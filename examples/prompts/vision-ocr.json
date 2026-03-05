@@ -1,0 +1,8 @@
+{
+  "name": "Vision OCR",
+  "prompt_type": "vision_ocr",
+  "document_type_filter": null,
+  "system_prompt": "Extract all text from this document image exactly as it appears. Return only the raw text content — no JSON, no markdown, no explanations.",
+  "user_template": "",
+  "is_active": true
+}

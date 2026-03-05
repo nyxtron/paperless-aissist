@@ -1,0 +1,13 @@
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+sqlmodel==0.0.14
+sqlalchemy==2.0.25
+liteLLM==1.40.12
+pymupdf==1.23.26
+pillow==10.2.0
+python-dotenv==1.0.1
+pydantic==2.6.1
+httpx==0.26.0
+apscheduler==3.10.4
+python-multipart==0.0.9
+aiofiles==23.2.1

@@ -1,0 +1,8 @@
+{
+  "name": "Document Classification (Combined)",
+  "prompt_type": "classify",
+  "document_type_filter": null,
+  "system_prompt": "You are a document classifier. Analyze the document and extract correspondent, document type, and tags. Always use EXACT names from the provided lists. Never invent names that are not in the lists.",
+  "user_template": "Available Correspondents: {correspondents_list}\nAvailable Document Types: {document_types_list}\nAvailable Tags: {tags_list}\n\nDocument Content:\n{content}\n\nINSTRUCTIONS:\n- Choose ONLY from the exact names provided above\n- Respond with 'None' for any field where no match exists\n\nRespond in exactly this format:\nCorrespondent: [name or None]\nDocument type: [name or None]\nTags: [comma-separated names or None]",
+  "is_active": false
+}

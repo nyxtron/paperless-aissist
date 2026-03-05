@@ -1,0 +1,8 @@
+{
+  "name": "Document Type Detection",
+  "prompt_type": "document_type",
+  "document_type_filter": null,
+  "system_prompt": "You classify documents. Always use EXACT names from the available list. Never modify or abbreviate names.",
+  "user_template": "Available Document Types:\n{document_types_list}\n\nDocument Content:\n{content}\n\nINSTRUCTIONS:\n- Choose ONLY from the exact names provided above\n- If no match exists, respond with 'None'\n\nRespond ONLY with the document type name (no other text):",
+  "is_active": true
+}

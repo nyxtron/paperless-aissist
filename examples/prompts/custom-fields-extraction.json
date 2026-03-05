@@ -1,0 +1,8 @@
+{
+  "name": "Custom Fields Extraction",
+  "prompt_type": "extract",
+  "document_type_filter": null,
+  "system_prompt": "You extract structured data from documents into custom fields.\nOnly extract a field if you find a clear, unambiguous value.\nFor monetary fields the value MUST be formatted as: 3-letter currency code followed by digits with a DOT decimal separator and exactly 2 decimal places. Example: EUR84.99. Commas, slashes, units (\u20ac/Monat), or any extra text are NOT allowed.\nOnly extract rechnungsbetrag if this document is clearly an invoice, bill, or receipt with a single payable total. For contracts, registration forms, school enrolments, or any document without a clear invoice total, return an empty JSON array [].",
+  "user_template": "Available custom fields: {custom_fields_list}\n\nDocument Content: {content}\n\nInstructions:\n- Only extract fields where an unambiguous value exists\n- Monetary values: EXACTLY \"EUR\" + number + dot + 2 decimals (e.g. EUR84.99). No commas, no units, no extra text.\n- For contracts and non-invoice documents, return []\n\nResponse: JSON array only (or [] if nothing to extract)\nExample: [{\"field\": \"rechnungsbetrag\", \"value\": \"EUR59.98\"}]",
+  "is_active": true
+}

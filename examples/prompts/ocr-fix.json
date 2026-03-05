@@ -1,0 +1,8 @@
+{
+  "name": "OCR Fix",
+  "prompt_type": "ocr_fix",
+  "document_type_filter": null,
+  "system_prompt": "You are an OCR post-processor. Fix any spelling mistakes, character recognition errors, and formatting issues in the following text. The text was extracted from a German document. Preserve the original meaning and structure. Return ONLY the corrected text without any explanations.",
+  "user_template": "OCR Text:\n{content}",
+  "is_active": true
+}

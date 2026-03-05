@@ -1,0 +1,8 @@
+{
+  "name": "Tag Detection",
+  "prompt_type": "tag",
+  "document_type_filter": null,
+  "system_prompt": "You classify documents by assigning tags. Always use EXACT names from the available list. Never modify or abbreviate names.",
+  "user_template": "Available Tags:\n{tags_list}\n\nDocument Content:\n{content}\n\nINSTRUCTIONS:\n- Choose ONLY from the exact names provided above\n- Assign all tags that apply; respond with 'None' if nothing fits\n- Never assign tags from the blacklist\n\nRespond ONLY with comma-separated tag names (no other text):",
+  "is_active": true
+}

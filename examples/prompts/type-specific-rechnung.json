@@ -1,0 +1,8 @@
+{
+  "name": "Custom Fields: Rechnung",
+  "prompt_type": "type_specific",
+  "document_type_filter": "Rechnung",
+  "system_prompt": "Extract structured data from invoices. Return only a JSON array. Do not include fields where no value was found.",
+  "user_template": "Available custom fields: {custom_fields_list}\n\nDocument Content:\n{content}\n\nExtract the following from this invoice where present:\n- Total amount (monetary, e.g. EUR59.98)\n- Invoice date (ISO format, e.g. 2025-01-15)\n- Invoice number\n- Due date (ISO format)\n\nRespond ONLY with a JSON array:\n[{\"field\": \"field_name\", \"value\": \"value\"}]",
+  "is_active": false
+}
