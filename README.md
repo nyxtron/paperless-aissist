@@ -180,7 +180,7 @@ Paperless AIssist is a flexible, web-UI-configured AI middleware for Paperless-n
 | **Best For**                      | Users wanting maximum prompt flexibility, hybrid local/cloud (incl. Grok), type-specific fields, easy config | Stable auto-tagging + excellent chat/RAG            | Challenging scans, best raw OCR accuracy            |
 
 **Quick Recommendation**
-- Want **maximum flexibility** (separate models, Grok, type-specific extraction, zero env-var hassle)? → Try **Paperless-AIssist*
+- Want **maximum flexibility** (separate models, Grok, type-specific extraction, zero env-var hassle)? → Try **Paperless-AIssist**
 - Need **rock-solid chat** and proven auto-tagging? → Paperless-AI
 - Fighting **poor scans/handwriting**? → Paperless-GPT (or combine with one of the others)
 
