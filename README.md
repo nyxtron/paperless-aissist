@@ -14,6 +14,26 @@ Tag a document with `ai-process` and it gets automatically classified, titled, t
 - **Document chat** — ask questions about any document via the web UI
 - **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
 
+## Screenshots
+
+### Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Process Queue
+![Process Queue](docs/screenshots/process-queue.png)
+
+### Processing Result
+![Processing Result](docs/screenshots/process-result.png)
+
+### Chat
+![Chat](docs/screenshots/chat.png)
+
+### Configuration
+![Configuration](docs/screenshots/config.png)
+
+### Prompts
+![Prompts](docs/screenshots/prompts.png)
+
 ## Quick Start
 
 ### 1. Pull and run
