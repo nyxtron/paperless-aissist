@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paperless-AIssist — AI-powered document processing for Paperless-ngx</title>
+  <meta name="description" content="Middleware that bridges Paperless-ngx and your LLM. Auto-classifies, titles, and extracts data from scanned documents using Ollama, OpenAI, or Grok." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#6366f1',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased">
+
+  <!-- Hero -->
+  <section class="max-w-3xl mx-auto px-6 pt-24 pb-16 text-center">
+    <div class="inline-flex items-center gap-2 bg-indigo-950 border border-indigo-800 text-indigo-300 text-sm px-4 py-1.5 rounded-full mb-8">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .03 2.703-1.352 2.703H4.15c-1.38 0-2.35-1.703-1.35-2.703L4.2 15.3"/></svg>
+      Open Source · Self-Hosted
+    </div>
+
+    <h1 class="text-5xl sm:text-6xl font-bold tracking-tight mb-5">
+      Paperless-<span class="text-indigo-400">AIssist</span>
+    </h1>
+
+    <p class="text-xl text-gray-400 max-w-xl mx-auto mb-10">
+      AI-powered document processing for <a href="https://docs.paperless-ngx.com/" class="text-indigo-400 hover:text-indigo-300 underline underline-offset-2">Paperless-ngx</a>. Drop a tag on a document — the LLM handles the rest.
+    </p>
+
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <a href="https://github.com/sponsors/nyxtron"
+         class="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-8 py-3 rounded-lg transition-colors">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.27 2 8.5 2 5.41 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.08C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.41 22 8.5c0 3.77-3.4 6.86-8.55 11.53L12 21.35z"/></svg>
+        Sponsor on GitHub
+      </a>
+      <a href="https://github.com/nyxtron/paperless-aissist"
+         class="inline-flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-100 font-semibold px-8 py-3 rounded-lg transition-colors">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="max-w-3xl mx-auto px-6 pb-16">
+    <div class="grid sm:grid-cols-2 gap-4">
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="text-indigo-400 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-1">Smart Classification</h3>
+        <p class="text-gray-400 text-sm">Automatically assigns correspondents, document types, and tags using your LLM — no manual sorting.</p>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="text-indigo-400 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-1">Vision OCR</h3>
+        <p class="text-gray-400 text-sm">Send document pages to a vision model for high-quality OCR on scanned PDFs, with optional text correction.</p>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="text-indigo-400 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-1">Custom Field Extraction</h3>
+        <p class="text-gray-400 text-sm">Define extraction prompts to pull structured data — invoice totals, dates, reference numbers — straight into Paperless custom fields.</p>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="text-indigo-400 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-1">Multi-Provider LLM</h3>
+        <p class="text-gray-400 text-sm">Supports Ollama (local), OpenAI, and Grok. Mix providers — use a local model for classification and a vision model for OCR.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Quick Start -->
+  <section class="max-w-3xl mx-auto px-6 pb-16">
+    <h2 class="text-2xl font-bold mb-6 text-center">Get Started in Seconds</h2>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <pre class="text-sm text-indigo-300 overflow-x-auto"><code>docker run -d \
+  -p 8000:80 \
+  -v paperless-aissist-data:/app/data \
+  nyxtronlab/paperless-aissist</code></pre>
+    </div>
+    <p class="text-gray-500 text-sm text-center mt-4">
+      Then open <span class="text-gray-300">http://localhost:8000</span> and connect your Paperless-ngx instance.
+    </p>
+  </section>
+
+  <!-- Footer -->
+  <footer class="max-w-3xl mx-auto px-6 pb-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600 border-t border-gray-800 pt-8">
+    <span>Paperless-AIssist · MIT License</span>
+    <div class="flex gap-6">
+      <a href="https://github.com/nyxtron/paperless-aissist" class="hover:text-gray-400 transition-colors">GitHub</a>
+      <a href="https://hub.docker.com/r/nyxtronlab/paperless-aissist" class="hover:text-gray-400 transition-colors">Docker Hub</a>
+      <a href="https://github.com/sponsors/nyxtron" class="hover:text-indigo-400 transition-colors text-indigo-500">Sponsor</a>
+    </div>
+  </footer>
+
+</body>
+</html>
