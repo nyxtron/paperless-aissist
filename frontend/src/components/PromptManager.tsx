@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { promptsApi } from '../api/client';
 import { Plus, Pencil, Trash2, X, RefreshCw } from 'lucide-react';
 
@@ -18,6 +19,7 @@ interface TemplateInfo {
 }
 
 export default function PromptManager() {
+  const { t } = useTranslation();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [templates, setTemplates] = useState<TemplateInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export default function PromptManager() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this prompt?')) return;
+    if (!confirm(t('prompts.confirmDelete'))) return;
     try {
       await promptsApi.delete(id);
       loadData();
@@ -104,10 +106,10 @@ export default function PromptManager() {
   };
 
   const handleLoadSamples = async () => {
-    if (!confirm('This will reset all sample prompts to their defaults. Custom prompts are not affected.')) return;
+    if (!confirm(t('prompts.confirmLoadSamples'))) return;
     try {
       const res = await promptsApi.loadSamples();
-      setSamplesMessage(`Loaded: ${res.data.created} created, ${res.data.updated} updated`);
+      setSamplesMessage(t('prompts.samplesLoaded', { created: res.data.created, updated: res.data.updated }));
       setTimeout(() => setSamplesMessage(null), 4000);
       loadData();
     } catch (error) {
@@ -124,13 +126,13 @@ export default function PromptManager() {
   };
 
   if (loading) {
-    return <div className="text-gray-500">Loading...</div>;
+    return <div className="text-gray-500">{t('common.loading')}</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Prompt Manager</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('prompts.title')}</h1>
         <div className="flex items-center gap-2">
           {samplesMessage && (
             <span className="text-sm text-green-700 bg-green-50 px-3 py-1 rounded-lg">{samplesMessage}</span>
@@ -140,7 +142,7 @@ export default function PromptManager() {
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
           >
             <RefreshCw size={18} />
-            Load Samples
+            {t('prompts.loadSamples')}
           </button>
           <button
             onClick={() => {
@@ -151,7 +153,7 @@ export default function PromptManager() {
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <Plus size={20} />
-            Add Prompt
+            {t('prompts.addPrompt')}
           </button>
         </div>
       </div>
@@ -160,11 +162,11 @@ export default function PromptManager() {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Name</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Type</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Type Filter</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colName')}</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colType')}</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colTypeFilter')}</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colStatus')}</th>
+              <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -177,7 +179,7 @@ export default function PromptManager() {
                 <td className="py-3 px-4 text-gray-600">{prompt.document_type_filter || '-'}</td>
                 <td className="py-3 px-4">
                   <span className={`px-2 py-1 rounded text-xs ${prompt.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                    {prompt.is_active ? 'Active' : 'Inactive'}
+                    {prompt.is_active ? t('prompts.active') : t('prompts.inactive')}
                   </span>
                 </td>
                 <td className="py-3 px-4 text-right">
@@ -204,7 +206,7 @@ export default function PromptManager() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
             <div className="flex justify-between items-center p-4 border-b">
-              <h2 className="text-lg font-semibold">{editingPrompt ? 'Edit Prompt' : 'Create Prompt'}</h2>
+              <h2 className="text-lg font-semibold">{editingPrompt ? t('prompts.editPrompt') : t('prompts.createPrompt')}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
                 <X size={24} />
               </button>
@@ -212,7 +214,7 @@ export default function PromptManager() {
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelName')}</label>
                   <input
                     type="text"
                     value={formData.name}
@@ -222,14 +224,14 @@ export default function PromptManager() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelType')}</label>
                   <select
                     value={formData.prompt_type}
                     onChange={(e) => setFormData({ ...formData, prompt_type: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    {templates?.types.map((t) => (
-                      <option key={t.value} value={t.value}>{t.description}</option>
+                    {templates?.types.map((type) => (
+                      <option key={type.value} value={type.value}>{type.description}</option>
                     ))}
                   </select>
                 </div>
@@ -237,19 +239,19 @@ export default function PromptManager() {
 
               {formData.prompt_type === 'type_specific' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Document Type Filter</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelDocTypeFilter')}</label>
                   <input
                     type="text"
                     value={formData.document_type_filter}
                     onChange={(e) => setFormData({ ...formData, document_type_filter: e.target.value })}
-                    placeholder="e.g., invoice, letter"
+                    placeholder={t('prompts.docTypeFilterPlaceholder')}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">System Prompt</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelSystemPrompt')}</label>
                 {templates && (
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {templates.variables.map((v) => (
@@ -274,7 +276,7 @@ export default function PromptManager() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">User Template</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelUserTemplate')}</label>
                 {templates && (
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {templates.variables.map((v) => (
@@ -294,7 +296,7 @@ export default function PromptManager() {
                   onChange={(e) => setFormData({ ...formData, user_template: e.target.value })}
                   required
                   rows={4}
-                  placeholder="Use {content} to include document text"
+                  placeholder={t('prompts.userTemplatePlaceholder')}
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -307,7 +309,7 @@ export default function PromptManager() {
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   className="rounded"
                 />
-                <label htmlFor="is_active" className="text-sm text-gray-700">Active</label>
+                <label htmlFor="is_active" className="text-sm text-gray-700">{t('prompts.labelActive')}</label>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
@@ -316,13 +318,13 @@ export default function PromptManager() {
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  {editingPrompt ? 'Update' : 'Create'}
+                  {editingPrompt ? t('prompts.update') : t('prompts.create')}
                 </button>
               </div>
             </form>

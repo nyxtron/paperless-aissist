@@ -9,7 +9,7 @@ from sqlmodel import select
 from ..database import get_session
 from ..models import Config, Prompt, ProcessingLog, TagCache, CorrespondentCache, DocumentTypeCache
 from .paperless import PaperlessClient
-from .llm_handler import LLMHandler
+from .llm_handler import LLMHandler, LLMUnavailableError
 from .vision import VisionPipeline
 
 _in_flight_docs: set[int] = set()
@@ -157,6 +157,13 @@ Available Custom Fields: [{custom_fields_list}]"""
                 session.flush()
                 return log.id
     
+    async def _delete_log(self, log_id: int) -> None:
+        with get_session() as session:
+            stmt = select(ProcessingLog).where(ProcessingLog.id == log_id)
+            log = session.exec(stmt).first()
+            if log:
+                session.delete(log)
+
     async def process_document(self, doc_id: int) -> dict[str, Any]:
         async with _in_flight_lock:
             if doc_id in _in_flight_docs:
@@ -313,254 +320,259 @@ Available Custom Fields: [{custom_fields_list}]"""
         add_step("Fetch metadata", "completed", 0)
         
         llm = await LLMHandler.from_config(for_vision=False)
-        
+
         update_data = {}
-        
-        if ocr_performed and content:
-            update_data["content"] = content
-        
-        title_prompt = next((p for p in prompts if p.get("prompt_type") == "title"), None)
         title_raw_response = None
-        if title_prompt:
-            title_start = time.time()
-            user_msg = self._substitute_variables(
-                title_prompt.get("user_template", ""),
-                content,
-                metadata,
-            )
-            title_result = await llm.complete(
-                system_prompt=title_prompt.get("system_prompt", ""),
-                user_prompt=user_msg,
-                json_mode=False,
-            )
-            title_text = title_result.get("text", "").strip() or title_result.get("raw", "").strip()
-            title_raw_response = title_result
-            if title_text:
-                update_data["title"] = title_text
-            add_step("Extract title", "completed", int((time.time() - title_start) * 1000))
-        
-        correspondent_prompt = next((p for p in prompts if p.get("prompt_type") == "correspondent"), None)
-        document_type_prompt = next((p for p in prompts if p.get("prompt_type") == "document_type"), None)
-        tag_prompt = next((p for p in prompts if p.get("prompt_type") == "tag"), None)
-        classify_prompt = next((p for p in prompts if p.get("prompt_type") == "classify"), None)
-
-        detected_type = None
         classification_result = None
-        use_individual = correspondent_prompt or document_type_prompt or tag_prompt
-
-        if use_individual:
-            # Individual pipeline stages
-            if correspondent_prompt:
-                corr_start = time.time()
-                user_msg = self._substitute_variables(
-                    correspondent_prompt.get("user_template", ""), content, metadata
-                )
-                corr_result = await llm.complete(
-                    system_prompt=correspondent_prompt.get("system_prompt", ""),
-                    user_prompt=user_msg,
-                    json_mode=False,
-                )
-                corr_text = corr_result.get("text", "").strip() or corr_result.get("raw", "").strip()
-                if corr_text and corr_text.lower() != "none":
-                    corr_match = next(
-                        (c["id"] for c in metadata["correspondents"] if c["name"].lower() == corr_text.lower()),
-                        None,
-                    )
-                    if corr_match:
-                        update_data["correspondent"] = corr_match
-                add_step("Detect correspondent", "completed", int((time.time() - corr_start) * 1000))
-
-            if document_type_prompt:
-                dt_start = time.time()
-                user_msg = self._substitute_variables(
-                    document_type_prompt.get("user_template", ""), content, metadata
-                )
-                dt_result = await llm.complete(
-                    system_prompt=document_type_prompt.get("system_prompt", ""),
-                    user_prompt=user_msg,
-                    json_mode=False,
-                )
-                dt_text = dt_result.get("text", "").strip() or dt_result.get("raw", "").strip()
-                if dt_text and dt_text.lower() != "none":
-                    dt_match = next(
-                        (dt["id"] for dt in metadata["document_types"] if dt["name"].lower() == dt_text.lower()),
-                        None,
-                    )
-                    if dt_match:
-                        update_data["document_type"] = dt_match
-                    detected_type = dt_text
-                add_step("Detect document type", "completed", int((time.time() - dt_start) * 1000))
-
-            if tag_prompt:
-                tag_start = time.time()
-                user_msg = self._substitute_variables(
-                    tag_prompt.get("user_template", ""), content, metadata
-                )
-                tag_result = await llm.complete(
-                    system_prompt=tag_prompt.get("system_prompt", ""),
-                    user_prompt=user_msg,
-                    json_mode=False,
-                )
-                tag_text = tag_result.get("text", "").strip() or tag_result.get("raw", "").strip()
-                if tag_text and tag_text.lower() != "none":
-                    blacklist_raw = await self._get_config("tag_blacklist", "")
-                    blacklist = [t.strip().lower() for t in blacklist_raw.split(",") if t.strip()]
-                    tag_names = [t.strip() for t in tag_text.split(",") if t.strip()]
-                    tag_ids = []
-                    for tag_name in tag_names:
-                        if blacklist and tag_name.lower() in blacklist:
-                            continue
-                        tag_match = next(
-                            (t["id"] for t in metadata["tags"] if t["name"].lower() == tag_name.lower()),
-                            None,
-                        )
-                        if tag_match:
-                            tag_ids.append(tag_match)
-                    if tag_ids:
-                        update_data["tags"] = tag_ids
-                add_step("Detect tags", "completed", int((time.time() - tag_start) * 1000))
-
-        elif classify_prompt:
-            # Legacy combined classify fallback
-            classification_result = None
-            classify_start = time.time()
-            user_msg = self._substitute_variables(
-                classify_prompt.get("user_template", ""), content, metadata
-            )
-            classification_result = await llm.complete(
-                system_prompt=classify_prompt.get("system_prompt", ""),
-                user_prompt=user_msg,
-                json_mode=False,
-            )
-
-            if classification_result and isinstance(classification_result, dict):
-                if "text" in classification_result:
-                    plain_text = classification_result.get("text", "")
-                    parsed = self._parse_classify_response(plain_text)
-                    if parsed:
-                        classification_result = parsed
-                elif "raw" in classification_result:
-                    plain_text = classification_result.get("raw", "")
-                    parsed = self._parse_classify_response(plain_text)
-                    if parsed:
-                        classification_result = parsed
-
-            add_step("Analyze document", "completed", int((time.time() - classify_start) * 1000))
-
-            if classification_result:
-                detected_type = classification_result.get("document_type")
-
-                if "title" in classification_result and classification_result["title"]:
-                    update_data["title"] = classification_result["title"]
-
-                if "correspondent" in classification_result and classification_result["correspondent"]:
-                    corr_name = classification_result["correspondent"]
-                    corr_match = next(
-                        (c["id"] for c in metadata["correspondents"] if c["name"].lower() == corr_name.lower()),
-                        None,
-                    )
-                    if corr_match:
-                        update_data["correspondent"] = corr_match
-
-                if "document_type" in classification_result and classification_result["document_type"]:
-                    doc_type_name = classification_result["document_type"]
-                    doc_type_match = next(
-                        (dt["id"] for dt in metadata["document_types"] if dt["name"].lower() == doc_type_name.lower()),
-                        None,
-                    )
-                    if doc_type_match:
-                        update_data["document_type"] = doc_type_match
-
-                if "tags" in classification_result and classification_result["tags"]:
-                    tag_names = classification_result["tags"] if isinstance(classification_result["tags"], list) else [classification_result["tags"]]
-                    blacklist_raw = await self._get_config("tag_blacklist", "")
-                    blacklist = [t.strip().lower() for t in blacklist_raw.split(",") if t.strip()]
-                    tag_ids = []
-                    for tag_name in tag_names:
-                        if blacklist and tag_name.lower() in blacklist:
-                            continue
-                        tag_match = next(
-                            (t["id"] for t in metadata["tags"] if t["name"].lower() == tag_name.lower()),
-                            None,
-                        )
-                        if tag_match:
-                            tag_ids.append(tag_match)
-                    if tag_ids:
-                        update_data["tags"] = tag_ids
-        
-        type_specific_prompt = None
-        if detected_type:
-            type_specific_prompt = next(
-                (p for p in prompts 
-                 if p.get("prompt_type") == "type_specific" 
-                 and p.get("document_type_filter") 
-                 and p.get("document_type_filter", "").lower() == detected_type.lower()),
-                None
-            )
-        
-        custom_fields_start = time.time()
-        extract_prompt = next((p for p in prompts if p.get("prompt_type") == "extract"), None)
         combined_fields: dict[str, str] = {}
 
-        def _extract_fields_from_result(result: dict) -> dict[str, str]:
-            """Parse an LLM custom fields result into a flat {field_name: value} dict."""
-            fields = {}
-            items = []
-            if "custom_fields" in result:
-                items = result["custom_fields"]
-            elif "extract" in result:
-                for k, v in result["extract"].items():
-                    if v:
-                        fields[k.lower()] = v
+        try:
+            if ocr_performed and content:
+                update_data["content"] = content
+
+            title_prompt = next((p for p in prompts if p.get("prompt_type") == "title"), None)
+            if title_prompt:
+                title_start = time.time()
+                user_msg = self._substitute_variables(
+                    title_prompt.get("user_template", ""),
+                    content,
+                    metadata,
+                )
+                title_result = await llm.complete(
+                    system_prompt=title_prompt.get("system_prompt", ""),
+                    user_prompt=user_msg,
+                    json_mode=False,
+                )
+                title_text = title_result.get("text", "").strip() or title_result.get("raw", "").strip()
+                title_raw_response = title_result
+                if title_text:
+                    update_data["title"] = title_text
+                add_step("Extract title", "completed", int((time.time() - title_start) * 1000))
+
+            correspondent_prompt = next((p for p in prompts if p.get("prompt_type") == "correspondent"), None)
+            document_type_prompt = next((p for p in prompts if p.get("prompt_type") == "document_type"), None)
+            tag_prompt = next((p for p in prompts if p.get("prompt_type") == "tag"), None)
+            classify_prompt = next((p for p in prompts if p.get("prompt_type") == "classify"), None)
+
+            detected_type = None
+            use_individual = correspondent_prompt or document_type_prompt or tag_prompt
+
+            if use_individual:
+                # Individual pipeline stages
+                if correspondent_prompt:
+                    corr_start = time.time()
+                    user_msg = self._substitute_variables(
+                        correspondent_prompt.get("user_template", ""), content, metadata
+                    )
+                    corr_result = await llm.complete(
+                        system_prompt=correspondent_prompt.get("system_prompt", ""),
+                        user_prompt=user_msg,
+                        json_mode=False,
+                    )
+                    corr_text = corr_result.get("text", "").strip() or corr_result.get("raw", "").strip()
+                    if corr_text and corr_text.lower() != "none":
+                        corr_match = next(
+                            (c["id"] for c in metadata["correspondents"] if c["name"].lower() == corr_text.lower()),
+                            None,
+                        )
+                        if corr_match:
+                            update_data["correspondent"] = corr_match
+                    add_step("Detect correspondent", "completed", int((time.time() - corr_start) * 1000))
+
+                if document_type_prompt:
+                    dt_start = time.time()
+                    user_msg = self._substitute_variables(
+                        document_type_prompt.get("user_template", ""), content, metadata
+                    )
+                    dt_result = await llm.complete(
+                        system_prompt=document_type_prompt.get("system_prompt", ""),
+                        user_prompt=user_msg,
+                        json_mode=False,
+                    )
+                    dt_text = dt_result.get("text", "").strip() or dt_result.get("raw", "").strip()
+                    if dt_text and dt_text.lower() != "none":
+                        dt_match = next(
+                            (dt["id"] for dt in metadata["document_types"] if dt["name"].lower() == dt_text.lower()),
+                            None,
+                        )
+                        if dt_match:
+                            update_data["document_type"] = dt_match
+                        detected_type = dt_text
+                    add_step("Detect document type", "completed", int((time.time() - dt_start) * 1000))
+
+                if tag_prompt:
+                    tag_start = time.time()
+                    user_msg = self._substitute_variables(
+                        tag_prompt.get("user_template", ""), content, metadata
+                    )
+                    tag_result = await llm.complete(
+                        system_prompt=tag_prompt.get("system_prompt", ""),
+                        user_prompt=user_msg,
+                        json_mode=False,
+                    )
+                    tag_text = tag_result.get("text", "").strip() or tag_result.get("raw", "").strip()
+                    if tag_text and tag_text.lower() != "none":
+                        blacklist_raw = await self._get_config("tag_blacklist", "")
+                        blacklist = [t.strip().lower() for t in blacklist_raw.split(",") if t.strip()]
+                        tag_names = [t.strip() for t in tag_text.split(",") if t.strip()]
+                        tag_ids = []
+                        for tag_name in tag_names:
+                            if blacklist and tag_name.lower() in blacklist:
+                                continue
+                            tag_match = next(
+                                (t["id"] for t in metadata["tags"] if t["name"].lower() == tag_name.lower()),
+                                None,
+                            )
+                            if tag_match:
+                                tag_ids.append(tag_match)
+                        if tag_ids:
+                            update_data["tags"] = tag_ids
+                    add_step("Detect tags", "completed", int((time.time() - tag_start) * 1000))
+
+            elif classify_prompt:
+                # Legacy combined classify fallback
+                classify_start = time.time()
+                user_msg = self._substitute_variables(
+                    classify_prompt.get("user_template", ""), content, metadata
+                )
+                classification_result = await llm.complete(
+                    system_prompt=classify_prompt.get("system_prompt", ""),
+                    user_prompt=user_msg,
+                    json_mode=False,
+                )
+
+                if classification_result and isinstance(classification_result, dict):
+                    if "text" in classification_result:
+                        plain_text = classification_result.get("text", "")
+                        parsed = self._parse_classify_response(plain_text)
+                        if parsed:
+                            classification_result = parsed
+                    elif "raw" in classification_result:
+                        plain_text = classification_result.get("raw", "")
+                        parsed = self._parse_classify_response(plain_text)
+                        if parsed:
+                            classification_result = parsed
+
+                add_step("Analyze document", "completed", int((time.time() - classify_start) * 1000))
+
+                if classification_result:
+                    detected_type = classification_result.get("document_type")
+
+                    if "title" in classification_result and classification_result["title"]:
+                        update_data["title"] = classification_result["title"]
+
+                    if "correspondent" in classification_result and classification_result["correspondent"]:
+                        corr_name = classification_result["correspondent"]
+                        corr_match = next(
+                            (c["id"] for c in metadata["correspondents"] if c["name"].lower() == corr_name.lower()),
+                            None,
+                        )
+                        if corr_match:
+                            update_data["correspondent"] = corr_match
+
+                    if "document_type" in classification_result and classification_result["document_type"]:
+                        doc_type_name = classification_result["document_type"]
+                        doc_type_match = next(
+                            (dt["id"] for dt in metadata["document_types"] if dt["name"].lower() == doc_type_name.lower()),
+                            None,
+                        )
+                        if doc_type_match:
+                            update_data["document_type"] = doc_type_match
+
+                    if "tags" in classification_result and classification_result["tags"]:
+                        tag_names = classification_result["tags"] if isinstance(classification_result["tags"], list) else [classification_result["tags"]]
+                        blacklist_raw = await self._get_config("tag_blacklist", "")
+                        blacklist = [t.strip().lower() for t in blacklist_raw.split(",") if t.strip()]
+                        tag_ids = []
+                        for tag_name in tag_names:
+                            if blacklist and tag_name.lower() in blacklist:
+                                continue
+                            tag_match = next(
+                                (t["id"] for t in metadata["tags"] if t["name"].lower() == tag_name.lower()),
+                                None,
+                            )
+                            if tag_match:
+                                tag_ids.append(tag_match)
+                        if tag_ids:
+                            update_data["tags"] = tag_ids
+
+            type_specific_prompt = None
+            if detected_type:
+                type_specific_prompt = next(
+                    (p for p in prompts
+                     if p.get("prompt_type") == "type_specific"
+                     and p.get("document_type_filter")
+                     and p.get("document_type_filter", "").lower() == detected_type.lower()),
+                    None
+                )
+
+            custom_fields_start = time.time()
+            extract_prompt = next((p for p in prompts if p.get("prompt_type") == "extract"), None)
+
+            def _extract_fields_from_result(result: dict) -> dict[str, str]:
+                """Parse an LLM custom fields result into a flat {field_name: value} dict."""
+                fields = {}
+                items = []
+                if "custom_fields" in result:
+                    items = result["custom_fields"]
+                elif "extract" in result:
+                    for k, v in result["extract"].items():
+                        if v:
+                            fields[k.lower()] = v
+                    return fields
+                elif "field" in result and "value" in result:
+                    items = [result]
+                for key, value in result.items():
+                    if key not in ("custom_fields", "extract") and isinstance(value, str) and value:
+                        fields[key.lower()] = value
+                for item in items:
+                    if isinstance(item, dict) and item.get("field") and item.get("value"):
+                        fields[str(item["field"]).lower()] = item["value"]
                 return fields
-            elif "field" in result and "value" in result:
-                items = [result]
-            for key, value in result.items():
-                if key not in ("custom_fields", "extract") and isinstance(value, str) and value:
-                    fields[key.lower()] = value
-            for item in items:
-                if isinstance(item, dict) and item.get("field") and item.get("value"):
-                    fields[str(item["field"]).lower()] = item["value"]
-            return fields
 
-        if extract_prompt:
-            user_msg = self._substitute_variables(
-                extract_prompt.get("user_template", ""), content, metadata
-            )
-            extract_result = await llm.complete(
-                system_prompt=extract_prompt.get("system_prompt", ""),
-                user_prompt=user_msg,
-                json_mode=True,
-            )
-            if extract_result and isinstance(extract_result, dict):
-                combined_fields.update(_extract_fields_from_result(extract_result))
+            if extract_prompt:
+                user_msg = self._substitute_variables(
+                    extract_prompt.get("user_template", ""), content, metadata
+                )
+                extract_result = await llm.complete(
+                    system_prompt=extract_prompt.get("system_prompt", ""),
+                    user_prompt=user_msg,
+                    json_mode=True,
+                )
+                if extract_result and isinstance(extract_result, dict):
+                    combined_fields.update(_extract_fields_from_result(extract_result))
 
-        if type_specific_prompt:
-            user_msg = self._substitute_variables(
-                type_specific_prompt.get("user_template", ""), content, metadata
-            )
-            type_result = await llm.complete(
-                system_prompt=type_specific_prompt.get("system_prompt", ""),
-                user_prompt=user_msg,
-                json_mode=True,
-            )
-            if type_result and isinstance(type_result, dict):
-                combined_fields.update(_extract_fields_from_result(type_result))
+            if type_specific_prompt:
+                user_msg = self._substitute_variables(
+                    type_specific_prompt.get("user_template", ""), content, metadata
+                )
+                type_result = await llm.complete(
+                    system_prompt=type_specific_prompt.get("system_prompt", ""),
+                    user_prompt=user_msg,
+                    json_mode=True,
+                )
+                if type_result and isinstance(type_result, dict):
+                    combined_fields.update(_extract_fields_from_result(type_result))
 
-        if extract_prompt or type_specific_prompt:
-            add_step("Extract custom fields", "completed", int((time.time() - custom_fields_start) * 1000))
-        
-        if combined_fields:
-            paperless_custom_fields = await self.paperless.get_custom_fields()
-            field_name_to_id = {cf["name"].lower(): cf["id"] for cf in paperless_custom_fields}
-            converted_fields = []
-            for field_name, field_value in combined_fields.items():
-                field_id = field_name_to_id.get(field_name)
-                if field_id and field_value:
-                    converted_fields.append({"field": field_id, "value": field_value})
-            if converted_fields:
-                update_data["custom_fields"] = converted_fields
-        
+            if extract_prompt or type_specific_prompt:
+                add_step("Extract custom fields", "completed", int((time.time() - custom_fields_start) * 1000))
+
+            if combined_fields:
+                paperless_custom_fields = await self.paperless.get_custom_fields()
+                field_name_to_id = {cf["name"].lower(): cf["id"] for cf in paperless_custom_fields}
+                converted_fields = []
+                for field_name, field_value in combined_fields.items():
+                    field_id = field_name_to_id.get(field_name)
+                    if field_id and field_value:
+                        converted_fields.append({"field": field_id, "value": field_value})
+                if converted_fields:
+                    update_data["custom_fields"] = converted_fields
+
+        except LLMUnavailableError as e:
+            await self._delete_log(log_id)
+            print(f"[Processor] LLM unavailable for doc {doc_id}, will retry: {e}")
+            return {"success": False, "error": str(e), "retryable": True}
+
         save_start = time.time()
 
         # Merge tag swap with any LLM-detected tags into a single update

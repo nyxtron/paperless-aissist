@@ -13,6 +13,7 @@ Tag a document with `ai-process` and it gets automatically classified, titled, t
 - **OCR post-processing** — LLM corrects OCR errors before classification
 - **Document chat** — ask questions about any document via the web UI
 - **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
+- **Multilingual UI** — web interface available in English and German
 
 ## Screenshots
 
@@ -194,6 +195,7 @@ Paperless AIssist is a flexible, web-UI-configured AI middleware for Paperless-n
 | **Document Chat (RAG/Q&A)**       | Yes, integrated in web UI                            | Yes, very mature & user-friendly RAG chat           | No / very limited                                   |
 | **Configuration**                 | 100% via modern web UI (React + FastAPI), no env vars needed, SQLite persistence | Env vars + config files + web dashboard             | Env vars + some web UI                              |
 | **Web UI**                        | Full-featured: Settings, Prompts editor, Logs, Chat | Dashboard + manual tagging queue + chat             | Basic review & ad-hoc analysis UI                   |
+| **i18n / UI Language**            | Yes (English + German)                               | No                                                  | No                                                  |
 | **Grok (xAI) Support**            | Yes (text + vision)                                  | No                                                  | No                                                  |
 | **Installation**                  | Single Docker container, very easy                   | Docker-compose                                      | Docker                                              |
 | **Development Stage**             | Very new (early 2026), active, MIT license           | Mature, very active, large community (~5k stars)    | Active, established niche for OCR                   |

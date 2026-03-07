@@ -1,21 +1,28 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Settings, FileText, Play, MessageCircle } from 'lucide-react';
-
-const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/processing', label: 'Process', icon: Play },
-  { path: '/chat', label: 'Chat', icon: MessageCircle },
-  { path: '/config', label: 'Configuration', icon: Settings },
-  { path: '/prompts', label: 'Prompts', icon: FileText },
-];
+import { useTranslation } from 'react-i18next';
+import { LayoutDashboard, Settings, FileText, Play, MessageCircle, ScrollText } from 'lucide-react';
 
 export default function Layout() {
+  const { t, i18n } = useTranslation();
+
+  const navItems = [
+    { path: '/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { path: '/processing', label: t('nav.process'), icon: Play },
+    { path: '/chat', label: t('nav.chat'), icon: MessageCircle },
+    { path: '/config', label: t('nav.configuration'), icon: Settings },
+    { path: '/prompts', label: t('nav.prompts'), icon: FileText },
+    { path: '/logs', label: t('nav.logs'), icon: ScrollText },
+  ];
+
   return (
     <div className="min-h-screen flex">
-      <aside className="w-64 bg-white border-r border-gray-200">
+      <aside className="w-72 bg-white border-r border-gray-200">
         <div className="p-6">
-          <h1 className="text-xl font-bold text-gray-900">Paperless-AIssist</h1>
-          <p className="text-sm text-gray-500">Document Processing Agent</p>
+          <div className="flex items-center gap-3 mb-1">
+            <img src="/icon.png" alt="Paperless-AIssist" className="w-12 h-12 rounded" />
+            <h1 className="text-xl font-bold text-gray-900">Paperless-AIssist</h1>
+          </div>
+          <p className="text-sm text-gray-500">{t('nav.subtitle')}</p>
         </div>
         <nav className="px-4">
           {navItems.map((item) => (
@@ -36,9 +43,28 @@ export default function Layout() {
           ))}
         </nav>
       </aside>
-      <main className="flex-1 p-8">
-        <Outlet />
-      </main>
+      <div className="flex-1 flex flex-col">
+        <header className="h-12 bg-white border-b border-gray-200 px-6 flex items-center justify-end">
+          <div className="flex gap-2">
+            {(['en', 'de'] as const).map((lng) => (
+              <button
+                key={lng}
+                onClick={() => i18n.changeLanguage(lng)}
+                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                  i18n.resolvedLanguage === lng
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {t(`language.${lng}`)}
+              </button>
+            ))}
+          </div>
+        </header>
+        <main className="flex-1 p-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
