@@ -13,6 +13,7 @@ Tag a document with `ai-process` and it gets automatically classified, titled, t
 - **OCR post-processing** — LLM corrects OCR errors before classification
 - **Document chat** — ask questions about any document via the web UI
 - **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
+- **Multilingual UI** — web interface available in English and German
 
 ## Screenshots
 

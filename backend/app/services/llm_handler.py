@@ -7,6 +7,11 @@ from ..database import get_session
 from sqlmodel import select
 
 
+class LLMUnavailableError(Exception):
+    """Raised when the LLM service is unreachable or the model is not available."""
+    pass
+
+
 class LLMHandler:
     def __init__(
         self,
@@ -124,7 +129,7 @@ class LLMHandler:
                 return {"text": content}
             except httpx.HTTPError as e:
                 print(f"[Ollama] Error connecting to {url}: {str(e)}")
-                raise Exception(f"Ollama request failed: {str(e)}")
+                raise LLMUnavailableError(f"Ollama request failed: {str(e)}")
 
     async def _openai_complete(
         self,
@@ -168,7 +173,7 @@ class LLMHandler:
                 return {"text": content}
             except httpx.HTTPError as e:
                 print(f"[OpenAI] Error connecting to {url}: {str(e)}")
-                raise Exception(f"OpenAI request failed: {str(e)}")
+                raise LLMUnavailableError(f"OpenAI request failed: {str(e)}")
 
     async def vision_complete(
         self,
