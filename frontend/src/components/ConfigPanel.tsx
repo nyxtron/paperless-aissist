@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { configApi, documentsApi, schedulerApi } from '../api/client';
 import { RefreshCw, CheckCircle, XCircle, Tag, Play, Square, Clock } from 'lucide-react';
 
@@ -34,6 +35,7 @@ interface PaperlessItem {
 }
 
 export default function ConfigPanel() {
+  const { t } = useTranslation();
   const [configs, setConfigs] = useState<Configs>({
     paperless_url: '',
     paperless_token: '',
@@ -77,7 +79,7 @@ export default function ConfigPanel() {
       const res = await configApi.getAll();
       const loadedConfigs = res.data;
       setConfigs((prev) => ({ ...prev, ...loadedConfigs }));
-      
+
       if (loadedConfigs.paperless_url && loadedConfigs.paperless_token) {
         handleTestPaperless();
       }
@@ -92,10 +94,10 @@ export default function ConfigPanel() {
       for (const [key, value] of Object.entries(configs)) {
         await configApi.set(key, value);
       }
-      alert('Configuration saved!');
+      alert(t('config.savedSuccess'));
     } catch (error) {
       console.error('Failed to save configs:', error);
-      alert('Failed to save configuration');
+      alert(t('config.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -127,18 +129,17 @@ export default function ConfigPanel() {
       });
       const data = await res.json();
       console.log('[LLM Test] Response:', data);
-      
-      // Build message from main and vision results
+
       let message = '';
-      
+
       if (data.main) {
         message += `Main: ${data.main.message}`;
       }
-      
+
       if (data.vision !== null && data.vision !== undefined) {
         message += `\nVision: ${data.vision.message}`;
       }
-      
+
       setLlmResult({ success: data.success, message: message });
     } catch (error: any) {
       console.error('[LLM Test] Error:', error);
@@ -152,7 +153,7 @@ export default function ConfigPanel() {
     setTriggering(true);
     try {
       const res = await documentsApi.trigger();
-      alert(`Processed ${res.data.processed} documents`);
+      alert(t('config.processedCount', { count: res.data.processed }));
     } catch (error: any) {
       alert(`Error: ${error.response?.data?.detail || error.message}`);
     } finally {
@@ -179,7 +180,7 @@ export default function ConfigPanel() {
       await loadSchedulerStatus();
     } catch (error) {
       console.error('Failed to start scheduler:', error);
-      alert('Failed to start scheduler');
+      alert(t('config.schedulerStartFailed'));
     } finally {
       setSchedulerLoading(false);
     }
@@ -192,23 +193,23 @@ export default function ConfigPanel() {
       await loadSchedulerStatus();
     } catch (error) {
       console.error('Failed to stop scheduler:', error);
-      alert('Failed to stop scheduler');
+      alert(t('config.schedulerStopFailed'));
     } finally {
       setSchedulerLoading(false);
     }
   };
 
   const handleClearState = async () => {
-    if (!window.confirm('Clear stuck processing state? Only do this if processing was interrupted.')) {
+    if (!window.confirm(t('config.clearStateConfirm'))) {
       return;
     }
     try {
       await schedulerApi.clearState();
       await loadSchedulerStatus();
-      alert('Processing state cleared');
+      alert(t('config.clearStateSuccess'));
     } catch (error) {
       console.error('Failed to clear state:', error);
-      alert('Failed to clear state');
+      alert(t('config.clearStateFailed'));
     }
   };
 
@@ -219,7 +220,7 @@ export default function ConfigPanel() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Configuration</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('config.title')}</h1>
         <div className="flex gap-2">
           <button
             onClick={handleTestPaperless}
@@ -227,14 +228,14 @@ export default function ConfigPanel() {
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
           >
             {testingPaperless ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle size={18} />}
-            Check / Load Tags
+            {t('config.checkLoadTags')}
           </button>
           <button
             onClick={handleTrigger}
             disabled={triggering}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            {triggering ? 'Processing...' : 'Process Documents'}
+            {triggering ? t('config.processing') : t('config.processDocuments')}
           </button>
         </div>
       </div>
@@ -249,17 +250,17 @@ export default function ConfigPanel() {
       {paperlessConnected && (
         <div className="p-4 rounded-lg flex items-center gap-2 bg-green-50 text-green-700">
           <CheckCircle size={20} />
-          Connected! Loaded {availableTags.length} tags, {availableCorrespondents.length} correspondents
+          {t('config.connectedMsg', { tags: availableTags.length, correspondents: availableCorrespondents.length })}
         </div>
       )}
 
       {/* Paperless Settings */}
       <div className="bg-white rounded-lg shadow p-6 space-y-6">
-        <h2 className="text-lg font-semibold border-b pb-2">Paperless-ngx Settings</h2>
+        <h2 className="text-lg font-semibold border-b pb-2">{t('config.paperlessSection')}</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className={label}>Paperless URL</label>
+            <label className={label}>{t('config.paperlessUrl')}</label>
             <input
               type="text"
               value={configs.paperless_url}
@@ -269,12 +270,12 @@ export default function ConfigPanel() {
             />
           </div>
           <div>
-            <label className={label}>API Token</label>
+            <label className={label}>{t('config.apiToken')}</label>
             <input
               type="password"
               value={configs.paperless_token}
               onChange={(e) => setConfigs({ ...configs, paperless_token: e.target.value })}
-              placeholder="Enter your Paperless API token"
+              placeholder={t('config.apiTokenPlaceholder')}
               className={field}
             />
           </div>
@@ -283,61 +284,61 @@ export default function ConfigPanel() {
         {availableTags.length > 0 && (
           <div className="flex items-center gap-2 text-sm text-gray-500 border-t pt-4 -mb-2">
             <Tag size={14} />
-            Tag dropdowns populated from Paperless
+            {t('config.tagDropdownHint')}
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className={label}>Process Tag</label>
+            <label className={label}>{t('config.processTag')}</label>
             <select value={configs.process_tag} onChange={(e) => setConfigs({ ...configs, process_tag: e.target.value })} className={field}>
-              <option value="">-- Select tag --</option>
+              <option value="">{t('common.selectTag')}</option>
               {availableTags.map((tag) => <option key={tag.id} value={tag.name}>{tag.name}</option>)}
             </select>
-            <p className={hint}>Documents with this tag will be processed</p>
+            <p className={hint}>{t('config.processTagHint')}</p>
           </div>
           <div>
-            <label className={label}>Processed Tag</label>
+            <label className={label}>{t('config.processedTag')}</label>
             <select value={configs.processed_tag} onChange={(e) => setConfigs({ ...configs, processed_tag: e.target.value })} className={field}>
-              <option value="">-- Select tag --</option>
+              <option value="">{t('common.selectTag')}</option>
               {availableTags.map((tag) => <option key={tag.id} value={tag.name}>{tag.name}</option>)}
             </select>
-            <p className={hint}>Added after successful processing</p>
+            <p className={hint}>{t('config.processedTagHint')}</p>
           </div>
           <div>
-            <label className={label}>OCR Post-Processing</label>
+            <label className={label}>{t('config.ocrPostProcess')}</label>
             <select value={configs.ocr_post_process} onChange={(e) => setConfigs({ ...configs, ocr_post_process: e.target.value })} className={field}>
-              <option value="false">Disabled</option>
-              <option value="true">Enabled</option>
+              <option value="false">{t('common.disabled')}</option>
+              <option value="true">{t('common.enabled')}</option>
             </select>
-            <p className={hint}>Fix OCR errors with LLM after extraction</p>
+            <p className={hint}>{t('config.ocrPostProcessHint')}</p>
           </div>
           <div className="md:col-span-3">
-            <label className={label}>Tag Blacklist</label>
+            <label className={label}>{t('config.tagBlacklist')}</label>
             <input
               type="text"
               value={configs.tag_blacklist}
               onChange={(e) => setConfigs({ ...configs, tag_blacklist: e.target.value })}
-              placeholder="e.g. inbox, todo, review"
+              placeholder={t('config.tagBlacklistPlaceholder')}
               className={field}
             />
-            <p className={hint}>Comma-separated tag names the LLM must not assign</p>
+            <p className={hint}>{t('config.tagBlacklistHint')}</p>
           </div>
           <div>
-            <label className={label}>Force OCR Tag</label>
+            <label className={label}>{t('config.forceOcrTag')}</label>
             <select value={configs.force_ocr_tag} onChange={(e) => setConfigs({ ...configs, force_ocr_tag: e.target.value })} className={field}>
-              <option value="">-- None --</option>
+              <option value="">{t('common.none')}</option>
               {availableTags.map((tag) => <option key={tag.id} value={tag.name}>{tag.name}</option>)}
             </select>
-            <p className={hint}>Tag to force vision OCR on a document</p>
+            <p className={hint}>{t('config.forceOcrTagHint')}</p>
           </div>
           <div>
-            <label className={label}>Force OCR Fix Tag</label>
+            <label className={label}>{t('config.forceOcrFixTag')}</label>
             <select value={configs.force_ocr_fix_tag} onChange={(e) => setConfigs({ ...configs, force_ocr_fix_tag: e.target.value })} className={field}>
-              <option value="">-- None --</option>
+              <option value="">{t('common.none')}</option>
               {availableTags.map((tag) => <option key={tag.id} value={tag.name}>{tag.name}</option>)}
             </select>
-            <p className={hint}>Tag to force OCR + LLM fix on a document</p>
+            <p className={hint}>{t('config.forceOcrFixTagHint')}</p>
           </div>
         </div>
       </div>
@@ -345,20 +346,20 @@ export default function ConfigPanel() {
       {/* LLM Settings */}
       <div className="bg-white rounded-lg shadow p-6 space-y-6">
         <div className="flex justify-between items-center border-b pb-2">
-          <h2 className="text-lg font-semibold">LLM Settings</h2>
+          <h2 className="text-lg font-semibold">{t('config.llmSection')}</h2>
           <button
             onClick={handleTestLlm}
             disabled={testingLlm}
             className="flex items-center gap-2 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
           >
             {testingLlm ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-            Test Connection
+            {t('config.testConnection')}
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className={label}>Provider</label>
+            <label className={label}>{t('config.provider')}</label>
             <select value={configs.llm_provider} onChange={(e) => setConfigs({ ...configs, llm_provider: e.target.value })} className={field}>
               <option value="ollama">Ollama</option>
               <option value="openai">OpenAI</option>
@@ -366,7 +367,7 @@ export default function ConfigPanel() {
             </select>
           </div>
           <div>
-            <label className={label}>Model</label>
+            <label className={label}>{t('config.model')}</label>
             <input
               type="text"
               value={configs.llm_model}
@@ -376,7 +377,7 @@ export default function ConfigPanel() {
             />
           </div>
           <div>
-            <label className={label}>API Base URL</label>
+            <label className={label}>{t('config.apiBaseUrl')}</label>
             <input
               type="text"
               value={configs.llm_api_base}
@@ -386,40 +387,40 @@ export default function ConfigPanel() {
             />
           </div>
           <div>
-            <label className={label}>API Key <span className="font-normal text-gray-400">(optional)</span></label>
+            <label className={label}>{t('config.apiKey')} <span className="font-normal text-gray-400">({t('common.optional')})</span></label>
             <input
               type="password"
               value={configs.llm_api_key}
               onChange={(e) => setConfigs({ ...configs, llm_api_key: e.target.value })}
-              placeholder={configs.llm_provider === 'ollama' ? 'Leave empty for local Ollama' : 'xai-... / sk-...'}
+              placeholder={configs.llm_provider === 'ollama' ? t('config.apiKeyPlaceholderOllama') : t('config.apiKeyPlaceholderCloud')}
               className={field}
             />
-            <p className={hint}>Required for OpenAI; also used for hosted/proxied Ollama</p>
+            <p className={hint}>{t('config.apiKeyHint')}</p>
           </div>
           <div>
-            <label className={label}>Vision / OCR</label>
+            <label className={label}>{t('config.visionOcr')}</label>
             <select value={configs.enable_vision} onChange={(e) => setConfigs({ ...configs, enable_vision: e.target.value })} className={field}>
-              <option value="false">Disabled</option>
-              <option value="true">Enabled</option>
+              <option value="false">{t('common.disabled')}</option>
+              <option value="true">{t('common.enabled')}</option>
             </select>
-            <p className={hint}>Use a vision model to OCR document images</p>
+            <p className={hint}>{t('config.visionOcrHint')}</p>
           </div>
           <div>
-            <label className={label}>Fallback OCR (Tesseract)</label>
+            <label className={label}>{t('config.fallbackOcr')}</label>
             <select value={configs.enable_fallback_ocr} onChange={(e) => setConfigs({ ...configs, enable_fallback_ocr: e.target.value })} className={field}>
-              <option value="false">Disabled</option>
-              <option value="true">Enabled</option>
+              <option value="false">{t('common.disabled')}</option>
+              <option value="true">{t('common.enabled')}</option>
             </select>
-            <p className={hint}>Use local Tesseract OCR if vision model fails</p>
+            <p className={hint}>{t('config.fallbackOcrHint')}</p>
           </div>
         </div>
 
         {configs.enable_vision === 'true' && (
           <div className="pt-4 border-t">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Vision Model Settings</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">{t('config.visionModelSection')}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={label}>Provider</label>
+                <label className={label}>{t('config.provider')}</label>
                 <select value={configs.llm_provider_vision} onChange={(e) => setConfigs({ ...configs, llm_provider_vision: e.target.value })} className={field}>
                   <option value="ollama">Ollama</option>
                   <option value="openai">OpenAI</option>
@@ -427,7 +428,7 @@ export default function ConfigPanel() {
                 </select>
               </div>
               <div>
-                <label className={label}>Vision Model</label>
+                <label className={label}>{t('config.visionModel')}</label>
                 <input
                   type="text"
                   value={configs.llm_model_vision}
@@ -437,7 +438,7 @@ export default function ConfigPanel() {
                 />
               </div>
               <div>
-                <label className={label}>API Base URL</label>
+                <label className={label}>{t('config.apiBaseUrl')}</label>
                 <input
                   type="text"
                   value={configs.llm_api_base_vision}
@@ -447,15 +448,15 @@ export default function ConfigPanel() {
                 />
               </div>
               <div>
-                <label className={label}>API Key <span className="font-normal text-gray-400">(optional)</span></label>
+                <label className={label}>{t('config.apiKey')} <span className="font-normal text-gray-400">({t('common.optional')})</span></label>
                 <input
                   type="password"
                   value={configs.llm_api_key_vision}
                   onChange={(e) => setConfigs({ ...configs, llm_api_key_vision: e.target.value })}
-                  placeholder={configs.llm_provider_vision === 'ollama' ? 'Leave empty for local Ollama' : 'xai-... / sk-...'}
+                  placeholder={configs.llm_provider_vision === 'ollama' ? t('config.apiKeyPlaceholderOllama') : t('config.apiKeyPlaceholderCloud')}
                   className={field}
                 />
-                <p className={hint}>Required for OpenAI; also used for hosted/proxied Ollama</p>
+                <p className={hint}>{t('config.apiKeyHint')}</p>
               </div>
             </div>
           </div>
@@ -467,19 +468,19 @@ export default function ConfigPanel() {
         <div className="flex items-center justify-between border-b pb-2">
           <div className="flex items-center gap-2">
             <Clock size={20} className="text-gray-700" />
-            <h2 className="text-lg font-semibold">Auto-Processing Scheduler</h2>
+            <h2 className="text-lg font-semibold">{t('config.schedulerSection')}</h2>
             {schedulerStatus?.running ? (
               <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-sm rounded">
-                <CheckCircle size={12} /> Running
+                <CheckCircle size={12} /> {t('config.schedulerRunning')}
               </span>
             ) : (
               <span className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-sm rounded">
-                <XCircle size={12} /> Stopped
+                <XCircle size={12} /> {t('config.schedulerStopped')}
               </span>
             )}
             {schedulerStatus?.is_processing && (
               <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-sm rounded">
-                <RefreshCw size={12} className="animate-spin" /> Processing...
+                <RefreshCw size={12} className="animate-spin" /> {t('config.schedulerProcessing')}
               </span>
             )}
           </div>
@@ -487,7 +488,7 @@ export default function ConfigPanel() {
 
         <div className="flex items-end gap-4">
           <div>
-            <label className={label}>Check interval (minutes)</label>
+            <label className={label}>{t('config.schedulerInterval')}</label>
             <input
               type="number"
               min="1"
@@ -506,7 +507,7 @@ export default function ConfigPanel() {
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 <Square size={18} />
-                Stop
+                {t('config.stop')}
               </button>
             ) : (
               <button
@@ -515,26 +516,26 @@ export default function ConfigPanel() {
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
                 <Play size={18} />
-                Start
+                {t('config.start')}
               </button>
             )}
           </div>
           {schedulerStatus?.running && schedulerStatus.next_run && (
             <span className="text-sm text-gray-500">
-              Next run: {new Date(schedulerStatus.next_run).toLocaleString()}
+              {t('config.schedulerNextRun', { time: new Date(schedulerStatus.next_run).toLocaleString() })}
             </span>
           )}
         </div>
 
         {schedulerStatus?.is_processing && schedulerStatus.current_doc_id && (
           <div className="text-sm text-blue-600">
-            Currently processing document #{schedulerStatus.current_doc_id}
+            {t('config.schedulerCurrentDoc', { id: schedulerStatus.current_doc_id })}
           </div>
         )}
 
         <div className="border-t pt-4">
           <button onClick={handleClearState} className="text-sm text-gray-500 hover:text-gray-700 underline">
-            Clear stuck processing state
+            {t('config.clearStuckState')}
           </button>
         </div>
       </div>
@@ -552,7 +553,7 @@ export default function ConfigPanel() {
           disabled={saving}
           className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
         >
-          {saving ? 'Saving...' : 'Save Configuration'}
+          {saving ? t('config.saving') : t('config.saveConfiguration')}
         </button>
       </div>
     </div>

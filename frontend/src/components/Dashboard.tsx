@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { statsApi } from '../api/client';
 import { RefreshCw, Trash2 } from 'lucide-react';
@@ -34,6 +35,7 @@ interface RecentLog {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<Stats | null>(null);
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
   const [recentLogs, setRecentLogs] = useState<RecentLog[]>([]);
@@ -62,7 +64,7 @@ export default function Dashboard() {
   };
 
   const handleReset = async () => {
-    if (!window.confirm('Are you sure you want to delete all processing logs? This cannot be undone.')) {
+    if (!window.confirm(t('dashboard.confirmReset'))) {
       return;
     }
     setResetting(true);
@@ -71,26 +73,26 @@ export default function Dashboard() {
       loadData();
     } catch (error) {
       console.error('Failed to reset stats:', error);
-      alert('Failed to reset stats');
+      alert(t('dashboard.resetFailed'));
     } finally {
       setResetting(false);
     }
   };
 
   if (loading) {
-    return <div className="text-gray-500">Loading...</div>;
+    return <div className="text-gray-500">{t('common.loading')}</div>;
   }
 
   const pieData = stats ? [
-    { name: 'Success', value: stats.success },
-    { name: 'Failed', value: stats.failed },
-    { name: 'Skipped', value: stats.skipped },
+    { name: t('dashboard.success'), value: stats.success },
+    { name: t('dashboard.failed'), value: stats.failed },
+    { name: t('dashboard.skipped'), value: stats.skipped },
   ] : [];
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
         <div className="flex gap-2">
           <button
             onClick={loadData}
@@ -98,7 +100,7 @@ export default function Dashboard() {
             className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-            Refresh
+            {t('common.refresh')}
           </button>
           <button
             onClick={handleReset}
@@ -106,29 +108,29 @@ export default function Dashboard() {
             className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50"
           >
             <Trash2 size={18} />
-            {resetting ? 'Resetting...' : 'Reset Stats'}
+            {resetting ? t('dashboard.resetting') : t('dashboard.resetStats')}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">Total Processed</p>
+          <p className="text-sm text-gray-500">{t('dashboard.totalProcessed')}</p>
           <p className="text-3xl font-bold text-gray-900">{stats?.total_processed || 0}</p>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">Success Rate</p>
+          <p className="text-sm text-gray-500">{t('dashboard.successRate')}</p>
           <p className="text-3xl font-bold text-green-600">{stats?.success_rate || 0}%</p>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">Avg Processing Time</p>
+          <p className="text-sm text-gray-500">{t('dashboard.avgProcessingTime')}</p>
           <p className="text-3xl font-bold text-gray-900">{stats?.avg_processing_time_ms || 0}ms</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Processing Status</h2>
+          <h2 className="text-lg font-semibold mb-4">{t('dashboard.processingStatus')}</h2>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
@@ -158,36 +160,36 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Daily Processing (7 days)</h2>
+          <h2 className="text-lg font-semibold mb-4">{t('dashboard.dailyProcessing')}</h2>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyStats}>
               <XAxis dataKey="date" tick={{ fontSize: 12 }} />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="success" fill="#22c55e" name="Success" />
-              <Bar dataKey="failed" fill="#ef4444" name="Failed" />
+              <Bar dataKey="success" fill="#22c55e" name={t('dashboard.success')} />
+              <Bar dataKey="failed" fill="#ef4444" name={t('dashboard.failed')} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Recent Processing Logs</h2>
+        <h2 className="text-lg font-semibold mb-4">{t('dashboard.recentLogs')}</h2>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Document</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Model</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Time</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Date</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colDocument')}</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colStatus')}</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colModel')}</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colTime')}</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colDate')}</th>
               </tr>
             </thead>
             <tbody>
               {recentLogs.map((log) => (
                 <tr key={log.id} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4">{log.document_title || `Doc #${log.document_id}`}</td>
+                  <td className="py-3 px-4">{log.document_title || t('dashboard.docFallback', { id: log.document_id })}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       log.status === 'success' ? 'bg-green-100 text-green-800' :

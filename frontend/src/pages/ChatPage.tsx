@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../api/client';
 import { Send, FileText, Loader2, RefreshCw } from 'lucide-react';
 
@@ -14,6 +15,7 @@ interface Message {
 }
 
 export default function ChatPage() {
+  const { t } = useTranslation();
   const [documents, setDocuments] = useState<ChatDocument[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -52,13 +54,13 @@ export default function ChatPage() {
     setLoadingDoc(true);
     setMessages([]);
     setError(null);
-    
+
     try {
       const res = await documentsApi.getChatDocument(docId);
       setMessages([
         {
           role: 'assistant',
-          content: `Document loaded: "${res.data.title}". You can now ask me questions about this document.`,
+          content: t('chat.documentLoaded', { title: res.data.title }),
         },
       ]);
     } catch (err: any) {
@@ -70,19 +72,19 @@ export default function ChatPage() {
 
   const sendMessage = async () => {
     if (!input.trim() || !selectedDoc || loading) return;
-    
+
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setLoading(true);
     setError(null);
-    
+
     try {
       const res = await documentsApi.chat(selectedDoc, userMessage);
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.response }]);
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error processing your request.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: t('chat.errorResponse') }]);
     } finally {
       setLoading(false);
     }
@@ -98,20 +100,20 @@ export default function ChatPage() {
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Document Chat</h1>
-        <p className="text-sm text-gray-500">Ask questions about your documents</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('chat.title')}</h1>
+        <p className="text-sm text-gray-500">{t('chat.subtitle')}</p>
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Document List */}
         <div className="w-64 bg-white rounded-lg shadow overflow-hidden flex flex-col">
           <div className="p-3 border-b bg-gray-50 flex justify-between items-center">
-            <h2 className="font-semibold text-sm">Select Document</h2>
+            <h2 className="font-semibold text-sm">{t('chat.selectDocument')}</h2>
             <button
               onClick={loadDocuments}
               disabled={loadingDocs}
               className="p-1 hover:bg-gray-200 rounded disabled:opacity-50"
-              title="Refresh documents"
+              title={t('chat.refreshTitle')}
             >
               <RefreshCw size={16} className={loadingDocs ? 'animate-spin' : ''} />
             </button>
@@ -119,7 +121,7 @@ export default function ChatPage() {
           <div className="flex-1 overflow-y-auto">
             {documents.length === 0 ? (
               <div className="p-4 text-sm text-gray-500 text-center">
-                No documents found
+                {t('chat.noDocuments')}
               </div>
             ) : (
               documents.map(doc => (
@@ -134,7 +136,7 @@ export default function ChatPage() {
                     <FileText size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
-                        {doc.title || `Document #${doc.id}`}
+                        {doc.title || t('chat.docFallback', { id: doc.id })}
                       </p>
                       <p className="text-xs text-gray-500">
                         {new Date(doc.created).toLocaleDateString()}
@@ -153,7 +155,7 @@ export default function ChatPage() {
             <div className="flex-1 flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-                <p>Select a document to start chatting</p>
+                <p>{t('chat.emptyState')}</p>
               </div>
             </div>
           ) : (
@@ -181,7 +183,7 @@ export default function ChatPage() {
                     <div className="bg-gray-100 rounded-lg p-3">
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <Loader2 size={16} className="animate-spin" />
-                        Loading document...
+                        {t('chat.loadingDocument')}
                       </div>
                     </div>
                   </div>
@@ -191,7 +193,7 @@ export default function ChatPage() {
                     <div className="bg-gray-100 rounded-lg p-3">
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <Loader2 size={16} className="animate-spin" />
-                        Thinking...
+                        {t('chat.thinking')}
                       </div>
                     </div>
                   </div>
@@ -214,7 +216,7 @@ export default function ChatPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask a question about the document..."
+                    placeholder={t('chat.inputPlaceholder')}
                     disabled={!selectedDoc || loading}
                     className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
                   />
