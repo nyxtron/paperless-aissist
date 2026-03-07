@@ -19,11 +19,13 @@ class LLMHandler:
         model: str = "llama3",
         api_base: Optional[str] = None,
         api_key: Optional[str] = None,
+        timeout: float = 600.0,
     ):
         self.provider = provider
         self.model = model
         self.api_base = api_base or ""
         self.api_key = api_key
+        self.timeout = timeout
 
     @classmethod
     async def from_config(cls, for_vision: bool = False) -> "LLMHandler":
@@ -47,9 +49,14 @@ class LLMHandler:
         if not model:
             model = "llama3" if not for_vision else "llava"
 
+        timeout_str = await cls._get_config(f"llm_timeout{suffix}")
+        if for_vision and not timeout_str:
+            timeout_str = await cls._get_config("llm_timeout")
+        timeout = float(timeout_str) if timeout_str else 600.0
+
         print(f"[LLM Handler] Provider: {provider}, Model: {model}, API Base: {api_base}")
 
-        return cls(provider=provider, model=model, api_base=api_base, api_key=api_key)
+        return cls(provider=provider, model=model, api_base=api_base, api_key=api_key, timeout=timeout)
 
     @staticmethod
     async def _get_config(key: str) -> Optional[str]:
@@ -91,7 +98,7 @@ class LLMHandler:
         json_mode: bool,
         temperature: float,
     ) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             url = f"{self.api_base}/api/chat"
             print(f"[Ollama] Calling: {url}")
             print(f"[Ollama] Model: {self.model}")
@@ -138,7 +145,7 @@ class LLMHandler:
         json_mode: bool,
         temperature: float,
     ) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             url = f"{self.api_base}/chat/completions"
             print(f"[OpenAI] Calling: {url}")
             print(f"[OpenAI] Model: {self.model}")
@@ -204,7 +211,7 @@ class LLMHandler:
         url = f"{self.api_base}/api/chat"
         combined_text = []
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             for i, img in enumerate(images):
                 img_b64 = base64.b64encode(img).decode("utf-8")
                 print(f"[Ollama Vision] Page {i+1}/{len(images)}: {url}, Model: {self.model}")
@@ -252,7 +259,7 @@ class LLMHandler:
     ) -> dict[str, Any]:
         import base64
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             url = f"{self.api_base}/chat/completions"
             print(f"[OpenAI Vision] Calling: {url}")
             print(f"[OpenAI Vision] Model: {self.model}")

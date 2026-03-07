@@ -101,7 +101,11 @@
     "clearStateConfirm": "Clear stuck processing state? Only do this if processing was interrupted.",
     "clearStateSuccess": "Processing state cleared",
     "clearStateFailed": "Failed to clear state",
-    "processedCount": "Processed {{count}} documents"
+    "processedCount": "Processed {{count}} documents",
+    "llmTimeout": "LLM Request Timeout (seconds)",
+    "llmTimeoutHint": "Maximum wait time for LLM/vision responses (30–3600 s). Increase for slow models.",
+    "llmTimeoutVision": "Vision Timeout (seconds)",
+    "llmTimeoutVisionHint": "Timeout for vision/OCR requests (30–3600 s). Leave at 600 if unsure."
   },
   "prompts": {
     "title": "Prompt Manager",

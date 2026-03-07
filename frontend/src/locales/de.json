@@ -101,7 +101,11 @@
     "clearStateConfirm": "Hängenden Verarbeitungsstatus zurücksetzen? Nur ausführen, wenn die Verarbeitung unterbrochen wurde.",
     "clearStateSuccess": "Verarbeitungsstatus zurückgesetzt",
     "clearStateFailed": "Status konnte nicht zurückgesetzt werden",
-    "processedCount": "{{count}} Dokumente verarbeitet"
+    "processedCount": "{{count}} Dokumente verarbeitet",
+    "llmTimeout": "LLM-Anfrage-Timeout (Sekunden)",
+    "llmTimeoutHint": "Maximale Wartezeit für LLM-/Vision-Antworten (30–3600 s). Erhöhen für langsame Modelle.",
+    "llmTimeoutVision": "Vision-Timeout (Sekunden)",
+    "llmTimeoutVisionHint": "Timeout für Vision-/OCR-Anfragen (30–3600 s). Im Zweifel bei 600 lassen."
   },
   "prompts": {
     "title": "Prompt-Verwaltung",

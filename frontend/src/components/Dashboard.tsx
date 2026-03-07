@@ -124,7 +124,7 @@ export default function Dashboard() {
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <p className="text-sm text-gray-500">{t('dashboard.avgProcessingTime')}</p>
-          <p className="text-3xl font-bold text-gray-900">{stats?.avg_processing_time_ms || 0}ms</p>
+          <p className="text-3xl font-bold text-gray-900">{((stats?.avg_processing_time_ms || 0) / 1000).toFixed(1)}s</p>
         </div>
       </div>
 
@@ -198,12 +198,20 @@ export default function Dashboard() {
                     }`}>
                       {log.status}
                     </span>
+                    {log.status === 'failed' && log.error_message && (
+                      <p
+                        className="mt-1 text-xs text-red-600 max-w-xs truncate"
+                        title={log.error_message}
+                      >
+                        {log.error_message}
+                      </p>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
                     {log.llm_model || '-'}
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
-                    {log.processing_time_ms ? `${log.processing_time_ms}ms` : '-'}
+                    {log.processing_time_ms ? `${(log.processing_time_ms / 1000).toFixed(1)}s` : '-'}
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
                     {new Date(log.processed_at).toLocaleString()}

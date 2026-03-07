@@ -22,6 +22,8 @@ interface Configs {
   llm_provider_vision: string;
   llm_api_base_vision: string;
   llm_api_key_vision: string;
+  llm_timeout: string;
+  llm_timeout_vision: string;
 }
 
 interface PaperlessTag {
@@ -55,6 +57,8 @@ export default function ConfigPanel() {
     llm_model_vision: 'qwen2.5vl:7b',
     llm_api_base_vision: 'http://localhost:11434',
     llm_api_key_vision: '',
+    llm_timeout: '600',
+    llm_timeout_vision: '600',
   });
   const [saving, setSaving] = useState(false);
   const [testingPaperless, setTestingPaperless] = useState(false);
@@ -413,6 +417,18 @@ export default function ConfigPanel() {
             </select>
             <p className={hint}>{t('config.fallbackOcrHint')}</p>
           </div>
+          <div>
+            <label className={label}>{t('config.llmTimeout')}</label>
+            <input
+              type="number"
+              min="30"
+              max="3600"
+              value={configs.llm_timeout}
+              onChange={(e) => setConfigs({ ...configs, llm_timeout: e.target.value })}
+              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <p className={hint}>{t('config.llmTimeoutHint')}</p>
+          </div>
         </div>
 
         {configs.enable_vision === 'true' && (
@@ -457,6 +473,18 @@ export default function ConfigPanel() {
                   className={field}
                 />
                 <p className={hint}>{t('config.apiKeyHint')}</p>
+              </div>
+              <div>
+                <label className={label}>{t('config.llmTimeoutVision')}</label>
+                <input
+                  type="number"
+                  min="30"
+                  max="3600"
+                  value={configs.llm_timeout_vision}
+                  onChange={(e) => setConfigs({ ...configs, llm_timeout_vision: e.target.value })}
+                  className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+                <p className={hint}>{t('config.llmTimeoutVisionHint')}</p>
               </div>
             </div>
           </div>
