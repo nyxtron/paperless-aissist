@@ -15,9 +15,12 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-64 bg-white border-r border-gray-200">
+      <aside className="w-72 bg-white border-r border-gray-200">
         <div className="p-6">
-          <h1 className="text-xl font-bold text-gray-900">Paperless-AIssist</h1>
+          <div className="flex items-center gap-3 mb-1">
+            <img src="/icon.png" alt="Paperless-AIssist" className="w-12 h-12 rounded" />
+            <h1 className="text-xl font-bold text-gray-900">Paperless-AIssist</h1>
+          </div>
           <p className="text-sm text-gray-500">{t('nav.subtitle')}</p>
         </div>
         <nav className="px-4">
