@@ -5,7 +5,8 @@
     "process": "Verarbeiten",
     "chat": "Chat",
     "configuration": "Konfiguration",
-    "prompts": "Prompts"
+    "prompts": "Prompts",
+    "logs": "System-Protokolle"
   },
   "common": {
     "loading": "Laden...",
@@ -46,6 +47,10 @@
   "config": {
     "title": "Konfiguration",
     "checkLoadTags": "Prüfen / Tags laden",
+    "connect": "Verbinden & Tags laden",
+    "connecting": "Verbinde…",
+    "notConnectedHint": "Verbinden, um Tag-Auswahl zu befüllen",
+    "connectedBadge": "Verbunden — {{tags}} Tags, {{correspondents}} Korrespondenten",
     "processing": "Wird verarbeitet...",
     "processDocuments": "Dokumente verarbeiten",
     "connectedMsg": "Verbunden! {{tags}} Tags, {{correspondents}} Korrespondenten geladen",
@@ -105,7 +110,10 @@
     "llmTimeout": "LLM-Anfrage-Timeout (Sekunden)",
     "llmTimeoutHint": "Maximale Wartezeit für LLM-/Vision-Antworten (30–3600 s). Erhöhen für langsame Modelle.",
     "llmTimeoutVision": "Vision-Timeout (Sekunden)",
-    "llmTimeoutVisionHint": "Timeout für Vision-/OCR-Anfragen (30–3600 s). Im Zweifel bei 600 lassen."
+    "llmTimeoutVisionHint": "Timeout für Vision-/OCR-Anfragen (30–3600 s). Im Zweifel bei 600 lassen.",
+    "applicationSection": "Anwendung",
+    "logLevel": "Log-Level",
+    "logLevelHint": "Steuert die Ausführlichkeit der System-Logs. DEBUG zeigt alle Pipeline-Details."
   },
   "prompts": {
     "title": "Prompt-Verwaltung",
@@ -163,6 +171,16 @@
     "processBtn": "Verarbeiten",
     "processedCount": "{{count}} Dokumente verarbeitet",
     "alreadyProcessing": "Verarbeitung läuft bereits"
+  },
+  "logs": {
+    "title": "System-Protokolle",
+    "connected": "Verbunden",
+    "disconnected": "Getrennt",
+    "live": "Live",
+    "pause": "Pause",
+    "resume": "Fortsetzen",
+    "clear": "Leeren",
+    "emptyState": "Noch keine Protokolleinträge."
   },
   "chat": {
     "title": "Dokument-Chat",

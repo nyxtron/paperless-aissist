@@ -1,6 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Settings, FileText, Play, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, Settings, FileText, Play, MessageCircle, ScrollText } from 'lucide-react';
 
 export default function Layout() {
   const { t, i18n } = useTranslation();
@@ -11,6 +11,7 @@ export default function Layout() {
     { path: '/chat', label: t('nav.chat'), icon: MessageCircle },
     { path: '/config', label: t('nav.configuration'), icon: Settings },
     { path: '/prompts', label: t('nav.prompts'), icon: FileText },
+    { path: '/logs', label: t('nav.logs'), icon: ScrollText },
   ];
 
   return (

@@ -5,7 +5,8 @@
     "process": "Process",
     "chat": "Chat",
     "configuration": "Configuration",
-    "prompts": "Prompts"
+    "prompts": "Prompts",
+    "logs": "System Logs"
   },
   "common": {
     "loading": "Loading...",
@@ -46,6 +47,10 @@
   "config": {
     "title": "Configuration",
     "checkLoadTags": "Check / Load Tags",
+    "connect": "Connect & Load Tags",
+    "connecting": "Connecting…",
+    "notConnectedHint": "Connect above to populate tag dropdowns",
+    "connectedBadge": "Connected — {{tags}} tags, {{correspondents}} correspondents",
     "processing": "Processing...",
     "processDocuments": "Process Documents",
     "connectedMsg": "Connected! Loaded {{tags}} tags, {{correspondents}} correspondents",
@@ -105,7 +110,10 @@
     "llmTimeout": "LLM Request Timeout (seconds)",
     "llmTimeoutHint": "Maximum wait time for LLM/vision responses (30–3600 s). Increase for slow models.",
     "llmTimeoutVision": "Vision Timeout (seconds)",
-    "llmTimeoutVisionHint": "Timeout for vision/OCR requests (30–3600 s). Leave at 600 if unsure."
+    "llmTimeoutVisionHint": "Timeout for vision/OCR requests (30–3600 s). Leave at 600 if unsure.",
+    "applicationSection": "Application",
+    "logLevel": "Log Level",
+    "logLevelHint": "Controls verbosity of the System Logs. DEBUG shows full pipeline detail."
   },
   "prompts": {
     "title": "Prompt Manager",
@@ -163,6 +171,16 @@
     "processBtn": "Process",
     "processedCount": "Processed {{count}} documents",
     "alreadyProcessing": "Already processing"
+  },
+  "logs": {
+    "title": "System Logs",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "live": "Live",
+    "pause": "Pause",
+    "resume": "Resume",
+    "clear": "Clear",
+    "emptyState": "No log entries yet."
   },
   "chat": {
     "title": "Document Chat",
