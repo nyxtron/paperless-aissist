@@ -69,37 +69,29 @@ class PaperlessClient:
         logger.debug(f"GET {url} → {len(results)} documents")
         return results
 
+    async def _get_all_pages(self, url: str) -> list[dict[str, Any]]:
+        results = []
+        next_url: Optional[str] = url
+        while next_url:
+            logger.debug(f"GET {next_url}")
+            response = await self.client.get(next_url, headers=self._get_headers())
+            response.raise_for_status()
+            data = response.json()
+            results.extend(data.get("results", []))
+            next_url = data.get("next")
+        return results
+
     async def get_correspondents(self) -> list[dict[str, Any]]:
-        url = f"{self.base_url}/api/correspondents/"
-        logger.debug(f"GET {url}")
-        response = await self.client.get(url, headers=self._get_headers())
-        response.raise_for_status()
-        data = response.json()
-        return data.get("results", [])
+        return await self._get_all_pages(f"{self.base_url}/api/correspondents/")
 
     async def get_tags(self) -> list[dict[str, Any]]:
-        url = f"{self.base_url}/api/tags/"
-        logger.debug(f"GET {url}")
-        response = await self.client.get(url, headers=self._get_headers())
-        response.raise_for_status()
-        data = response.json()
-        return data.get("results", [])
+        return await self._get_all_pages(f"{self.base_url}/api/tags/")
 
     async def get_document_types(self) -> list[dict[str, Any]]:
-        url = f"{self.base_url}/api/document_types/"
-        logger.debug(f"GET {url}")
-        response = await self.client.get(url, headers=self._get_headers())
-        response.raise_for_status()
-        data = response.json()
-        return data.get("results", [])
+        return await self._get_all_pages(f"{self.base_url}/api/document_types/")
 
     async def get_custom_fields(self) -> list[dict[str, Any]]:
-        url = f"{self.base_url}/api/custom_fields/"
-        logger.debug(f"GET {url}")
-        response = await self.client.get(url, headers=self._get_headers())
-        response.raise_for_status()
-        data = response.json()
-        return data.get("results", [])
+        return await self._get_all_pages(f"{self.base_url}/api/custom_fields/")
     
     async def update_document(
         self,
