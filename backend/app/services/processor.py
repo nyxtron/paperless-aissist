@@ -1048,6 +1048,16 @@ Available Custom Fields: [{custom_fields_list}]"""
             prompts = self._get_all_prompts()
             metadata["title"] = doc.get("title", "")
 
+            # Seed detected_type from document's existing Paperless field so type_specific
+            # prompts fire even when ai-document-type tag is not present in this run
+            if "fields" in steps_to_run and "document_type" not in steps_to_run:
+                existing_dt_id = doc.get("document_type")
+                if existing_dt_id:
+                    detected_type = next(
+                        (dt["name"] for dt in metadata["document_types"] if dt["id"] == existing_dt_id),
+                        None,
+                    )
+
             for step in steps_to_run:
                 if step == "ocr":
                     step_update, content = await self._step_ocr(doc_id, doc, content, metadata, prompts, llm, add_step)
