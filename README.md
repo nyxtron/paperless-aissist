@@ -13,6 +13,7 @@ Tag a document with `ai-process` and it gets automatically classified, titled, t
 - **OCR post-processing** — LLM corrects OCR errors before classification
 - **Document chat** — ask questions about any document via the web UI
 - **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
+- **Modular tag workflows** — trigger only the steps you need per document (`ai-title`, `ai-tags`, `ai-fields`, etc.) instead of the full pipeline
 - **Multilingual UI** — web interface available in English and German
 
 ## Screenshots
@@ -74,7 +75,7 @@ volumes:
 
 1. Go to **Settings** and verify your Paperless and Ollama URLs
 2. Set the LLM model (see recommendations below)
-3. Create two tags in Paperless-ngx: `ai-process` and `ai-processed`
+3. Create at minimum two tags in Paperless-ngx: `ai-process` and `ai-processed`. Optionally create modular step tags (see below) for per-step triggering.
 4. Tag any document with `ai-process` — it will be processed immediately or on the next scheduler tick
 
 ## Configuration
@@ -126,14 +127,35 @@ ollama pull benhaotang/Nanonets-OCR-s:latest
 
 ## Processing Pipeline
 
-Each document tagged with `ai-process` goes through the following steps:
+Each document tagged with `ai-process` goes through all steps below. Use modular tags to trigger individual steps only (see **Modular Tag Workflows**).
 
 1. **Vision OCR** *(optional)* — reads the document as page images using an Ollama vision model
 2. **OCR Fix** *(optional)* — LLM corrects OCR errors in the extracted text
 3. **Title** — generates a document title
 4. **Classification** — detects correspondent, document type, and tags
 5. **Custom field extraction** — extracts structured data into Paperless custom fields
-6. **Tag swap** — removes `ai-process`, adds `ai-processed`
+6. **Tag swap** — removes whichever trigger tag(s) were present, adds `ai-processed`
+
+## Modular Tag Workflows
+
+Instead of running the full pipeline with `ai-process`, you can tag a document with one or more step-specific tags to run only those steps:
+
+| Tag                | Triggers             |
+|--------------------|----------------------|
+| `ai-process`       | Full pipeline (all steps) |
+| `ai-ocr`           | Vision OCR only      |
+| `ai-ocr-fix`       | OCR error correction only |
+| `ai-title`         | Title generation only |
+| `ai-correspondent` | Correspondent classification only |
+| `ai-document-type` | Document type classification only |
+| `ai-tags`          | Tag assignment only  |
+| `ai-fields`        | Custom field extraction only |
+
+Multiple step tags can be combined on a single document. All default tag names can be overridden in Settings.
+
+> **Note on `ai-fields` + type-specific prompts:** When `ai-fields` runs without `ai-document-type`, the processor reads the document's current document type from Paperless and uses it to match any active `type_specific` prompts. You do not need to add `ai-document-type` just to get type-specific field extraction to work.
+
+Documents tagged with any modular tag are picked up by the scheduler and the process queue alongside `ai-process` documents.
 
 ## Prompts
 
@@ -165,7 +187,7 @@ Both `extract` and `type_specific` can be active at the same time — their resu
 
 The **Document Type Filter** on a `type_specific` prompt limits it to run only when the document is classified as that type. For example: `document_type_filter = Rechnung` runs the prompt only for invoices.
 
-`type_specific` requires the `document_type` prompt (or `classify`) to be active — it uses the detected type to decide whether to run.
+`type_specific` requires a known document type to decide whether to run. When the `document_type` prompt (or `classify`) is active, it uses the newly detected type. When running `ai-fields` alone, the processor falls back to the document's existing document type in Paperless — so type-specific extraction works without also adding `ai-document-type`.
 
 ### Load Samples
 
@@ -185,7 +207,7 @@ Paperless AIssist is a flexible, web-UI-configured AI middleware for Paperless-n
 | Feature / Aspect                  | Paperless AIssist (nyxtron)                          | Paperless-AI (clusterzx)                            | Paperless-GPT (icereed)                             |
 |-----------------------------------|------------------------------------------------------|-----------------------------------------------------|-----------------------------------------------------|
 | **Main Focus**                    | Full processing pipeline: Vision OCR → Error correction → Classification → Title → Custom Fields + Chat | Automated tagging, correspondent/type assignment, title + strong RAG chat | LLM-enhanced Vision OCR (superior for bad scans/handwriting) + basic tagging |
-| **Trigger Mechanism**             | Manual tag `ai-process` (auto-swapped to `ai-processed`) + optional scheduler polling | Automatic on upload / consumable + queue           | Automatic / manual + web UI review                  |
+| **Trigger Mechanism**             | Manual tag `ai-process` (full pipeline) or individual step tags (`ai-title`, `ai-tags`, etc.) + optional scheduler polling | Automatic on upload / consumable + queue           | Automatic / manual + web UI review                  |
 | **OCR Capabilities**              | Strong Vision OCR (images/PDF pages) + optional LLM post-processing for error correction | Uses standard Paperless-ngx Tesseract OCR           | Excellent LLM Vision OCR (context-aware, self-correcting) |
 | **Supported Vision Models**       | Ollama (e.g. Nanonets-OCR-s, qwen2.5vl), OpenAI (gpt-4o), Grok (grok-2-vision) | None (no native vision enhancement)                 | Ollama (MiniCPM-V etc.), OpenAI (gpt-4o), others    |
 | **Text LLM Support**              | Ollama, OpenAI (gpt-4o-mini), Grok (grok-3-mini), any OpenAI-compatible | Ollama, OpenAI, DeepSeek, Gemini, many others       | Ollama, OpenAI, Anthropic, Gemini, Mistral          |
