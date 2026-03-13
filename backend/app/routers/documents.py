@@ -17,15 +17,19 @@ async def process_document(doc_id: int):
         paperless = await PaperlessClient.from_config()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     processor = DocumentProcessor(paperless)
-    result = await processor.process_document(doc_id)
-    
+
+    # Try modular pipeline first; fall back to legacy if no modular tags found
+    result = await processor.process_document_modular(doc_id)
+    if result.get("no_modular_tags"):
+        result = await processor.process_document(doc_id)
+
     await paperless.close()
-    
+
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Processing failed"))
-    
+
     return result
 
 
@@ -95,45 +99,57 @@ async def get_paperless_tags():
 async def get_tagged_documents():
     from ..database import get_session
     from ..models import Config
+    from ..services.processor import DocumentProcessor
     from sqlmodel import select
-    
+
     process_tag_name = None
     with get_session() as session:
         stmt = select(Config).where(Config.key == "process_tag")
         config = session.exec(stmt).first()
         if config:
             process_tag_name = config.value
-    
-    if not process_tag_name:
-        return {"documents": [], "error": "Process tag not configured. Please set 'process_tag' in configuration."}
-    
+
     try:
         paperless = await PaperlessClient.from_config()
     except ValueError as e:
         return {"documents": [], "error": f"Paperless config error: {str(e)}"}
-    
+
     try:
         tags = await paperless.get_tags()
         tags_by_name = {t["name"]: t["id"] for t in tags}
-        tag_id = tags_by_name.get(process_tag_name)
-        
-        if not tag_id:
-            return {"documents": [], "error": f"Tag '{process_tag_name}' not found in Paperless"}
-        
-        docs = await paperless.list_documents(tags=[tag_id], limit=100)
+
+        merged: dict[int, dict] = {}
+
+        # Fetch docs tagged with process_tag
+        process_tag_id = None
+        if process_tag_name:
+            process_tag_id = tags_by_name.get(process_tag_name)
+            if process_tag_id:
+                for doc in await paperless.list_documents(tags=[process_tag_id], limit=100):
+                    merged[doc["id"]] = doc
+
+        # Fetch docs tagged with any modular trigger tag
+        modular_tag_map = await DocumentProcessor._get_modular_tag_map()
+        for tag_name in modular_tag_map.values():
+            tag_id = tags_by_name.get(tag_name)
+            if tag_id:
+                for doc in await paperless.list_documents(tags=[tag_id], limit=100):
+                    merged[doc["id"]] = doc
+
         await paperless.close()
-        
-        documents = []
-        for doc in docs:
-            documents.append({
+
+        documents = [
+            {
                 "id": doc.get("id"),
                 "title": doc.get("title"),
                 "created": doc.get("created"),
                 "added": doc.get("added"),
                 "tags": doc.get("tags", []),
-            })
-        
-        return {"documents": documents, "process_tag": process_tag_name, "process_tag_id": tag_id}
+            }
+            for doc in merged.values()
+        ]
+
+        return {"documents": documents, "process_tag": process_tag_name, "process_tag_id": process_tag_id}
     except Exception as e:
         await paperless.close()
         return {"documents": [], "error": str(e)}
