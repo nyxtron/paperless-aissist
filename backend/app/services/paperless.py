@@ -57,18 +57,12 @@ class PaperlessClient:
         response.raise_for_status()
         return response.content
 
-    async def list_documents(self, tags: Optional[list[int]] = None, limit: int = 50) -> list[dict]:
-        url = f"{self.base_url}/api/documents/"
-        params = {"limit": limit}
+    async def list_documents(self, tags: Optional[list[int]] = None) -> list[dict]:
+        params: dict[str, Any] = {"page_size": 100}
         if tags:
-            params["tags__id"] = ",".join(map(str, tags))
-        logger.debug(f"GET {url} params={params}")
-        response = await self.client.get(url, headers=self._get_headers(), params=params)
-        response.raise_for_status()
-        data = response.json()
-        results = data.get("results", [])
-        logger.debug(f"GET {url} → {len(results)} documents")
-        return results
+            params["tags__id__all"] = ",".join(map(str, tags))
+        url = f"{self.base_url}/api/documents/?" + "&".join(f"{k}={v}" for k, v in params.items())
+        return await self._get_all_pages(url)
 
     async def _get_all_pages(self, url: str) -> list[dict[str, Any]]:
         results = []

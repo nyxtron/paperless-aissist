@@ -5,6 +5,7 @@ from ..services.processor import DocumentProcessor
 from ..services.scheduler import (
     try_trigger_processing,
     process_tagged_documents as process_tagged_with_state,
+    process_modular_tagged_documents as process_modular_with_state,
     _clear_processing,
 )
 
@@ -40,10 +41,14 @@ async def trigger_processing():
         raise HTTPException(status_code=409, detail=message)
     
     try:
-        result = await process_tagged_with_state()
-        return result
+        legacy = await process_tagged_with_state()
+        modular = await process_modular_with_state()
+        return {
+            "success": True,
+            "processed": legacy.get("processed", 0) + modular.get("processed", 0),
+            "results": legacy.get("results", []) + modular.get("results", []),
+        }
     except Exception as e:
-        _clear_processing()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         _clear_processing()
@@ -125,7 +130,7 @@ async def get_tagged_documents():
         if process_tag_name:
             process_tag_id = tags_by_name.get(process_tag_name)
             if process_tag_id:
-                for doc in await paperless.list_documents(tags=[process_tag_id], limit=100):
+                for doc in await paperless.list_documents(tags=[process_tag_id]):
                     merged[doc["id"]] = doc
 
         # Fetch docs tagged with any modular trigger tag
@@ -133,7 +138,7 @@ async def get_tagged_documents():
         for tag_name in modular_tag_map.values():
             tag_id = tags_by_name.get(tag_name)
             if tag_id:
-                for doc in await paperless.list_documents(tags=[tag_id], limit=100):
+                for doc in await paperless.list_documents(tags=[tag_id]):
                     merged[doc["id"]] = doc
 
         await paperless.close()
@@ -185,7 +190,7 @@ async def get_chat_documents():
         if not tag_id:
             return {"documents": [], "error": f"Tag '{process_tag_name}' not found in Paperless"}
         
-        docs = await paperless.list_documents(tags=[tag_id], limit=100)
+        docs = await paperless.list_documents(tags=[tag_id])
         await paperless.close()
         
         documents = []
