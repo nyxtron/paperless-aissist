@@ -12,6 +12,7 @@
     "loading": "Laden...",
     "refresh": "Aktualisieren",
     "cancel": "Abbrechen",
+    "close": "Schließen",
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "none": "-- Keiner --",
@@ -50,6 +51,7 @@
     "connect": "Verbinden & Tags laden",
     "connecting": "Verbinde…",
     "notConnectedHint": "Verbinden, um Tag-Auswahl zu befüllen",
+    "paperlessNotConfigured": "Paperless-URL und Token müssen konfiguriert werden",
     "connectedBadge": "Verbunden — {{tags}} Tags, {{correspondents}} Korrespondenten",
     "processing": "Wird verarbeitet...",
     "processDocuments": "Dokumente verarbeiten",
@@ -234,6 +236,15 @@
     "thinking": "Wird verarbeitet...",
     "inputPlaceholder": "Frage zum Dokument stellen...",
     "documentLoaded": "Dokument geladen: \"{{title}}\". Sie können jetzt Fragen zu diesem Dokument stellen.",
-    "errorResponse": "Beim Verarbeiten Ihrer Anfrage ist ein Fehler aufgetreten."
+    "errorResponse": "Beim Verarbeiten Ihrer Anfrage ist ein Fehler aufgetreten.",
+    "searchPlaceholder": "Dokumente nach Titel oder Inhalt suchen...",
+    "searching": "Suche läuft...",
+    "noResults": "Keine Ergebnisse gefunden",
+    "previewTitle": "Änderungsvorschau",
+    "preview": "Vorschau",
+    "previewing": "Vorschau wird erstellt...",
+    "previewHint": "KI-Verarbeitung simulieren, ohne Paperless zu verändern",
+    "previewSuccess": "Vorschau erfolgreich erstellt",
+    "proposedChanges": "Vorgeschlagene Änderungen"
   }
 }

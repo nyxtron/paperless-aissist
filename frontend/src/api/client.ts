@@ -26,8 +26,8 @@ api.interceptors.response.use(
 export const configApi = {
   getAll: () => api.get('/config'),
   get: (key: string) => api.get(`/config/${key}`),
-  set: (key: string, value: string, description?: string) => 
-    api.post('/config', null, { params: { key, value, description } }),
+  set: (key: string, value: string, description?: string) =>
+    api.post('/config', { key, value, description }),
   delete: (key: string) => api.delete(`/config/${key}`),
 };
 
@@ -56,7 +56,7 @@ export const promptsApi = {
 };
 
 export const documentsApi = {
-  process: (docId: number) => api.post(`/documents/process/${docId}`),
+  process: (docId: number) => api.post('/documents/process', { document_id: docId }),
   trigger: () => api.post('/documents/trigger'),
   testConnection: () => api.get('/documents/test-connection'),
   getTagged: () => api.get('/documents/tagged'),
@@ -65,6 +65,8 @@ export const documentsApi = {
   getChatDocument: (docId: number) => api.get(`/documents/chat/${docId}`),
   chat: (docId: number, message: string) => 
     api.post(`/documents/chat?doc_id=${docId}`, null, { params: { message } }),
+  searchPaperless: (query: string) => api.get('/documents/search', { params: { query } }),
+  getPreview: (docId: number) => api.get(`/documents/preview/${docId}`),
 };
 
 export const statsApi = {
@@ -78,7 +80,7 @@ export const schedulerApi = {
   getStatus: () => api.get('/scheduler'),
   start: (intervalMinutes?: number) => api.post('/scheduler/start', null, { params: { interval_minutes: intervalMinutes } }),
   stop: () => api.post('/scheduler/stop'),
-  update: (intervalMinutes: number) => api.post('/scheduler/update', null, { params: { interval_minutes: intervalMinutes } }),
+  update: (intervalMinutes: number) => api.put('/scheduler/', { enabled: true, interval: intervalMinutes }),
   triggerNow: () => api.post('/scheduler/trigger-now'),
   clearState: () => api.post('/scheduler/clear-state'),
 };

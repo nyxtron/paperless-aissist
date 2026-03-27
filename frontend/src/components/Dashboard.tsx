@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { statsApi } from '../api/client';
 import { RefreshCw, Trash2 } from 'lucide-react';
@@ -73,7 +74,7 @@ export default function Dashboard() {
       loadData();
     } catch (error) {
       console.error('Failed to reset stats:', error);
-      alert(t('dashboard.resetFailed'));
+      toast.error(t('dashboard.resetFailed'));
     } finally {
       setResetting(false);
     }

@@ -12,6 +12,7 @@ Tag a document with `ai-process` and it gets automatically classified, titled, t
 - **Vision OCR** — uses vision models (Ollama, OpenAI, Grok) to read documents directly from page images
 - **OCR post-processing** — LLM corrects OCR errors before classification
 - **Document chat** — ask questions about any document via the web UI
+- **Document search & preview** — search Paperless documents from the Chat page; preview what AI processing would do without modifying Paperless
 - **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
 - **Modular tag workflows** — trigger only the steps you need per document (`ai-title`, `ai-tags`, `ai-fields`, etc.) instead of the full pipeline
 - **Multilingual UI** — web interface available in English and German
@@ -20,22 +21,22 @@ Tag a document with `ai-process` and it gets automatically classified, titled, t
 ## Screenshots
 
 ### Dashboard
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](https://raw.githubusercontent.com/nyxtron/paperless-aissist/main/docs/screenshots/dashboard.png)
 
 ### Process Queue
-![Process Queue](docs/screenshots/process-queue.png)
+![Process Queue](https://raw.githubusercontent.com/nyxtron/paperless-aissist/main/docs/screenshots/process-queue.png)
 
 ### Processing Result
-![Processing Result](docs/screenshots/process-result.png)
+![Processing Result](https://raw.githubusercontent.com/nyxtron/paperless-aissist/main/docs/screenshots/process-result.png)
 
 ### Chat
-![Chat](docs/screenshots/chat.png)
+![Chat](https://raw.githubusercontent.com/nyxtron/paperless-aissist/main/docs/screenshots/chat.png)
 
 ### Configuration
-![Configuration](docs/screenshots/config.png)
+![Configuration](https://raw.githubusercontent.com/nyxtron/paperless-aissist/main/docs/screenshots/config.png)
 
 ### Prompts
-![Prompts](docs/screenshots/prompts.png)
+![Prompts](https://raw.githubusercontent.com/nyxtron/paperless-aissist/main/docs/screenshots/prompts.png)
 
 ## Quick Start
 

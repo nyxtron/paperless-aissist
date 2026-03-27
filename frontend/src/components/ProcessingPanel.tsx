@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { documentsApi, schedulerApi } from '../api/client';
 import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
 
@@ -93,14 +94,14 @@ export default function ProcessingPanel() {
     setProcessing(true);
     try {
       const res = await documentsApi.trigger();
-      alert(t('processing.processedCount', { count: res.data.processed }));
+      toast.success(t('processing.processedCount', { count: res.data.processed }));
       loadDocuments();
       loadSchedulerStatus();
     } catch (err: any) {
       if (err.response?.status === 409) {
-        alert(err.response?.data?.detail || t('processing.alreadyProcessing'));
+        toast.error(err.response?.data?.detail || t('processing.alreadyProcessing'));
       } else {
-        alert(`Error: ${err.response?.data?.detail || err.message}`);
+        toast.error(`Error: ${err.response?.data?.detail || err.message}`);
       }
     } finally {
       setProcessing(false);
@@ -118,7 +119,7 @@ export default function ProcessingPanel() {
       loadDocuments();
       loadSchedulerStatus();
     } catch (err: any) {
-      alert(`Error: ${err.response?.data?.detail || err.message}`);
+      toast.error(`Error: ${err.response?.data?.detail || err.message}`);
     } finally {
       setProcessingId(null);
     }

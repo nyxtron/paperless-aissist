@@ -14,7 +14,10 @@ scheduler: Optional[AsyncIOScheduler] = None
 job_id = "auto_process_documents"
 lock = threading.Lock()
 
-DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data"))
+DATA_DIR = os.environ.get(
+    "DATA_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data"),
+)
 os.makedirs(DATA_DIR, exist_ok=True)
 STATE_FILE = os.path.join(DATA_DIR, "scheduler_state.json")
 
@@ -22,7 +25,7 @@ STATE_FILE = os.path.join(DATA_DIR, "scheduler_state.json")
 def _load_state() -> dict:
     try:
         if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, 'r') as f:
+            with open(STATE_FILE, "r") as f:
                 return json.load(f)
     except Exception as e:
         logger.error(f"Failed to load state: {e}")
@@ -31,7 +34,7 @@ def _load_state() -> dict:
 
 def _save_state(state: dict):
     try:
-        with open(STATE_FILE, 'w') as f:
+        with open(STATE_FILE, "w") as f:
             json.dump(state, f)
     except Exception as e:
         logger.error(f"Failed to save state: {e}")
@@ -64,16 +67,16 @@ def load_scheduler_config() -> tuple[bool, int]:
         from ..database import get_session
         from ..models import Config
         from sqlmodel import select
-        
+
         with get_session() as session:
             stmt = select(Config).where(Config.key == "scheduler_enabled")
             enabled_config = session.exec(stmt).first()
             enabled = enabled_config.value == "true" if enabled_config else False
-            
+
             stmt = select(Config).where(Config.key == "scheduler_interval")
             interval_config = session.exec(stmt).first()
             interval = int(interval_config.value) if interval_config else 5
-            
+
             return enabled, interval
     except Exception as e:
         logger.error(f"Failed to load scheduler config: {e}")
@@ -86,21 +89,27 @@ def save_scheduler_config(enabled: bool, interval_minutes: int):
         from ..database import get_session
         from ..models import Config
         from sqlmodel import select
-        
+
         with get_session() as session:
             stmt = select(Config).where(Config.key == "scheduler_enabled")
             config = session.exec(stmt).first()
             if config:
                 config.value = "true" if enabled else "false"
             else:
-                session.add(Config(key="scheduler_enabled", value="true" if enabled else "false"))
-            
+                session.add(
+                    Config(
+                        key="scheduler_enabled", value="true" if enabled else "false"
+                    )
+                )
+
             stmt = select(Config).where(Config.key == "scheduler_interval")
             config = session.exec(stmt).first()
             if config:
                 config.value = str(interval_minutes)
             else:
-                session.add(Config(key="scheduler_interval", value=str(interval_minutes)))
+                session.add(
+                    Config(key="scheduler_interval", value=str(interval_minutes))
+                )
     except Exception as e:
         logger.error(f"Failed to save scheduler config: {e}")
 
@@ -132,7 +141,9 @@ async def process_documents_task():
     try:
         modular_result = await process_modular_tagged_documents()
         if modular_result.get("processed", 0) > 0:
-            logger.info(f"Auto-processed {modular_result.get('processed')} documents (modular pipeline)")
+            logger.info(
+                f"Auto-processed {modular_result.get('processed')} documents (modular pipeline)"
+            )
     except Exception as e:
         logger.error(f"Modular auto-processing failed: {e}")
     finally:
@@ -142,13 +153,13 @@ async def process_documents_task():
 
 def start_scheduler(interval_minutes: int = 5):
     global scheduler
-    
+
     if scheduler is None:
         scheduler = create_scheduler()
-    
+
     if scheduler.running:
         scheduler.shutdown()
-    
+
     scheduler.add_job(
         process_documents_task,
         trigger=IntervalTrigger(minutes=interval_minutes),
@@ -162,7 +173,7 @@ def start_scheduler(interval_minutes: int = 5):
 
 def stop_scheduler():
     global scheduler
-    
+
     if scheduler and scheduler.running:
         scheduler.shutdown()
     save_scheduler_config(False, 5)
@@ -171,9 +182,9 @@ def stop_scheduler():
 
 def get_scheduler_status() -> dict:
     global scheduler
-    
+
     is_processing, current_doc_id = is_currently_processing()
-    
+
     if scheduler is None or not scheduler.running:
         return {
             "running": False,
@@ -182,7 +193,7 @@ def get_scheduler_status() -> dict:
             "is_processing": is_processing,
             "current_doc_id": current_doc_id,
         }
-    
+
     job = scheduler.get_job(job_id)
     if job and job.next_run_time:
         return {
@@ -192,7 +203,7 @@ def get_scheduler_status() -> dict:
             "is_processing": is_processing,
             "current_doc_id": current_doc_id,
         }
-    
+
     return {
         "running": False,
         "interval_minutes": None,
@@ -204,12 +215,12 @@ def get_scheduler_status() -> dict:
 
 def update_scheduler_interval(interval_minutes: int):
     global scheduler
-    
+
     if scheduler and scheduler.running:
         job = scheduler.get_job(job_id)
         if job:
             scheduler.remove_job(job_id)
-        
+
         scheduler.add_job(
             process_documents_task,
             trigger=IntervalTrigger(minutes=interval_minutes),
@@ -227,7 +238,7 @@ def try_trigger_processing() -> tuple[bool, str]:
         if is_running:
             return False, f"Already processing document #{doc_id}"
         _set_processing()
-    
+
     return True, "Processing started"
 
 
@@ -235,7 +246,9 @@ def clear_processing_state():
     """Clear processing state (e.g., on startup if was interrupted)."""
     is_running, doc_id = is_currently_processing()
     if is_running:
-        logger.warning(f"Clearing stale processing state (was processing doc #{doc_id})")
+        logger.warning(
+            f"Clearing stale processing state (was processing doc #{doc_id})"
+        )
         _clear_processing()
 
 
@@ -266,6 +279,32 @@ async def process_modular_tagged_documents() -> dict:
 
     paperless = await PaperlessClient.from_config()
     processor = DocumentProcessor(paperless)
-    result = await processor.process_modular_tagged_documents()
+    tag_map = await processor._get_modular_tag_map()
+    trigger_tag_names = list(tag_map.values())
+
+    all_tags = await paperless.get_tags()
+    tag_name_to_id = {t["name"]: t["id"] for t in all_tags}
+
+    doc_ids: set[int] = set()
+    for tag_name in trigger_tag_names:
+        tag_id = tag_name_to_id.get(tag_name)
+        if not tag_id:
+            continue
+        try:
+            docs = await paperless.list_documents(tags=[tag_id])
+            for doc in docs:
+                doc_ids.add(doc["id"])
+        except Exception as e:
+            logger.warning(f"Failed to list docs for modular tag {tag_name!r}: {e}")
+
+    results = []
+    for doc_id in doc_ids:
+        result = await processor.process_document(doc_id)
+        results.append(result)
+
     await paperless.close()
-    return result
+    return {
+        "success": True,
+        "processed": len(results),
+        "results": results,
+    }

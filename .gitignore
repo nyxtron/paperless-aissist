@@ -44,3 +44,4 @@ logs/
 
 # Docker
 !.dockerignore
+.worktrees/

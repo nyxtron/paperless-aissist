@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
+from pydantic import BaseModel
 
 from ..services.scheduler import (
     start_scheduler,
@@ -14,6 +15,11 @@ from ..services.scheduler import (
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 
 
+class SchedulerUpdate(BaseModel):
+    enabled: bool
+    interval: int
+
+
 @router.get("")
 async def get_scheduler():
     return get_scheduler_status()
@@ -22,7 +28,10 @@ async def get_scheduler():
 @router.post("/start")
 async def start(interval_minutes: int = 5):
     start_scheduler(interval_minutes)
-    return {"success": True, "message": f"Scheduler started with {interval_minutes} minute interval"}
+    return {
+        "success": True,
+        "message": f"Scheduler started with {interval_minutes} minute interval",
+    }
 
 
 @router.post("/stop")
@@ -31,10 +40,17 @@ async def stop():
     return {"success": True, "message": "Scheduler stopped"}
 
 
-@router.post("/update")
-async def update(interval_minutes: int = 5):
-    update_scheduler_interval(interval_minutes)
-    return {"success": True, "message": f"Scheduler interval updated to {interval_minutes} minutes"}
+@router.put("")
+async def update_scheduler(data: SchedulerUpdate = Body(...)):
+    update_scheduler_interval(data.interval)
+    if data.enabled:
+        start_scheduler(data.interval)
+    else:
+        stop_scheduler()
+    return {
+        "success": True,
+        "message": f"Scheduler {'started' if data.enabled else 'stopped'} with {data.interval} minute interval",
+    }
 
 
 @router.post("/trigger-now")
@@ -42,7 +58,7 @@ async def trigger_now():
     success, message = try_trigger_processing()
     if not success:
         raise HTTPException(status_code=409, detail=message)
-    
+
     try:
         result = await process_tagged_documents()
         return {"success": True, "processed": result.get("processed", 0)}

@@ -12,6 +12,7 @@
     "loading": "Loading...",
     "refresh": "Refresh",
     "cancel": "Cancel",
+    "close": "Close",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "none": "-- None --",
@@ -50,6 +51,7 @@
     "connect": "Connect & Load Tags",
     "connecting": "Connecting…",
     "notConnectedHint": "Connect above to populate tag dropdowns",
+    "paperlessNotConfigured": "Paperless URL and Token must be configured",
     "connectedBadge": "Connected — {{tags}} tags, {{correspondents}} correspondents",
     "processing": "Processing...",
     "processDocuments": "Process Documents",
@@ -234,6 +236,15 @@
     "thinking": "Thinking...",
     "inputPlaceholder": "Ask a question about the document...",
     "documentLoaded": "Document loaded: \"{{title}}\". You can now ask me questions about this document.",
-    "errorResponse": "Sorry, I encountered an error processing your request."
+    "errorResponse": "Sorry, I encountered an error processing your request.",
+    "searchPlaceholder": "Search documents by title or content...",
+    "searching": "Searching...",
+    "noResults": "No results found",
+    "previewTitle": "Preview Changes",
+    "preview": "Preview",
+    "previewing": "Previewing...",
+    "previewHint": "Simulate AI processing without modifying Paperless",
+    "previewSuccess": "Preview generated successfully",
+    "proposedChanges": "Proposed Changes"
   }
 }

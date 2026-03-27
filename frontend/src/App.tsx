@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
@@ -44,6 +45,7 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
