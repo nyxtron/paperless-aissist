@@ -90,6 +90,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+create_db_and_tables()
+
 origins_str = get_config_value("allowed_origins", "*")
 origins = [o.strip() for o in origins_str.split(",")] if origins_str != "*" else ["*"]
 app.add_middleware(
