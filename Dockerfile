@@ -40,6 +40,7 @@ RUN touch /var/run/supervisord.pid
 WORKDIR /app/backend
 
 ENV DATA_DIR=/app/data
+ENV PYTHONPATH=/app/backend
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 80
