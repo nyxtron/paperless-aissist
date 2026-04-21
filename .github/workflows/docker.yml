@@ -1,5 +1,6 @@
 name: Build and Push to Docker Hub
 
+# This workflow triggers only when a tag starting with 'v' is pushed
 on:
   push:
     tags:
@@ -8,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,16 +41,26 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Extracts metadata (tags and labels) for the Docker image
+      # Important: :latest tag is only applied to clean version tags (e.g. v1.2.3)
+      # Dev tags like v1.2.3-dev, v1.2.3-beta, etc. will NOT overwrite :latest
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: nyxtronlab/paperless-aissist
           tags: |
+            # Always add the git tag (e.g. v1.2.3 or v1.2.3-dev)
             type=ref,event=tag
+            # Add short SHA for every build (e.g. sha-abc1234)
             type=sha
-            type=raw,value=latest
+            # Add :latest tag only if the tag does NOT contain a hyphen (no -dev, -beta, -rc, etc.)
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+          # Disable automatic latest tag generation so our custom condition is the only one that decides
+          flavor: |
+            latest=false
 
+      # Build multi-platform Docker image and push to Docker Hub
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -59,6 +71,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      # Update the repository description on Docker Hub with content from README.md
       - name: Update Docker Hub description
         uses: peter-evans/dockerhub-description@v4
         with:
