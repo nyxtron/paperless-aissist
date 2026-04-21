@@ -38,3 +38,7 @@ logs/
 # Docker
 !.dockerignore
 .worktrees/
+
+# Test artifacts
+.coverage
+htmlcov/

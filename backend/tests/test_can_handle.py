@@ -9,7 +9,6 @@ from app.services.steps.correspondent_step import CorrespondentStep
 from app.services.steps.document_type_step import DocumentTypeStep
 from app.services.steps.tags_step import TagsStep
 from app.services.steps.fields_step import FieldsStep
-from app.services.steps.modular_tags_step import ModularTagsStep
 
 
 CONFIG = {
@@ -114,21 +113,3 @@ def test_fields_step_ignores_unrelated_tag():
     step = FieldsStep(CONFIG)
     assert step.can_handle({"something-else"}) is False
 
-
-# --- ModularTagsStep: reads process tag from config ---
-
-def test_modular_tags_step_triggers_on_configured_process_tag():
-    step = ModularTagsStep(CONFIG)
-    assert step.can_handle({"ai-process"}) is True
-
-def test_modular_tags_step_triggers_on_individual_step_tags():
-    # ModularTagsStep must also run for individual step tags so it can remove them
-    step = ModularTagsStep(CONFIG)
-    assert step.can_handle({"ai-title"}) is True
-    assert step.can_handle({"ai-correspondent"}) is True
-    assert step.can_handle({"ai-tags"}) is True
-
-def test_modular_tags_step_ignores_unrelated_tags():
-    step = ModularTagsStep(CONFIG)
-    assert step.can_handle({"Rechnung"}) is False
-    assert step.can_handle(set()) is False

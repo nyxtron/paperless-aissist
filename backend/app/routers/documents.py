@@ -1,7 +1,13 @@
-from fastapi import APIRouter, HTTPException, Body
+"""Document processing endpoints: trigger, chat, tag listing, and preview."""
+
+from fastapi import APIRouter, HTTPException, Body, Query
 from pydantic import BaseModel
+from starlette.requests import Request
+
+from ..limiter import limiter
 
 from ..services.paperless import PaperlessClient
+from ..services.paperless_manager import PaperlessClientManager
 from ..services.processor import DocumentProcessor
 from ..services.scheduler import (
     try_trigger_processing,
@@ -9,6 +15,7 @@ from ..services.scheduler import (
     process_modular_tagged_documents as process_modular_with_state,
     _clear_processing,
 )
+from ..constants import CHAT_CONTENT_LIMIT, CHAT_HISTORY_LIMIT
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -20,16 +27,15 @@ class ProcessRequest(BaseModel):
 
 @router.post("/process")
 async def process_document(data: ProcessRequest = Body(...)):
+    """Process a single document by ID through the AI pipeline."""
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     processor = DocumentProcessor(paperless)
 
     result = await processor.process_document(data.document_id, force=data.force)
-
-    await paperless.close()
 
     if not result.get("success"):
         raise HTTPException(
@@ -40,16 +46,15 @@ async def process_document(data: ProcessRequest = Body(...)):
 
 
 @router.get("/search")
-async def search_documents(query: str):
+async def search_documents(query: str = Query(..., max_length=500)):
     """Search documents in Paperless by query string."""
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         return {"results": [], "error": f"Paperless config error: {str(e)}"}
 
     try:
         docs = await paperless.list_documents(search=query)
-        await paperless.close()
 
         results = [
             {
@@ -69,22 +74,21 @@ async def search_documents(query: str):
 async def get_preview(doc_id: int):
     """Preview what ai-process would do for a document - runs all steps EXCEPT OCR/OCR-fix."""
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
         processor = DocumentProcessor(paperless)
         result = await processor.process_document_preview(doc_id)
-        await paperless.close()
         return result
     except Exception as e:
-        await paperless.close()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/trigger")
 async def trigger_processing():
+    """Manually trigger processing of all tagged documents (legacy + modular)."""
     success, message = try_trigger_processing()
     if not success:
         raise HTTPException(status_code=409, detail=message)
@@ -106,11 +110,10 @@ async def trigger_processing():
 @router.get("/test-connection")
 async def test_paperless_connection():
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
         tags = await paperless.get_tags()
         correspondents = await paperless.get_correspondents()
         document_types = await paperless.get_document_types()
-        await paperless.close()
 
         return {
             "success": True,
@@ -128,8 +131,9 @@ async def test_paperless_connection():
 
 @router.get("/tags")
 async def get_paperless_tags():
+    """Return all Paperless tags, correspondents, and document types."""
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -137,7 +141,6 @@ async def get_paperless_tags():
         tags = await paperless.get_tags()
         correspondents = await paperless.get_correspondents()
         document_types = await paperless.get_document_types()
-        await paperless.close()
 
         return {
             "tags": [{"id": t["id"], "name": t["name"]} for t in tags],
@@ -149,26 +152,26 @@ async def get_paperless_tags():
             ],
         }
     except Exception as e:
-        await paperless.close()
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/tagged")
 async def get_tagged_documents():
-    from ..database import get_session
+    from ..database import get_async_session
     from ..models import Config
     from ..services.processor import DocumentProcessor
     from sqlmodel import select
 
     process_tag_name = None
-    with get_session() as session:
+    async with get_async_session() as session:
         stmt = select(Config).where(Config.key == "process_tag")
-        config = session.exec(stmt).first()
+        config = await session.exec(stmt)
+        config = config.first()
         if config:
             process_tag_name = config.value
 
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         return {"documents": [], "error": f"Paperless config error: {str(e)}"}
 
@@ -194,8 +197,6 @@ async def get_tagged_documents():
                 for doc in await paperless.list_documents(tags=[tag_id]):
                     merged[doc["id"]] = doc
 
-        await paperless.close()
-
         documents = [
             {
                 "id": doc.get("id"),
@@ -213,21 +214,21 @@ async def get_tagged_documents():
             "process_tag_id": process_tag_id,
         }
     except Exception as e:
-        await paperless.close()
         return {"documents": [], "error": str(e)}
 
 
 @router.get("/chat-list")
 async def get_chat_documents():
     """Get documents for chat dropdown - uses process_tag."""
-    from ..database import get_session
+    from ..database import get_async_session
     from ..models import Config
     from sqlmodel import select
 
     process_tag_name = None
-    with get_session() as session:
+    async with get_async_session() as session:
         stmt = select(Config).where(Config.key == "process_tag")
-        config = session.exec(stmt).first()
+        config = await session.exec(stmt)
+        config = config.first()
         if config:
             process_tag_name = config.value
 
@@ -235,7 +236,7 @@ async def get_chat_documents():
         return {"documents": [], "error": "Process tag not configured"}
 
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         return {"documents": [], "error": f"Paperless config error: {str(e)}"}
 
@@ -251,7 +252,6 @@ async def get_chat_documents():
             }
 
         docs = await paperless.list_documents(tags=[tag_id])
-        await paperless.close()
 
         documents = []
         for doc in docs:
@@ -265,7 +265,6 @@ async def get_chat_documents():
 
         return {"documents": documents}
     except Exception as e:
-        await paperless.close()
         return {"documents": [], "error": str(e)}
 
 
@@ -273,7 +272,7 @@ async def get_chat_documents():
 async def get_document_for_chat(doc_id: int):
     """Get document content for chat."""
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -288,25 +287,25 @@ async def get_document_for_chat(doc_id: int):
             vision_pipeline = await VisionPipeline.create()
             vision_result = await vision_pipeline.extract_text_from_pdf(pdf_bytes)
             content = vision_result.get("text", "") or vision_result.get("raw", "")
-
-        await paperless.close()
 
         return {
             "id": doc.get("id"),
             "title": doc.get("title"),
-            "content": content[:50000],
+            "content": content[:CHAT_HISTORY_LIMIT],
             "created": doc.get("created"),
         }
     except Exception as e:
-        await paperless.close()
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/chat")
-async def chat_with_document(message: str, doc_id: int):
+@limiter.limit("10/minute")
+async def chat_with_document(
+    request: Request, doc_id: int, message: str = Query(..., max_length=10000)
+):
     """Chat with a document."""
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -322,11 +321,9 @@ async def chat_with_document(message: str, doc_id: int):
             vision_result = await vision_pipeline.extract_text_from_pdf(pdf_bytes)
             content = vision_result.get("text", "") or vision_result.get("raw", "")
 
-        await paperless.close()
+        from ..services.llm_handler import LLMHandlerManager
 
-        from ..services.llm_handler import LLMHandler
-
-        llm = await LLMHandler.from_config(for_vision=False)
+        llm = await LLMHandlerManager.get_handler(for_vision=False)
 
         system_prompt = """You are a helpful assistant that answers questions about a document.
 Use the provided document content to answer questions accurately.
@@ -335,7 +332,7 @@ If the answer is not in the document, say so."""
         user_prompt = f"""Document title: {doc.get("title", "Unknown")}
 
 Document content:
-{content[:40000]}
+{content[:CHAT_CONTENT_LIMIT]}
 
 Question: {message}
 
@@ -351,5 +348,4 @@ Answer the question based on the document content above."""
 
         return {"response": response_text}
     except Exception as e:
-        await paperless.close()
         raise HTTPException(status_code=400, detail=str(e))

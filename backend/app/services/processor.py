@@ -1,10 +1,16 @@
+"""Document processing pipeline.
+
+Orchestrates step-based AI processing of Paperless documents: OCR, title generation,
+correspondent/dtype/tag detection, custom field extraction, and tag lifecycle management.
+"""
+
 import asyncio
 import json
 import logging
 import time
 import re
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import select
 
 logger = logging.getLogger(__name__)
@@ -20,17 +26,16 @@ MODULAR_TAG_DEFAULTS: dict[str, str] = {
     "modular_tag_process": "ai-process",
 }
 
-from ..database import get_session
+from ..database import get_async_session
 from ..models import (
     Config,
     Prompt,
     ProcessingLog,
-    TagCache,
-    CorrespondentCache,
-    DocumentTypeCache,
 )
 from .paperless import PaperlessClient
-from .llm_handler import LLMHandler, LLMUnavailableError
+from .llm_handler import LLMHandlerManager
+from ..exceptions import LLMUnavailableError
+from ..constants import CONTENT_TRUNCATION_LIMIT, TITLE_MAX_LENGTH
 from .vision import VisionPipeline
 
 _in_flight_docs: set[int] = set()
@@ -38,17 +43,26 @@ _in_flight_lock = asyncio.Lock()
 
 
 class DocumentProcessor:
+    """Coordinates step-based AI document processing.
+
+    Runs a configurable pipeline of steps (OCR, title, correspondent, dtype, tags,
+    fields, modular tags) against a single Paperless document.
+    """
+
     def __init__(self, paperless: PaperlessClient):
+        """Initialize with a Paperless client; steps are built lazily."""
         self.paperless = paperless
         self._steps: list | None = None
 
     async def _get_config_dict(self) -> dict[str, str]:
-        with get_session() as session:
-            stmt = select(Config)
-            configs = session.exec(stmt).all()
-            return {c.key: c.value for c in configs}
+        """Return the full config dict from the cache."""
+        from .config_cache import ConfigCache
+
+        cache = await ConfigCache.get_instance()
+        return await cache.get_all()
 
     async def _build_steps(self) -> list:
+        """Lazily build and cache the ordered list of processing steps."""
         if self._steps is not None:
             return self._steps
         from .steps import (
@@ -59,7 +73,6 @@ class DocumentProcessor:
             DocumentTypeStep,
             TagsStep,
             FieldsStep,
-            ModularTagsStep,
         )
 
         config = await self._get_config_dict()
@@ -71,7 +84,6 @@ class DocumentProcessor:
             await DocumentTypeStep.from_config(config),
             await TagsStep.from_config(config),
             await FieldsStep.from_config(config),
-            await ModularTagsStep.from_config(config),
         ]
         self._steps = steps
         return steps
@@ -98,16 +110,18 @@ class DocumentProcessor:
 
     @staticmethod
     async def _get_config(key: str, default: Optional[str] = None) -> Optional[str]:
-        with get_session() as session:
+        async with get_async_session() as session:
             stmt = select(Config).where(Config.key == key)
-            config = session.exec(stmt).first()
+            config = await session.exec(stmt)
+            config = config.first()
             return config.value if config else default
 
     @staticmethod
-    def _get_all_prompts() -> list[dict]:
-        with get_session() as session:
-            stmt = select(Prompt).where(Prompt.is_active == True)
-            prompts = session.exec(stmt).all()
+    async def _get_all_prompts() -> list[dict]:
+        async with get_async_session() as session:
+            stmt = select(Prompt).where(Prompt.is_active.is_(True))
+            prompts = await session.exec(stmt)
+            prompts = prompts.all()
             return [
                 {
                     "id": p.id,
@@ -182,7 +196,7 @@ Available Custom Fields: [{custom_fields_list}]"""
         metadata: dict[str, Any],
     ) -> str:
         result = template
-        result = result.replace("{content}", content[:10000])
+        result = result.replace("{content}", content[:CONTENT_TRUNCATION_LIMIT])
         result = result.replace("{title}", metadata.get("title", ""))
         result = result.replace(
             "{correspondents_list}",
@@ -212,11 +226,11 @@ Available Custom Fields: [{custom_fields_list}]"""
         processing_time_ms: int,
         log_id: Optional[int] = None,
     ) -> Optional[int]:
-        with get_session() as session:
+        async with get_async_session() as session:
             if log_id:
-                # Update existing log entry
                 stmt = select(ProcessingLog).where(ProcessingLog.id == log_id)
-                log = session.exec(stmt).first()
+                log = await session.exec(stmt)
+                log = log.first()
                 if log:
                     log.status = status
                     log.llm_provider = provider
@@ -224,10 +238,9 @@ Available Custom Fields: [{custom_fields_list}]"""
                     log.llm_response = llm_response
                     log.error_message = error_message
                     log.processing_time_ms = processing_time_ms
-                    log.processed_at = datetime.utcnow()
+                    log.processed_at = datetime.now(timezone.utc)
                 return log_id
             else:
-                # Create new log entry
                 log = ProcessingLog(
                     document_id=doc_id,
                     document_title=doc_title,
@@ -237,18 +250,19 @@ Available Custom Fields: [{custom_fields_list}]"""
                     llm_response=llm_response,
                     error_message=error_message,
                     processing_time_ms=processing_time_ms,
-                    processed_at=datetime.utcnow(),
+                    processed_at=datetime.now(timezone.utc),
                 )
                 session.add(log)
-                session.flush()
+                await session.flush()
                 return log.id
 
     async def _delete_log(self, log_id: int) -> None:
-        with get_session() as session:
+        async with get_async_session() as session:
             stmt = select(ProcessingLog).where(ProcessingLog.id == log_id)
-            log = session.exec(stmt).first()
+            log = await session.exec(stmt)
+            log = log.first()
             if log:
-                session.delete(log)
+                await session.delete(log)
 
     async def _resolve_proposed_changes(
         self,
@@ -298,7 +312,9 @@ Available Custom Fields: [{custom_fields_list}]"""
 
         return resolved
 
-    async def process_document(self, doc_id: int, force: bool = False) -> dict[str, Any]:
+    async def process_document(
+        self, doc_id: int, force: bool = False
+    ) -> dict[str, Any]:
         async with _in_flight_lock:
             if doc_id in _in_flight_docs:
                 logger.info(f"Doc {doc_id} already in flight, skipping")
@@ -316,6 +332,7 @@ Available Custom Fields: [{custom_fields_list}]"""
 
     async def process_document_preview(self, doc_id: int) -> dict[str, Any]:
         """Runs the ai-process pipeline (all steps EXCEPT OCR/OCR-fix) and returns proposed changes without modifying Paperless."""
+        start_time = time.time()
         config_dict = await self._get_config_dict()
 
         from .steps import (
@@ -324,7 +341,6 @@ Available Custom Fields: [{custom_fields_list}]"""
             DocumentTypeStep,
             TagsStep,
             FieldsStep,
-            ModularTagsStep,
         )
 
         steps = [
@@ -333,13 +349,7 @@ Available Custom Fields: [{custom_fields_list}]"""
             await DocumentTypeStep.from_config(config_dict),
             await TagsStep.from_config(config_dict),
             await FieldsStep.from_config(config_dict),
-            await ModularTagsStep.from_config(config_dict),
         ]
-
-        try:
-            await self.paperless.from_config()
-        except ValueError as e:
-            return {"success": False, "error": str(e)}
 
         doc = await self.paperless.get_document(doc_id)
         all_tags = await self.paperless.get_tags()
@@ -355,8 +365,9 @@ Available Custom Fields: [{custom_fields_list}]"""
         preview_trigger_tags = {process_tag}
 
         from .steps.base import StepContext
+        from .llm_handler import LLMHandlerManager
 
-        llm = await LLMHandler.from_config(for_vision=False)
+        llm = await LLMHandlerManager.get_handler(for_vision=False)
         ctx = StepContext(
             doc_id=doc_id,
             paperless=self.paperless,
@@ -408,23 +419,73 @@ Available Custom Fields: [{custom_fields_list}]"""
             all_custom_fields,
         )
 
+        end_time = time.time()
+        processing_time_ms = int((end_time - start_time) * 1000)
+
         return {
             "success": True,
             "document_id": doc_id,
+            "title": doc.get("title"),
+            "updates": accumulated_update,
+            "processing_time_ms": processing_time_ms,
             "steps": step_records,
             "proposed_changes": proposed,
         }
 
+    async def _apply_metadata_update(
+        self,
+        doc_id: int,
+        title: str | None,
+        correspondent_id: int | None,
+        doc_type_id: int | None,
+    ) -> None:
+        """Apply title, correspondent, and document type updates to Paperless."""
+        if title or correspondent_id is not None or doc_type_id is not None:
+            if title and len(title) > 128:
+                title = title[:TITLE_MAX_LENGTH]
+            await self.paperless.update_document(
+                doc_id,
+                title=title,
+                correspondent=correspondent_id,
+                document_type=doc_type_id,
+            )
+
+    async def _apply_tag_updates(
+        self,
+        doc_id: int,
+        trigger_tags: set[str],
+        tag_ids_to_add: list[int],
+        tag_ids_to_remove: list[int],
+    ) -> None:
+        """Replace current document tags: remove trigger tags, add processed tag."""
+        doc = await self.paperless.get_document(doc_id)
+        current_tag_ids = set(doc.get("tags", []))
+        final_tag_ids = (current_tag_ids | set(tag_ids_to_add)) - set(tag_ids_to_remove)
+        await self.paperless.update_document(doc_id, tags=list(final_tag_ids))
+
+    def _get_trigger_tag_ids(
+        self,
+        doc_tag_ids: list[int],
+        tag_id_to_name: dict[int, str],
+        config_defaults: dict[str, str],
+    ) -> list[int]:
+        """Return tag IDs on the document that are modular trigger tags."""
+        modular_tag_names = {
+            config_defaults.get(key) or default
+            for key, default in MODULAR_TAG_DEFAULTS.items()
+        }
+        return [
+            tid
+            for tid in doc_tag_ids
+            if tag_id_to_name.get(tid, "") in modular_tag_names
+        ]
+
     async def _process_document_step_based(self, doc_id: int) -> dict[str, Any]:
         start_time = time.time()
 
-        try:
-            await self.paperless.from_config()
-        except ValueError as e:
-            return {"success": False, "error": str(e)}
-
         doc = await self.paperless.get_document(doc_id)
-        all_tags = await self.paperless.get_tags()
+        metadata = await self._fetch_metadata()
+        all_tags = metadata["tags"]
         tag_id_to_name = {t["id"]: t["name"] for t in all_tags}
         doc_tag_names = {tag_id_to_name.get(tid, "") for tid in doc.get("tags", [])}
 
@@ -441,7 +502,9 @@ Available Custom Fields: [{custom_fields_list}]"""
 
         step_instances = await self._build_steps()
         config_dict = await self._get_config_dict()
-        llm = await LLMHandler.from_config(for_vision=False)
+        from .llm_handler import LLMHandlerManager
+
+        llm = await LLMHandlerManager.get_handler(for_vision=False)
 
         from .steps.base import StepContext
 
@@ -504,16 +567,17 @@ Available Custom Fields: [{custom_fields_list}]"""
             logger.warning(f"LLM unavailable for doc {doc_id}, will retry: {e}")
             return {"success": False, "error": str(e), "retryable": True}
 
-        # Classify fallback: if no individual classification ran, try legacy classify prompt
         has_classification = any(
-            k in accumulated_update for k in ("title", "correspondent", "document_type", "tags")
+            k in accumulated_update
+            for k in ("title", "correspondent", "document_type", "tags")
         )
         if not has_classification:
-            with get_session() as session:
+            async with get_async_session() as session:
                 stmt = select(Prompt).where(
-                    Prompt.prompt_type == "classify", Prompt.is_active == True
+                    Prompt.prompt_type == "classify", Prompt.is_active.is_(True)
                 )
-                classify_prompt = session.exec(stmt).first()
+                classify_prompt = await session.exec(stmt)
+                classify_prompt = classify_prompt.first()
                 classify_prompt_data = (
                     {
                         "system_prompt": classify_prompt.system_prompt,
@@ -527,45 +591,78 @@ Available Custom Fields: [{custom_fields_list}]"""
                     text = ctx.ocr_text or ""
                     if not text:
                         doc_content = await self.paperless.get_document(doc_id)
-                        text = doc_content.get("content", "").strip() if doc_content.get("content") else ""
-                    user_msg = classify_prompt_data["user_template"].replace("{content}", text[:10000])
+                        text = (
+                            doc_content.get("content", "").strip()
+                            if doc_content.get("content")
+                            else ""
+                        )
+                    user_msg = classify_prompt_data["user_template"].replace(
+                        "{content}", text[:10000]
+                    )
                     classify_result = await llm.complete(
                         system_prompt=classify_prompt_data["system_prompt"],
                         user_prompt=user_msg,
                         json_mode=False,
                     )
-                    raw = classify_result.get("text", "") or classify_result.get("raw", "")
+                    raw = classify_result.get("text", "") or classify_result.get(
+                        "raw", ""
+                    )
                     if raw:
                         parsed = self._parse_classify_response(raw)
-                        metadata = await self._fetch_metadata()
                         if parsed.get("correspondent"):
                             corr_id = next(
-                                (c["id"] for c in metadata["correspondents"] if c["name"].lower() == parsed["correspondent"].lower()),
+                                (
+                                    c["id"]
+                                    for c in metadata["correspondents"]
+                                    if c["name"].lower()
+                                    == parsed["correspondent"].lower()
+                                ),
                                 None,
                             )
                             if corr_id:
                                 accumulated_update["correspondent"] = corr_id
                         if parsed.get("document_type"):
                             dt_id = next(
-                                (dt["id"] for dt in metadata["document_types"] if dt["name"].lower() == parsed["document_type"].lower()),
+                                (
+                                    dt["id"]
+                                    for dt in metadata["document_types"]
+                                    if dt["name"].lower()
+                                    == parsed["document_type"].lower()
+                                ),
                                 None,
                             )
                             if dt_id:
                                 accumulated_update["document_type"] = dt_id
                         if parsed.get("tags"):
                             blacklist_raw = config_dict.get("tag_blacklist", "")
-                            blacklist = [t.strip().lower() for t in blacklist_raw.split(",") if t.strip()]
+                            blacklist = [
+                                t.strip().lower()
+                                for t in blacklist_raw.split(",")
+                                if t.strip()
+                            ]
                             tag_ids = [
-                                t["id"] for t in metadata["tags"]
-                                if t["name"].lower() in [n.lower() for n in parsed["tags"]]
+                                t["id"]
+                                for t in metadata["tags"]
+                                if t["name"].lower()
+                                in [n.lower() for n in parsed["tags"]]
                                 and t["name"].lower() not in blacklist
                             ]
                             if tag_ids:
                                 accumulated_update["tags"] = tag_ids
                         add_step("classify", "completed", 0)
                 except Exception as classify_err:
-                    logger.warning(f"Classify fallback failed for doc {doc_id}: {classify_err}")
+                    logger.warning(
+                        f"Classify fallback failed for doc {doc_id}: {classify_err}"
+                    )
                     add_step("classify", "failed", 0, str(classify_err))
+
+        proposed = await self._resolve_proposed_changes(
+            accumulated_update,
+            all_tags,
+            metadata["correspondents"],
+            metadata["document_types"],
+            metadata["custom_fields"],
+        )
 
         process_tag_name = await self._get_config("process_tag")
         processed_tag_name = await self._get_config("processed_tag")
@@ -577,52 +674,75 @@ Available Custom Fields: [{custom_fields_list}]"""
             tags_by_name.get(processed_tag_name) if processed_tag_name else None
         )
 
-        existing_tag_ids = list(doc.get("tags", []))
-        remove_tags = accumulated_update.pop("remove_tags", [])
-        add_tags = accumulated_update.pop("add_tags", [])
         tags_from_steps = accumulated_update.pop("tags", None)
-        # LLM-assigned tags override the current list; apply remove/add after so
-        # modular trigger tags are always cleaned up regardless of which path ran.
+
+        existing_tag_ids = list(doc.get("tags", []))
         if tags_from_steps is not None:
-            existing_tag_ids = tags_from_steps
-        for tid in remove_tags:
-            if tid in existing_tag_ids:
-                existing_tag_ids.remove(tid)
-        for tid in add_tags:
-            if tid not in existing_tag_ids:
-                existing_tag_ids.append(tid)
-        if processed_tag_id and processed_tag_id not in existing_tag_ids:
-            existing_tag_ids.append(processed_tag_id)
-        accumulated_update["tags"] = existing_tag_ids
+            existing_tag_ids = list(set(existing_tag_ids) | set(tags_from_steps))
 
-        accumulated_update.pop("text", None)
-        accumulated_update.pop("content", None)
+        config_dict = await self._get_config_dict()
+        trigger_tag_ids = self._get_trigger_tag_ids(
+            doc_tag_ids=doc.get("tags", []),
+            tag_id_to_name=tag_id_to_name,
+            config_defaults=config_dict,
+        )
 
-        if accumulated_update:
-            try:
-                await self.paperless.update_document(doc_id, **accumulated_update)
-            except Exception as e:
-                error_detail = str(e)
-                if hasattr(e, "response") and e.response is not None:
-                    try:
-                        error_detail = f"{error_detail}: {e.response.text}"
-                    except Exception:
-                        pass
-                await self._log_processing(
-                    doc_id=doc_id,
-                    doc_title=doc.get("title"),
-                    status="failed",
-                    provider=llm.provider,
-                    model=llm.model,
-                    llm_response=None,
-                    error_message=f"Paperless update failed: {error_detail}",
-                    processing_time_ms=int((time.time() - start_time) * 1000),
-                    log_id=log_id,
+        title = accumulated_update.pop("title", None)
+        correspondent_id = accumulated_update.pop("correspondent", None)
+        doc_type_id = accumulated_update.pop("document_type", None)
+
+        try:
+            await self._apply_metadata_update(
+                doc_id, title, correspondent_id, doc_type_id
+            )
+
+            tag_ids_to_add = [
+                t for t in existing_tag_ids if t not in doc.get("tags", [])
+            ]
+            tag_ids_to_remove = list(trigger_tag_ids)
+            if process_tag_id:
+                tag_ids_to_remove.append(process_tag_id)
+            if processed_tag_id and processed_tag_id not in existing_tag_ids:
+                tag_ids_to_add.append(processed_tag_id)
+
+            if tag_ids_to_add or tag_ids_to_remove:
+                await self._apply_tag_updates(
+                    doc_id, doc_tag_names, tag_ids_to_add, tag_ids_to_remove
                 )
-                return {
-                    "success": False,
-                    "error": f"Paperless update failed: {error_detail}",
-                }
+
+            accumulated_update.pop("text", None)
+            accumulated_update.pop("content", None)
+
+            if accumulated_update:
+                await self.paperless.update_document(doc_id, **accumulated_update)
+        except Exception as e:
+            error_detail = str(e)
+            if hasattr(e, "response") and e.response is not None:
+                try:
+                    error_detail = f"{error_detail}: {e.response.text}"
+                except Exception:
+                    pass
+            await self._log_processing(
+                doc_id=doc_id,
+                doc_title=doc.get("title"),
+                status="failed",
+                provider=llm.provider,
+                model=llm.model,
+                llm_response=None,
+                error_message=f"Paperless update failed: {error_detail}",
+                processing_time_ms=int((time.time() - start_time) * 1000),
+                log_id=log_id,
+            )
+            return {
+                "success": False,
+                "document_id": doc_id,
+                "title": doc.get("title"),
+                "updates": {},
+                "processing_time_ms": int((time.time() - start_time) * 1000),
+                "steps": step_records,
+                "proposed_changes": proposed,
+                "error": f"Paperless update failed: {error_detail}",
+            }
 
         processing_time_ms = int((time.time() - start_time) * 1000)
         await self._log_processing(
@@ -641,9 +761,10 @@ Available Custom Fields: [{custom_fields_list}]"""
             "success": True,
             "document_id": doc_id,
             "title": doc.get("title"),
-            "updates": accumulated_update,
+            "updates": {},
             "processing_time_ms": processing_time_ms,
             "steps": step_records,
+            "proposed_changes": proposed,
         }
 
     @staticmethod
@@ -659,14 +780,18 @@ Available Custom Fields: [{custom_fields_list}]"""
             "fields": "modular_tag_fields",
             "process": "modular_tag_process",
         }
-        with get_session() as session:
+        async with get_async_session() as session:
             stmt = select(Config)
-            configs = session.exec(stmt).all()
+            configs = await session.exec(stmt)
+            configs = configs.all()
             config_dict = {c.key: c.value for c in configs}
         result = {}
         for step_id, config_key in step_to_config.items():
-            tag_name = config_dict.get(config_key) or MODULAR_TAG_DEFAULTS[config_key]
-            result[step_id] = tag_name
+            tag_name = config_dict.get(config_key) or MODULAR_TAG_DEFAULTS.get(
+                config_key
+            )
+            if tag_name:
+                result[step_id] = tag_name
         return result
 
     async def process_tagged_documents(self) -> dict[str, Any]:
@@ -677,11 +802,6 @@ Available Custom Fields: [{custom_fields_list}]"""
                 "success": False,
                 "error": "Process tag not configured. Please set 'process_tag' in configuration.",
             }
-
-        try:
-            await self.paperless.from_config()
-        except ValueError as e:
-            return {"success": False, "error": str(e)}
 
         # Get tags and resolve tag name to ID
         tags = await self.paperless.get_tags()
@@ -706,4 +826,3 @@ Available Custom Fields: [{custom_fields_list}]"""
             "processed": len(results),
             "results": results,
         }
-

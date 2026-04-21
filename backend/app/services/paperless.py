@@ -1,23 +1,35 @@
+"""HTTP client for the Paperless-ngx REST API.
+
+Supports document CRUD, listing with pagination, and metadata entity fetching.
+All requests include bearer token authentication.
+"""
+
 import httpx
 import logging
-import os
 from typing import Optional, Any
 from urllib.parse import urlparse, urlunparse
-from ..models import Config
-from ..database import get_session
-from sqlmodel import select
+from ..constants import PAPERLESS_TIMEOUT, DEFAULT_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
 
 class PaperlessClient:
+    """Async HTTP client for the Paperless-ngx API.
+
+    Attributes:
+        base_url: Base URL of the Paperless instance.
+        token: Bearer token for authentication.
+    """
+
     def __init__(self, base_url: Optional[str] = None, token: Optional[str] = None):
+        """Initialize with optional base URL and token; defaults are read from config."""
         self.base_url = base_url
         self.token = token
-        self.client = httpx.AsyncClient(timeout=60.0)
+        self.client = httpx.AsyncClient(timeout=PAPERLESS_TIMEOUT)
 
     @classmethod
     async def from_config(cls) -> "PaperlessClient":
+        """Factory: construct a client from the application config (paperless_url/token)."""
         base_url = await cls._get_config("paperless_url")
         token = await cls._get_config("paperless_token")
         if not base_url or not token:
@@ -26,16 +38,11 @@ class PaperlessClient:
 
     @staticmethod
     async def _get_config(key: str) -> Optional[str]:
-        # First try to get from database
-        with get_session() as session:
-            stmt = select(Config).where(Config.key == key)
-            config = session.exec(stmt).first()
-            if config and config.value:
-                return config.value
+        """Read a config key from ConfigCache."""
+        from .config_cache import ConfigCache
 
-        # Fallback to environment variable
-        env_key = key.upper().replace("-", "_")
-        return os.environ.get(env_key)
+        cache = await ConfigCache.get_instance()
+        return await cache.get(key)
 
     def _get_headers(self) -> dict:
         return {
@@ -43,11 +50,15 @@ class PaperlessClient:
             "Content-Type": "application/json",
         }
 
-    def _get_max_pages(self) -> int:
-        with get_session() as session:
-            stmt = select(Config).where(Config.key == "max_page_limit")
-            config = session.exec(stmt).first()
-            return int(config.value) if config else 100
+    async def _get_max_pages(self) -> int:
+        from .config_cache import ConfigCache
+
+        cache = await ConfigCache.get_instance()
+        val = await cache.get("max_page_limit", str(DEFAULT_PAGE_SIZE))
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return DEFAULT_PAGE_SIZE
 
     async def get_document(self, doc_id: int) -> dict[str, Any]:
         url = f"{self.base_url}/api/documents/{doc_id}/"
@@ -105,22 +116,22 @@ class PaperlessClient:
 
     async def get_correspondents(self) -> list[dict[str, Any]]:
         return await self._get_all_pages(
-            f"{self.base_url}/api/correspondents/", self._get_max_pages()
+            f"{self.base_url}/api/correspondents/", await self._get_max_pages()
         )
 
     async def get_tags(self) -> list[dict[str, Any]]:
         return await self._get_all_pages(
-            f"{self.base_url}/api/tags/", self._get_max_pages()
+            f"{self.base_url}/api/tags/", await self._get_max_pages()
         )
 
     async def get_document_types(self) -> list[dict[str, Any]]:
         return await self._get_all_pages(
-            f"{self.base_url}/api/document_types/", self._get_max_pages()
+            f"{self.base_url}/api/document_types/", await self._get_max_pages()
         )
 
     async def get_custom_fields(self) -> list[dict[str, Any]]:
         return await self._get_all_pages(
-            f"{self.base_url}/api/custom_fields/", self._get_max_pages()
+            f"{self.base_url}/api/custom_fields/", await self._get_max_pages()
         )
 
     async def update_document(
@@ -155,6 +166,10 @@ class PaperlessClient:
         logger.debug(f"PATCH {url} → {response.status_code}")
         response.raise_for_status()
         return response.json()
+
+    @property
+    def is_closed(self) -> bool:
+        return self.client.is_closed
 
     async def close(self):
         await self.client.aclose()

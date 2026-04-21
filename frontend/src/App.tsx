@@ -1,45 +1,65 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'sonner';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import Layout from './components/Layout';
-import DashboardPage from './pages/DashboardPage';
-import ConfigPage from './pages/ConfigPage';
-import PromptsPage from './pages/PromptsPage';
-import ProcessingPage from './pages/ProcessingPage';
-import ChatPage from './pages/ChatPage';
-import LogsPage from './pages/LogsPage';
-import LoginPage from './pages/LoginPage';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'sonner'
+import { Suspense, lazy } from 'react'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import Layout from './components/Layout'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import LoginPage from './pages/LoginPage'
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const ConfigPage = lazy(() => import('./pages/ConfigPage'))
+const PromptsPage = lazy(() => import('./pages/PromptsPage'))
+const ProcessingPage = lazy(() => import('./pages/ProcessingPage'))
+const ChatPage = lazy(() => import('./pages/ChatPage'))
+const LogsPage = lazy(() => import('./pages/LogsPage'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  const { isAuthenticated, loading } = useAuth()
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    )
   }
-  return <>{children}</>;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  return <>{children}</>
+}
+
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-gray-500">Loading...</div>
+    </div>
+  )
 }
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="config" element={<ConfigPage />} />
-        <Route path="prompts" element={<PromptsPage />} />
-        <Route path="processing" element={<ProcessingPage />} />
-        <Route path="chat" element={<ChatPage />} />
-        <Route path="logs" element={<LogsPage />} />
-      </Route>
-    </Routes>
-  );
+    <Suspense fallback={<LoadingFallback />}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="config" element={<ConfigPage />} />
+          <Route path="prompts" element={<PromptsPage />} />
+          <Route path="processing" element={<ProcessingPage />} />
+          <Route path="chat" element={<ChatPage />} />
+          <Route path="logs" element={<LogsPage />} />
+        </Route>
+      </Routes>
+    </Suspense>
+  )
 }
 
 function App() {
@@ -47,10 +67,12 @@ function App() {
     <BrowserRouter>
       <Toaster />
       <AuthProvider>
-        <AppRoutes />
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
-  );
+  )
 }
 
-export default App;
+export default App

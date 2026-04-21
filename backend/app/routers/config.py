@@ -1,14 +1,32 @@
+"""Configuration CRUD endpoints."""
+
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Body
-from sqlmodel import select, Session
+from fastapi import APIRouter, HTTPException, Body
+from sqlmodel import select
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import httpx
 from pydantic import BaseModel
 
-from ..database import get_db, get_session
+from ..database import get_async_session
 from ..models import Config
+from ..schemas import ConfigResponse, ConfigDetailResponse, ConfigDeleteResponse
 from ..services.log_stream import apply_log_level
+
+
+SENSITIVE_KEYS = {"paperless_token", "llm_api_key", "llm_api_key_vision"}
+
+
+LLM_HANDLER_KEYS = {
+    "llm_provider",
+    "llm_model",
+    "llm_api_base",
+    "llm_api_key",
+    "llm_provider_vision",
+    "llm_model_vision",
+    "llm_api_base_vision",
+    "llm_api_key_vision",
+}
 
 
 class ConfigUpdate(BaseModel):
@@ -23,12 +41,14 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 
 async def get_llm_config():
     """Get LLM configuration from database."""
-    with get_session() as session:
+    async with get_async_session() as session:
+        stmt = select(Config)
+        configs = await session.exec(stmt)
+        config_list = configs.all()
+        config_dict = {c.key: c.value for c in config_list}
 
         def _get(key: str, default: str = "") -> str:
-            stmt = select(Config).where(Config.key == key)
-            c = session.exec(stmt).first()
-            return c.value if c and c.value else default
+            return config_dict.get(key) or default
 
         provider = _get("llm_provider", "ollama")
         api_base = _get("llm_api_base")
@@ -73,10 +93,16 @@ async def test_ollama_url(api_base: str) -> dict:
                 return {"success": False, "message": f"Status {response.status_code}"}
     except httpx.ConnectError as e:
         logger.error(f"[Test Ollama] Connection error: {e}")
-        return {"success": False, "message": f"Cannot connect: {str(e)}"}
+        return {
+            "success": False,
+            "message": "Cannot connect to the Ollama server. Check the URL and that Ollama is running.",
+        }
     except Exception as e:
         logger.error(f"[Test Ollama] Error: {e}")
-        return {"success": False, "message": f"Error: {str(e)}"}
+        return {
+            "success": False,
+            "message": "An unexpected error occurred while testing the Ollama connection.",
+        }
 
 
 async def test_openai_url(api_base: str, api_key: str) -> dict:
@@ -109,15 +135,24 @@ async def test_openai_url(api_base: str, api_key: str) -> dict:
                 return {"success": False, "message": f"Status {response.status_code}"}
     except httpx.ConnectError as e:
         logger.error(f"[Test OpenAI] Connection error: {e}")
-        return {"success": False, "message": f"Cannot connect: {str(e)}"}
+        return {
+            "success": False,
+            "message": "Cannot connect to the API server. Check the URL.",
+        }
     except Exception as e:
         logger.error(f"[Test OpenAI] Error: {e}")
-        return {"success": False, "message": f"Error: {str(e)}"}
+        return {
+            "success": False,
+            "message": "An unexpected error occurred while testing the connection.",
+        }
 
 
 @router.post("/test-ollama")
 async def test_ollama_connection():
-    """Test LLM connection(s) from backend."""
+    """Test Ollama connection(s) configured in the backend.
+
+    Tests both the main LLM and vision LLM if vision is enabled.
+    """
     config = await get_llm_config()
 
     # Test main LLM
@@ -148,34 +183,64 @@ async def test_ollama_connection():
     return result
 
 
-@router.get("")
+@router.get("", response_model=ConfigResponse)
 async def get_configs():
-    with get_session() as session:
+    """Return all non-sensitive config key-value pairs.
+
+    Sensitive keys (tokens, API keys) are never returned. The ``secrets_set``
+    field lists which sensitive keys have a non-empty value stored, so the UI
+    knows whether a secret is already configured.
+    """
+    async with get_async_session() as session:
         stmt = select(Config)
-        configs = session.exec(stmt).all()
-        return {c.key: c.value for c in configs}
+        configs = await session.exec(stmt)
+        config_list = configs.all()
+        data: dict[str, str] = {}
+        secrets_set: list[str] = []
+        for c in config_list:
+            if c.key in SENSITIVE_KEYS:
+                if c.value and c.value.strip():
+                    secrets_set.append(c.key)
+            else:
+                data[c.key] = c.value
+        return ConfigResponse(data=data, secrets_set=secrets_set)
 
 
 @router.get("/{key}")
 async def get_config(key: str):
-    with get_session() as session:
+    """Return a single config entry (masked if sensitive)."""
+    if key in SENSITIVE_KEYS:
+        raise HTTPException(status_code=404, detail="Config not found")
+    async with get_async_session() as session:
         stmt = select(Config).where(Config.key == key)
-        config = session.exec(stmt).first()
+        config = await session.exec(stmt)
+        config = config.first()
         if not config:
             raise HTTPException(status_code=404, detail="Config not found")
         return {"key": config.key, "value": config.value}
 
 
-@router.post("")
+@router.post("", response_model=ConfigDetailResponse)
 async def set_config(data: ConfigUpdate = Body(...), description: Optional[str] = None):
-    with get_session() as session:
+    """Create or update a config entry, optionally with a description.
+
+    For sensitive keys (tokens, API keys), an empty/whitespace value is treated
+    as a no-op: the existing value is preserved instead of being overwritten.
+    """
+    async with get_async_session() as session:
         stmt = select(Config).where(Config.key == data.key)
-        config = session.exec(stmt).first()
+        config = await session.exec(stmt)
+        config = config.first()
+
+        if data.key in SENSITIVE_KEYS and (not data.value or not data.value.strip()):
+            if config is None:
+                raise HTTPException(status_code=404, detail="Config not found")
+            return {"key": data.key, "value": config.value}
 
         if config:
             config.value = data.value
             config.description = description
-            config.updated_at = datetime.utcnow()
+            config.updated_at = datetime.now(timezone.utc)
         else:
             config = Config(key=data.key, value=data.value, description=description)
             session.add(config)
@@ -183,15 +248,41 @@ async def set_config(data: ConfigUpdate = Body(...), description: Optional[str] 
         if data.key == "log_level":
             apply_log_level(data.value)
 
+        if data.key in LLM_HANDLER_KEYS:
+            from ..services.llm_handler import LLMHandlerManager
+
+            await LLMHandlerManager.reset()
+
+        if data.key in ("paperless_url", "paperless_token"):
+            from ..services.paperless_manager import PaperlessClientManager
+
+            await PaperlessClientManager.reset()
+
+        from ..services.config_cache import ConfigCache
+
+        await (await ConfigCache.get_instance()).invalidate()
+
         return {"key": data.key, "value": data.value}
 
 
-@router.delete("/{key}")
+@router.delete("/{key}", response_model=ConfigDeleteResponse)
 async def delete_config(key: str):
-    with get_session() as session:
+    """Delete a config entry by key."""
+    async with get_async_session() as session:
         stmt = select(Config).where(Config.key == key)
-        config = session.exec(stmt).first()
+        config = await session.exec(stmt)
+        config = config.first()
         if not config:
             raise HTTPException(status_code=404, detail="Config not found")
-        session.delete(config)
-        return {"message": "Config deleted"}
+        await session.delete(config)
+
+        from ..services.config_cache import ConfigCache
+
+        await (await ConfigCache.get_instance()).invalidate()
+
+        if config.key in ("paperless_url", "paperless_token"):
+            from ..services.paperless_manager import PaperlessClientManager
+
+            await PaperlessClientManager.reset()
+
+        return {"success": True, "message": "Config deleted"}

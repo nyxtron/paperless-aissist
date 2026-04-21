@@ -139,7 +139,13 @@
     "authEnabled": "Anmeldung erforderlich",
     "authEnabledHint": "Wenn aktiviert, müssen sich Benutzer mit ihren Paperless-ngx-Zugangsdaten anmelden",
     "authEnabledWarning": "Sie werden nach dem Speichern sofort zur Anmeldeseite weitergeleitet.",
-    "authRequiresPaperless": "Die Paperless-URL muss konfiguriert sein, bevor die Anmeldung aktiviert werden kann."
+    "authRequiresPaperless": "Die Paperless-URL muss konfiguriert sein, bevor die Anmeldung aktiviert werden kann.",
+    "tabServer": "Server",
+    "tabLLM": "LLM/Vision",
+    "tabVision": "Vision",
+    "tabScheduler": "Scheduler",
+    "tabTags": "Tags",
+    "tabAdvanced": "Erweitert"
   },
   "login": {
     "title": "Anmelden",

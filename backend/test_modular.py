@@ -18,8 +18,8 @@ os.environ.setdefault("DATA_DIR", os.path.join(os.path.dirname(__file__), "data"
 from app.services.paperless import PaperlessClient
 from app.services.processor import DocumentProcessor, MODULAR_TAG_DEFAULTS
 
-PAPERLESS_URL = "http://localhost:8000"
-PAPERLESS_TOKEN = "581840c8fa560ac3776172c7837f424cbec09dc9"
+PAPERLESS_URL = os.environ.get("PAPERLESS_URL", "http://localhost:8000")
+PAPERLESS_TOKEN = os.environ.get("PAPERLESS_TOKEN", "")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--doc-id", type=int, default=35)
@@ -29,13 +29,13 @@ DOC_ID = args.doc_id
 # ── Individual step tags ──────────────────────────────────────────────────────
 # Each tests exactly one step in isolation.
 STEP_TAGS = [
-    ("ocr",           MODULAR_TAG_DEFAULTS["modular_tag_ocr"]),
-    ("ocr_fix",       MODULAR_TAG_DEFAULTS["modular_tag_ocr_fix"]),
-    ("title",         MODULAR_TAG_DEFAULTS["modular_tag_title"]),
+    ("ocr", MODULAR_TAG_DEFAULTS["modular_tag_ocr"]),
+    ("ocr_fix", MODULAR_TAG_DEFAULTS["modular_tag_ocr_fix"]),
+    ("title", MODULAR_TAG_DEFAULTS["modular_tag_title"]),
     ("correspondent", MODULAR_TAG_DEFAULTS["modular_tag_correspondent"]),
     ("document_type", MODULAR_TAG_DEFAULTS["modular_tag_document_type"]),
-    ("tags",          MODULAR_TAG_DEFAULTS["modular_tag_tags"]),
-    ("fields",        MODULAR_TAG_DEFAULTS["modular_tag_fields"]),
+    ("tags", MODULAR_TAG_DEFAULTS["modular_tag_tags"]),
+    ("fields", MODULAR_TAG_DEFAULTS["modular_tag_fields"]),
 ]
 
 # ── Combination scenarios ─────────────────────────────────────────────────────

@@ -1,11 +1,19 @@
-import { Outlet, NavLink } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { LayoutDashboard, Settings, FileText, Play, MessageCircle, ScrollText, LogOut } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { Outlet, NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import {
+  LayoutDashboard,
+  Settings,
+  FileText,
+  Play,
+  MessageCircle,
+  ScrollText,
+  LogOut,
+} from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Layout() {
-  const { t, i18n } = useTranslation();
-  const { isAuthEnabled, logout } = useAuth();
+  const { t, i18n } = useTranslation()
+  const { isAuthEnabled, logout } = useAuth()
 
   const navItems = [
     { path: '/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
@@ -14,7 +22,7 @@ export default function Layout() {
     { path: '/config', label: t('nav.configuration'), icon: Settings },
     { path: '/prompts', label: t('nav.prompts'), icon: FileText },
     { path: '/logs', label: t('nav.logs'), icon: ScrollText },
-  ];
+  ]
 
   return (
     <div className="min-h-screen flex">
@@ -33,9 +41,7 @@ export default function Layout() {
               to={item.path}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-50'
+                  isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
                 }`
               }
             >
@@ -77,5 +83,5 @@ export default function Layout() {
         </main>
       </div>
     </div>
-  );
+  )
 }

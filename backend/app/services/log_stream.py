@@ -1,3 +1,9 @@
+"""In-memory log broadcast system for SSE streaming and log history.
+
+Provides a circular buffer of recent log lines, pub/sub for SSE clients, and a
+logging handler that feeds directly into the broadcast pipeline.
+"""
+
 import asyncio
 import logging
 from collections import deque
@@ -23,32 +29,46 @@ _KNOWN_LOGGERS = (
 
 
 def apply_log_level(level_str: str) -> None:
+    """Set the global and per-module log level from a string (DEBUG/INFO/WARNING/ERROR)."""
     level = _LEVEL_MAP.get(level_str.upper(), logging.INFO)
     logging.getLogger().setLevel(level)
     for name in _KNOWN_LOGGERS:
         logging.getLogger(name).setLevel(level)
+
 
 _buffer: deque[str] = deque(maxlen=500)
 _subscribers: list[asyncio.Queue] = []
 
 
 def get_history() -> list[str]:
+    """Return the current circular buffer contents as a list of log lines."""
     return list(_buffer)
 
 
 async def _broadcast(line: str) -> None:
     _buffer.append(line)
-    for q in _subscribers:
-        await q.put(line)
+    dead_queues = []
+    for i, q in enumerate(_subscribers):
+        try:
+            q.put_nowait(line)
+        except asyncio.QueueFull:
+            dead_queues.append(i)
+    for i in reversed(dead_queues):
+        try:
+            _subscribers.pop(i)
+        except IndexError:
+            pass
 
 
 async def subscribe() -> asyncio.Queue:
-    q: asyncio.Queue = asyncio.Queue()
+    """Subscribe to new log lines; returns a queue with a 500-line buffer."""
+    q: asyncio.Queue = asyncio.Queue(maxsize=500)
     _subscribers.append(q)
     return q
 
 
 def unsubscribe(q: asyncio.Queue) -> None:
+    """Remove a subscriber queue from the broadcast list."""
     try:
         _subscribers.remove(q)
     except ValueError:

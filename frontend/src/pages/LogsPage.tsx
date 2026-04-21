@@ -1,5 +1,5 @@
-import LiveLog from '../components/LiveLog';
+import LiveLog from '../components/LiveLog'
 
 export default function LogsPage() {
-  return <LiveLog />;
+  return <LiveLog />
 }

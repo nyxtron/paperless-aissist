@@ -1,5 +1,5 @@
-import PromptManager from '../components/PromptManager';
+import PromptManager from '../components/PromptManager'
 
 export default function PromptsPage() {
-  return <PromptManager />;
+  return <PromptManager />
 }

@@ -1,84 +1,79 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { schedulerApi } from '../api/client';
-import { Clock, Play, Square, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { schedulerApi } from '../api/client'
+import { Clock, Play, Square, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
+import { SchedulerStatus } from '../api/types'
 
-interface SchedulerStatus {
-  running: boolean;
-  interval_minutes: number | null;
-  next_run: string | null;
-  is_processing: boolean;
-  current_doc_id: number | null;
+interface SchedulerConfigSectionProps {
+  config: Record<string, string>
+  onSave: (key: string, value: string) => Promise<void>
 }
 
-interface ConfigSectionProps {
-  config: Record<string, string>;
-  onSave: (key: string, value: string) => Promise<void>;
-  onTest?: (key: string) => Promise<boolean>;
-}
+export function ConfigSectionScheduler({
+  config: _config,
+  onSave: _onSave,
+}: SchedulerConfigSectionProps) {
+  const { t } = useTranslation()
+  const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null)
+  const [schedulerInterval, setSchedulerInterval] = useState(5)
+  const [schedulerLoading, setSchedulerLoading] = useState(false)
 
-export function ConfigSectionScheduler(_props: ConfigSectionProps) {
-  const { t } = useTranslation();
-  const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
-  const [schedulerInterval, setSchedulerInterval] = useState(5);
-  const [schedulerLoading, setSchedulerLoading] = useState(false);
+  const label = 'block text-sm font-medium text-gray-700 mb-1'
 
-  const label = 'block text-sm font-medium text-gray-700 mb-1';
-
-  useEffect(() => {
-    loadSchedulerStatus();
-  }, []);
-
-  const loadSchedulerStatus = async () => {
+  const loadSchedulerStatus = useCallback(async () => {
     try {
-      const res = await schedulerApi.getStatus();
-      setSchedulerStatus(res.data);
+      const res = await schedulerApi.getStatus()
+      setSchedulerStatus(res.data)
       if (res.data.interval_minutes) {
-        setSchedulerInterval(res.data.interval_minutes);
+        setSchedulerInterval(res.data.interval_minutes)
       }
     } catch (error) {
-      console.error('Failed to load scheduler status:', error);
+      console.error('Failed to load scheduler status:', error)
     }
-  };
+  }, [])
+
+  useEffect(() => {
+    loadSchedulerStatus()
+  }, [loadSchedulerStatus])
 
   const handleSchedulerStart = async () => {
-    setSchedulerLoading(true);
+    setSchedulerLoading(true)
     try {
-      await schedulerApi.start(schedulerInterval);
-      await loadSchedulerStatus();
+      await schedulerApi.start(schedulerInterval)
+      await loadSchedulerStatus()
     } catch (error) {
-      console.error('Failed to start scheduler:', error);
-      toast.error(t('config.schedulerStartFailed'));
+      console.error('Failed to start scheduler:', error)
+      toast.error(t('config.schedulerStartFailed'))
     } finally {
-      setSchedulerLoading(false);
+      setSchedulerLoading(false)
     }
-  };
+  }
 
   const handleSchedulerStop = async () => {
-    setSchedulerLoading(true);
+    setSchedulerLoading(true)
     try {
-      await schedulerApi.stop();
-      await loadSchedulerStatus();
+      await schedulerApi.stop()
+      await loadSchedulerStatus()
     } catch (error) {
-      console.error('Failed to stop scheduler:', error);
-      toast.error(t('config.schedulerStopFailed'));
+      console.error('Failed to stop scheduler:', error)
+      toast.error(t('config.schedulerStopFailed'))
     } finally {
-      setSchedulerLoading(false);
+      setSchedulerLoading(false)
     }
-  };
+  }
 
   const handleClearState = async () => {
-    if (!window.confirm(t('config.clearStateConfirm'))) return;
+    if (!window.confirm(t('config.clearStateConfirm'))) return
     try {
-      await schedulerApi.clearState();
-      await loadSchedulerStatus();
-      toast.success(t('config.clearStateSuccess'));
+      await schedulerApi.clearState()
+      await loadSchedulerStatus()
+      toast.success(t('config.clearStateSuccess'))
     } catch (error) {
-      console.error('Failed to clear state:', error);
-      toast.error(t('config.clearStateFailed'));
+      console.error('Failed to clear state:', error)
+      toast.error(t('config.clearStateFailed'))
     }
-  };
+  }
 
   return (
     <div className="bg-white rounded-lg shadow p-6 space-y-6">
@@ -139,7 +134,9 @@ export function ConfigSectionScheduler(_props: ConfigSectionProps) {
         </div>
         {schedulerStatus?.running && schedulerStatus.next_run && (
           <span className="text-sm text-gray-500">
-            {t('config.schedulerNextRun', { time: new Date(schedulerStatus.next_run).toLocaleString() })}
+            {t('config.schedulerNextRun', {
+              time: new Date(schedulerStatus.next_run).toLocaleString(),
+            })}
           </span>
         )}
       </div>
@@ -159,5 +156,5 @@ export function ConfigSectionScheduler(_props: ConfigSectionProps) {
         </button>
       </div>
     </div>
-  );
+  )
 }

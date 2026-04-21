@@ -1,60 +1,52 @@
-import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { promptsApi, configApi } from '../api/client';
-import { Plus, Pencil, Trash2, X, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import { promptsApi, configApi } from '../api/client'
+import { Plus, Pencil, Trash2, X, RefreshCw } from 'lucide-react'
 
 const PROMPT_TYPE_TO_CONFIG_KEY: Record<string, string | undefined> = {
-  title:         'modular_tag_title',
+  title: 'modular_tag_title',
   correspondent: 'modular_tag_correspondent',
   document_type: 'modular_tag_document_type',
-  tag:           'modular_tag_tags',
-  extract:       'modular_tag_fields',
+  tag: 'modular_tag_tags',
+  extract: 'modular_tag_fields',
   type_specific: 'modular_tag_fields',
-  vision_ocr:    'modular_tag_ocr',
-  ocr_fix:       'modular_tag_ocr',
-  classify:      'modular_tag_process',
-};
+  vision_ocr: 'modular_tag_ocr',
+  ocr_fix: 'modular_tag_ocr',
+  classify: 'modular_tag_process',
+}
 
-const MODULAR_TAG_DEFAULTS: Record<string, string> = {
-  modular_tag_ocr:           'ai-ocr',
-  modular_tag_title:         'ai-title',
-  modular_tag_correspondent: 'ai-correspondent',
-  modular_tag_document_type: 'ai-document-type',
-  modular_tag_tags:          'ai-tags',
-  modular_tag_fields:        'ai-fields',
-  modular_tag_process:       'ai-process',
-};
+import { MODULAR_TAG_DEFAULTS } from '../constants'
 
-function getTriggerTag(promptType: string, config: Record<string, string>): string | null {
-  const configKey = PROMPT_TYPE_TO_CONFIG_KEY[promptType];
-  if (!configKey) return null;
-  return config[configKey] ?? MODULAR_TAG_DEFAULTS[configKey] ?? null;
+export function getTriggerTag(promptType: string, config: Record<string, string>): string | null {
+  const configKey = PROMPT_TYPE_TO_CONFIG_KEY[promptType]
+  if (!configKey) return null
+  return config[configKey] ?? MODULAR_TAG_DEFAULTS[configKey] ?? null
 }
 
 interface Prompt {
-  id: number;
-  name: string;
-  prompt_type: string;
-  document_type_filter: string | null;
-  system_prompt: string;
-  user_template: string;
-  is_active: boolean;
+  id: number
+  name: string
+  prompt_type: string
+  document_type_filter: string | null
+  system_prompt: string
+  user_template: string
+  is_active: boolean
 }
 
 interface TemplateInfo {
-  variables: { name: string; description: string }[];
-  types: { value: string; description: string }[];
+  variables: { name: string; description: string }[]
+  types: { value: string; description: string }[]
 }
 
 export default function PromptManager() {
-  const { t } = useTranslation();
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [templates, setTemplates] = useState<TemplateInfo | null>(null);
-  const [config, setConfig] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
-  const [samplesMessage, setSamplesMessage] = useState<string | null>(null);
+  const { t } = useTranslation()
+  const [prompts, setPrompts] = useState<Prompt[]>([])
+  const [templates, setTemplates] = useState<TemplateInfo | null>(null)
+  const [config, setConfig] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
+  const [samplesMessage, setSamplesMessage] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     prompt_type: 'classify',
@@ -62,58 +54,58 @@ export default function PromptManager() {
     system_prompt: '',
     user_template: '',
     is_active: true,
-  });
+  })
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [promptsRes, templatesRes, configRes] = await Promise.all([
         promptsApi.getAll(),
         promptsApi.getTemplates(),
         configApi.getAll(),
-      ]);
-      setPrompts(promptsRes.data);
-      setTemplates(templatesRes.data);
-      setConfig(configRes.data as Record<string, string>);
+      ])
+      setPrompts(promptsRes.data)
+      setTemplates(templatesRes.data)
+      setConfig(configRes.data as Record<string, string>)
     } catch (error) {
-      console.error('Failed to load prompts:', error);
+      console.error('Failed to load prompts:', error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     try {
       if (editingPrompt) {
-        await promptsApi.update(editingPrompt.id, formData);
+        await promptsApi.update(editingPrompt.id, formData)
       } else {
-        await promptsApi.create(formData);
+        await promptsApi.create(formData)
       }
-      setShowModal(false);
-      setEditingPrompt(null);
-      resetForm();
-      loadData();
+      setShowModal(false)
+      setEditingPrompt(null)
+      resetForm()
+      loadData()
     } catch (error) {
-      console.error('Failed to save prompt:', error);
+      console.error('Failed to save prompt:', error)
     }
-  };
+  }
 
   const handleDelete = async (id: number) => {
-    if (!confirm(t('prompts.confirmDelete'))) return;
+    if (!confirm(t('prompts.confirmDelete'))) return
     try {
-      await promptsApi.delete(id);
-      loadData();
+      await promptsApi.delete(id)
+      loadData()
     } catch (error) {
-      console.error('Failed to delete prompt:', error);
+      console.error('Failed to delete prompt:', error)
     }
-  };
+  }
 
   const handleEdit = (prompt: Prompt) => {
-    setEditingPrompt(prompt);
+    setEditingPrompt(prompt)
     setFormData({
       name: prompt.name,
       prompt_type: prompt.prompt_type,
@@ -121,9 +113,9 @@ export default function PromptManager() {
       system_prompt: prompt.system_prompt,
       user_template: prompt.user_template,
       is_active: prompt.is_active,
-    });
-    setShowModal(true);
-  };
+    })
+    setShowModal(true)
+  }
 
   const resetForm = () => {
     setFormData({
@@ -133,31 +125,33 @@ export default function PromptManager() {
       system_prompt: '',
       user_template: '',
       is_active: true,
-    });
-  };
+    })
+  }
 
   const handleLoadSamples = async () => {
-    if (!confirm(t('prompts.confirmLoadSamples'))) return;
+    if (!confirm(t('prompts.confirmLoadSamples'))) return
     try {
-      const res = await promptsApi.loadSamples();
-      setSamplesMessage(t('prompts.samplesLoaded', { created: res.data.created, updated: res.data.updated }));
-      setTimeout(() => setSamplesMessage(null), 4000);
-      loadData();
+      const res = await promptsApi.loadSamples()
+      setSamplesMessage(
+        t('prompts.samplesLoaded', { created: res.data.created, updated: res.data.updated }),
+      )
+      setTimeout(() => setSamplesMessage(null), 4000)
+      loadData()
     } catch (error) {
-      console.error('Failed to load samples:', error);
+      console.error('Failed to load samples:', error)
     }
-  };
+  }
 
   const insertVariable = (variable: string, field: 'system' | 'user') => {
-    const key = field === 'system' ? 'system_prompt' : 'user_template';
+    const key = field === 'system' ? 'system_prompt' : 'user_template'
     setFormData({
       ...formData,
       [key]: formData[key] + variable,
-    });
-  };
+    })
+  }
 
   if (loading) {
-    return <div className="text-gray-500">{t('common.loading')}</div>;
+    return <div className="text-gray-500">{t('common.loading')}</div>
   }
 
   return (
@@ -166,7 +160,9 @@ export default function PromptManager() {
         <h1 className="text-2xl font-bold text-gray-900">{t('prompts.title')}</h1>
         <div className="flex items-center gap-2">
           {samplesMessage && (
-            <span className="text-sm text-green-700 bg-green-50 px-3 py-1 rounded-lg">{samplesMessage}</span>
+            <span className="text-sm text-green-700 bg-green-50 px-3 py-1 rounded-lg">
+              {samplesMessage}
+            </span>
           )}
           <button
             onClick={handleLoadSamples}
@@ -177,9 +173,9 @@ export default function PromptManager() {
           </button>
           <button
             onClick={() => {
-              resetForm();
-              setEditingPrompt(null);
-              setShowModal(true);
+              resetForm()
+              setEditingPrompt(null)
+              setShowModal(true)
             }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
@@ -193,12 +189,27 @@ export default function PromptManager() {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colName')}</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colType')}</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colTypeFilter')}</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500" title="Paperless tag that triggers this prompt">Trigger Tag</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colStatus')}</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">{t('prompts.colActions')}</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                {t('prompts.colName')}
+              </th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                {t('prompts.colType')}
+              </th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                {t('prompts.colTypeFilter')}
+              </th>
+              <th
+                className="text-left py-3 px-4 text-sm font-medium text-gray-500"
+                title="Paperless tag that triggers this prompt"
+              >
+                Trigger Tag
+              </th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                {t('prompts.colStatus')}
+              </th>
+              <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">
+                {t('prompts.colActions')}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -206,19 +217,27 @@ export default function PromptManager() {
               <tr key={prompt.id} className="border-t hover:bg-gray-50">
                 <td className="py-3 px-4 font-medium">{prompt.name}</td>
                 <td className="py-3 px-4">
-                  <span className="px-2 py-1 bg-gray-100 rounded text-xs">{prompt.prompt_type}</span>
+                  <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+                    {prompt.prompt_type}
+                  </span>
                 </td>
                 <td className="py-3 px-4 text-gray-600">{prompt.document_type_filter || '-'}</td>
                 <td className="py-3 px-4">
                   {(() => {
-                    const tag = getTriggerTag(prompt.prompt_type, config);
-                    return tag
-                      ? <span className="px-2 py-1 bg-gray-100 text-gray-700 font-mono text-xs rounded">{tag}</span>
-                      : <span className="text-gray-400">—</span>;
+                    const tag = getTriggerTag(prompt.prompt_type, config)
+                    return tag ? (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 font-mono text-xs rounded">
+                        {tag}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )
                   })()}
                 </td>
                 <td className="py-3 px-4">
-                  <span className={`px-2 py-1 rounded text-xs ${prompt.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${prompt.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+                  >
                     {prompt.is_active ? t('prompts.active') : t('prompts.inactive')}
                   </span>
                 </td>
@@ -246,15 +265,22 @@ export default function PromptManager() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
             <div className="flex justify-between items-center p-4 border-b">
-              <h2 className="text-lg font-semibold">{editingPrompt ? t('prompts.editPrompt') : t('prompts.createPrompt')}</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
+              <h2 className="text-lg font-semibold">
+                {editingPrompt ? t('prompts.editPrompt') : t('prompts.createPrompt')}
+              </h2>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
                 <X size={24} />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelName')}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('prompts.labelName')}
+                  </label>
                   <input
                     type="text"
                     value={formData.name}
@@ -264,14 +290,18 @@ export default function PromptManager() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelType')}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('prompts.labelType')}
+                  </label>
                   <select
                     value={formData.prompt_type}
                     onChange={(e) => setFormData({ ...formData, prompt_type: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     {templates?.types.map((type) => (
-                      <option key={type.value} value={type.value}>{type.description}</option>
+                      <option key={type.value} value={type.value}>
+                        {type.description}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -279,11 +309,15 @@ export default function PromptManager() {
 
               {formData.prompt_type === 'type_specific' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelDocTypeFilter')}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('prompts.labelDocTypeFilter')}
+                  </label>
                   <input
                     type="text"
                     value={formData.document_type_filter}
-                    onChange={(e) => setFormData({ ...formData, document_type_filter: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, document_type_filter: e.target.value })
+                    }
                     placeholder={t('prompts.docTypeFilterPlaceholder')}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
@@ -291,7 +325,9 @@ export default function PromptManager() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelSystemPrompt')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('prompts.labelSystemPrompt')}
+                </label>
                 {templates && (
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {templates.variables.map((v) => (
@@ -316,7 +352,9 @@ export default function PromptManager() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('prompts.labelUserTemplate')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('prompts.labelUserTemplate')}
+                </label>
                 {templates && (
                   <div className="flex gap-2 mb-2 flex-wrap">
                     {templates.variables.map((v) => (
@@ -349,7 +387,9 @@ export default function PromptManager() {
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   className="rounded"
                 />
-                <label htmlFor="is_active" className="text-sm text-gray-700">{t('prompts.labelActive')}</label>
+                <label htmlFor="is_active" className="text-sm text-gray-700">
+                  {t('prompts.labelActive')}
+                </label>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
@@ -372,5 +412,5 @@ export default function PromptManager() {
         </div>
       )}
     </div>
-  );
+  )
 }

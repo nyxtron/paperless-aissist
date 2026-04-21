@@ -1,3 +1,9 @@
+"""Correspondent detection step for the document processing pipeline.
+
+Triggered by the ai-process or ai-correspondent tag; uses the correspondent
+prompt to match the document against known Paperless correspondents.
+"""
+
 import logging
 from typing import Any
 
@@ -7,22 +13,34 @@ logger = logging.getLogger(__name__)
 
 
 class CorrespondentStep(AbstractStep):
+    """LLM-based correspondent detection step.
+
+    Triggered by ai-process or ai-correspondent tag. Selects the best matching
+    Paperless correspondent from the available list and returns its ID.
+    """
+
     name = "correspondent"
 
     def __init__(self, config):
+        """Initialize with config dict."""
         self.config = config
 
     @classmethod
     async def from_config(cls, config):
+        """Factory: create a CorrespondentStep from the config dict."""
         return cls(config)
 
     def can_handle(self, tags: set[str]) -> bool:
+        """Return True if ai-process or ai-correspondent tag is present."""
         process_tag = self.config.get("modular_tag_process") or "ai-process"
-        correspondent_tag = self.config.get("modular_tag_correspondent") or "ai-correspondent"
+        correspondent_tag = (
+            self.config.get("modular_tag_correspondent") or "ai-correspondent"
+        )
         return process_tag in tags or correspondent_tag in tags
 
     async def execute(self, ctx: StepContext) -> StepResult:
-        from ...database import get_session
+        """Detect the correspondent from content and available list."""
+        from ...database import get_async_session
         from ...models import Prompt
         from sqlmodel import select
 
@@ -34,11 +52,12 @@ class CorrespondentStep(AbstractStep):
         if not text:
             return StepResult(data={}, error="No content available")
 
-        with get_session() as session:
+        async with get_async_session() as session:
             stmt = select(Prompt).where(
-                Prompt.prompt_type == "correspondent", Prompt.is_active == True
+                Prompt.prompt_type == "correspondent", Prompt.is_active.is_(True)
             )
-            correspondent_prompt = session.exec(stmt).first()
+            result = await session.exec(stmt)
+            correspondent_prompt = result.first()
             prompt_data = (
                 {
                     "system_prompt": correspondent_prompt.system_prompt,
@@ -86,4 +105,3 @@ class CorrespondentStep(AbstractStep):
         except Exception as e:
             logger.warning(f"CorrespondentStep: failed for doc {ctx.doc_id}: {e}")
             return StepResult(data={}, error=str(e))
-

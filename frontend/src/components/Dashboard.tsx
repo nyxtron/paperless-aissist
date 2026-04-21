@@ -1,51 +1,61 @@
-import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { statsApi } from '../api/client';
-import { RefreshCw, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
+import { statsApi } from '../api/client'
+import { RefreshCw, Trash2 } from 'lucide-react'
 
-const COLORS = ['#22c55e', '#ef4444', '#f59e0b'];
+const COLORS = ['#22c55e', '#ef4444', '#f59e0b']
 
 interface Stats {
-  total_processed: number;
-  success: number;
-  failed: number;
-  skipped: number;
-  success_rate: number;
-  avg_processing_time_ms: number;
+  total_processed: number
+  success: number
+  failed: number
+  skipped: number
+  success_rate: number
+  avg_processing_time_ms: number
 }
 
 interface DailyStats {
-  date: string;
-  success: number;
-  failed: number;
-  skipped: number;
+  date: string
+  success: number
+  failed: number
+  skipped: number
 }
 
 interface RecentLog {
-  id: number;
-  document_id: number;
-  document_title: string | null;
-  status: string;
-  llm_provider: string | null;
-  llm_model: string | null;
-  error_message: string | null;
-  processing_time_ms: number | null;
-  processed_at: string;
+  id: number
+  document_id: number
+  document_title: string | null
+  status: string
+  llm_provider: string | null
+  llm_model: string | null
+  error_message: string | null
+  processing_time_ms: number | null
+  processed_at: string
 }
 
 export default function Dashboard() {
-  const { t } = useTranslation();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
-  const [recentLogs, setRecentLogs] = useState<RecentLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [resetting, setResetting] = useState(false);
+  const { t } = useTranslation()
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
+  const [recentLogs, setRecentLogs] = useState<RecentLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData()
+  }, [])
 
   const loadData = async () => {
     try {
@@ -53,42 +63,44 @@ export default function Dashboard() {
         statsApi.get(),
         statsApi.getDaily(7),
         statsApi.getRecent(10),
-      ]);
-      setStats(statsRes.data);
-      setDailyStats(dailyRes.data);
-      setRecentLogs(recentRes.data);
+      ])
+      setStats(statsRes.data)
+      setDailyStats(dailyRes.data)
+      setRecentLogs(recentRes.data)
     } catch (error) {
-      console.error('Failed to load stats:', error);
+      console.error('Failed to load stats:', error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleReset = async () => {
     if (!window.confirm(t('dashboard.confirmReset'))) {
-      return;
+      return
     }
-    setResetting(true);
+    setResetting(true)
     try {
-      await statsApi.reset();
-      loadData();
+      await statsApi.reset()
+      loadData()
     } catch (error) {
-      console.error('Failed to reset stats:', error);
-      toast.error(t('dashboard.resetFailed'));
+      console.error('Failed to reset stats:', error)
+      toast.error(t('dashboard.resetFailed'))
     } finally {
-      setResetting(false);
+      setResetting(false)
     }
-  };
-
-  if (loading) {
-    return <div className="text-gray-500">{t('common.loading')}</div>;
   }
 
-  const pieData = stats ? [
-    { name: t('dashboard.success'), value: stats.success },
-    { name: t('dashboard.failed'), value: stats.failed },
-    { name: t('dashboard.skipped'), value: stats.skipped },
-  ] : [];
+  if (loading) {
+    return <div className="text-gray-500">{t('common.loading')}</div>
+  }
+
+  const pieData = stats
+    ? [
+        { name: t('dashboard.success'), value: stats.success },
+        { name: t('dashboard.failed'), value: stats.failed },
+        { name: t('dashboard.skipped'), value: stats.skipped },
+      ]
+    : []
 
   return (
     <div className="space-y-6">
@@ -125,7 +137,9 @@ export default function Dashboard() {
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <p className="text-sm text-gray-500">{t('dashboard.avgProcessingTime')}</p>
-          <p className="text-3xl font-bold text-gray-900">{((stats?.avg_processing_time_ms || 0) / 1000).toFixed(1)}s</p>
+          <p className="text-3xl font-bold text-gray-900">
+            {((stats?.avg_processing_time_ms || 0) / 1000).toFixed(1)}s
+          </p>
         </div>
       </div>
 
@@ -154,7 +168,9 @@ export default function Dashboard() {
             {pieData.map((entry, index) => (
               <div key={entry.name} className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }} />
-                <span className="text-sm text-gray-600">{entry.name}: {entry.value}</span>
+                <span className="text-sm text-gray-600">
+                  {entry.name}: {entry.value}
+                </span>
               </div>
             ))}
           </div>
@@ -180,23 +196,39 @@ export default function Dashboard() {
           <table className="w-full">
             <thead>
               <tr className="border-b">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colDocument')}</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colStatus')}</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colModel')}</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colTime')}</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">{t('dashboard.colDate')}</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                  {t('dashboard.colDocument')}
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                  {t('dashboard.colStatus')}
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                  {t('dashboard.colModel')}
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                  {t('dashboard.colTime')}
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                  {t('dashboard.colDate')}
+                </th>
               </tr>
             </thead>
             <tbody>
               {recentLogs.map((log) => (
                 <tr key={log.id} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4">{log.document_title || t('dashboard.docFallback', { id: log.document_id })}</td>
                   <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      log.status === 'success' ? 'bg-green-100 text-green-800' :
-                      log.status === 'failed' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
+                    {log.document_title || t('dashboard.docFallback', { id: log.document_id })}
+                  </td>
+                  <td className="py-3 px-4">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${
+                        log.status === 'success'
+                          ? 'bg-green-100 text-green-800'
+                          : log.status === 'failed'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                      }`}
+                    >
                       {log.status}
                     </span>
                     {log.status === 'failed' && log.error_message && (
@@ -208,11 +240,11 @@ export default function Dashboard() {
                       </p>
                     )}
                   </td>
+                  <td className="py-3 px-4 text-sm text-gray-600">{log.llm_model || '-'}</td>
                   <td className="py-3 px-4 text-sm text-gray-600">
-                    {log.llm_model || '-'}
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    {log.processing_time_ms ? `${(log.processing_time_ms / 1000).toFixed(1)}s` : '-'}
+                    {log.processing_time_ms
+                      ? `${(log.processing_time_ms / 1000).toFixed(1)}s`
+                      : '-'}
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
                     {new Date(log.processed_at).toLocaleString()}
@@ -224,5 +256,5 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -1,10 +1,12 @@
+"""Prompt template CRUD endpoints with type filtering and sample loading."""
+
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 
-from ..database import get_session
+from ..database import get_async_session
 from ..models import Prompt
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
@@ -30,9 +32,11 @@ class PromptUpdate(BaseModel):
 
 @router.get("")
 async def get_prompts():
-    with get_session() as session:
+    """Return all prompt templates."""
+    async with get_async_session() as session:
         stmt = select(Prompt)
-        prompts = session.exec(stmt).all()
+        prompts = await session.exec(stmt)
+        prompts = prompts.all()
         return [
             {
                 "id": p.id,
@@ -54,31 +58,54 @@ async def get_prompt_templates():
     return {
         "variables": [
             {"name": "{content}", "description": "The document text content"},
-            {"name": "{correspondents_list}", "description": "List of available correspondents"},
+            {
+                "name": "{correspondents_list}",
+                "description": "List of available correspondents",
+            },
             {"name": "{tags_list}", "description": "List of available tags"},
-            {"name": "{document_types_list}", "description": "List of available document types"},
-            {"name": "{custom_fields_list}", "description": "List of available custom fields"},
+            {
+                "name": "{document_types_list}",
+                "description": "List of available document types",
+            },
+            {
+                "name": "{custom_fields_list}",
+                "description": "List of available custom fields",
+            },
             {"name": "{title}", "description": "Original document title"},
         ],
         "types": [
             {"value": "correspondent", "description": "Correspondent detection"},
             {"value": "document_type", "description": "Document type detection"},
             {"value": "tag", "description": "Tag detection"},
-            {"value": "ocr_fix", "description": "OCR post-processing (fix recognition errors)"},
-            {"value": "classify", "description": "Document classification (legacy combined)"},
+            {
+                "value": "ocr_fix",
+                "description": "OCR post-processing (fix recognition errors)",
+            },
+            {
+                "value": "classify",
+                "description": "Document classification (legacy combined)",
+            },
             {"value": "extract", "description": "Custom fields extraction"},
-            {"value": "type_specific", "description": "Type-specific extraction (runs after classify)"},
+            {
+                "value": "type_specific",
+                "description": "Type-specific extraction (runs after classify)",
+            },
             {"value": "title", "description": "Title generation"},
-            {"value": "vision_ocr", "description": "Vision OCR (prompt sent to vision model for text extraction)"},
+            {
+                "value": "vision_ocr",
+                "description": "Vision OCR (prompt sent to vision model for text extraction)",
+            },
         ],
     }
 
 
 @router.get("/{prompt_id}")
 async def get_prompt(prompt_id: int):
-    with get_session() as session:
+    """Return a single prompt template by ID."""
+    async with get_async_session() as session:
         stmt = select(Prompt).where(Prompt.id == prompt_id)
-        prompt = session.exec(stmt).first()
+        prompt = await session.exec(stmt)
+        prompt = prompt.first()
         if not prompt:
             raise HTTPException(status_code=404, detail="Prompt not found")
         return {
@@ -96,7 +123,8 @@ async def get_prompt(prompt_id: int):
 
 @router.post("")
 async def create_prompt(prompt: PromptCreate):
-    with get_session() as session:
+    """Create a new prompt template."""
+    async with get_async_session() as session:
         db_prompt = Prompt(
             name=prompt.name,
             prompt_type=prompt.prompt_type,
@@ -104,8 +132,8 @@ async def create_prompt(prompt: PromptCreate):
             system_prompt=prompt.system_prompt,
             user_template=prompt.user_template,
             is_active=prompt.is_active,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         session.add(db_prompt)
         return {
@@ -117,12 +145,14 @@ async def create_prompt(prompt: PromptCreate):
 
 @router.put("/{prompt_id}")
 async def update_prompt(prompt_id: int, prompt: PromptUpdate):
-    with get_session() as session:
+    """Update an existing prompt template."""
+    async with get_async_session() as session:
         stmt = select(Prompt).where(Prompt.id == prompt_id)
-        db_prompt = session.exec(stmt).first()
+        db_prompt = await session.exec(stmt)
+        db_prompt = db_prompt.first()
         if not db_prompt:
             raise HTTPException(status_code=404, detail="Prompt not found")
-        
+
         if prompt.name is not None:
             db_prompt.name = prompt.name
         if prompt.prompt_type is not None:
@@ -135,9 +165,9 @@ async def update_prompt(prompt_id: int, prompt: PromptUpdate):
             db_prompt.user_template = prompt.user_template
         if prompt.is_active is not None:
             db_prompt.is_active = prompt.is_active
-        
-        db_prompt.updated_at = datetime.utcnow()
-        
+
+        db_prompt.updated_at = datetime.now(timezone.utc)
+
         return {
             "id": db_prompt.id,
             "name": db_prompt.name,
@@ -155,20 +185,33 @@ async def load_sample_prompts():
         raise HTTPException(status_code=404, detail="Examples directory not found")
 
     created, updated = 0, 0
-    with get_session() as session:
+    async with get_async_session() as session:
         for json_file in sorted(examples_dir.glob("*.json")):
             with open(json_file) as f:
                 p = json.load(f)
             stmt = select(Prompt).where(Prompt.name == p["name"])
-            existing = session.exec(stmt).first()
+            existing = await session.exec(stmt)
+            existing = existing.first()
             if existing:
-                for field in ("prompt_type", "system_prompt", "user_template", "document_type_filter", "is_active"):
+                for field in (
+                    "prompt_type",
+                    "system_prompt",
+                    "user_template",
+                    "document_type_filter",
+                    "is_active",
+                ):
                     if field in p:
                         setattr(existing, field, p[field])
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
                 updated += 1
             else:
-                session.add(Prompt(**p, created_at=datetime.utcnow(), updated_at=datetime.utcnow()))
+                session.add(
+                    Prompt(
+                        **p,
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc),
+                    )
+                )
                 created += 1
 
     return {"created": created, "updated": updated}
@@ -176,10 +219,12 @@ async def load_sample_prompts():
 
 @router.delete("/{prompt_id}")
 async def delete_prompt(prompt_id: int):
-    with get_session() as session:
+    """Delete a prompt template by ID."""
+    async with get_async_session() as session:
         stmt = select(Prompt).where(Prompt.id == prompt_id)
-        prompt = session.exec(stmt).first()
+        prompt = await session.exec(stmt)
+        prompt = prompt.first()
         if not prompt:
             raise HTTPException(status_code=404, detail="Prompt not found")
-        session.delete(prompt)
+        await session.delete(prompt)
         return {"message": "Prompt deleted successfully"}

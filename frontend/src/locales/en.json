@@ -139,7 +139,13 @@
     "authEnabled": "Require Login",
     "authEnabledHint": "When enabled, users must sign in with their Paperless-ngx credentials",
     "authEnabledWarning": "You will be redirected to the login page immediately after saving.",
-    "authRequiresPaperless": "Paperless URL must be configured before enabling authentication."
+    "authRequiresPaperless": "Paperless URL must be configured before enabling authentication.",
+    "tabServer": "Server",
+    "tabLLM": "LLM/Vision",
+    "tabVision": "Vision",
+    "tabScheduler": "Scheduler",
+    "tabTags": "Tags",
+    "tabAdvanced": "Advanced"
   },
   "login": {
     "title": "Sign In",

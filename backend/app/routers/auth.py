@@ -1,10 +1,21 @@
+"""Authentication endpoints: login, logout, and auth status."""
+
 import httpx
 import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from ..auth import _is_auth_enabled, _get_paperless_url, _verify_token_against_paperless, _bearer_scheme, _token_cache, require_auth
+from starlette.requests import Request
+from ..limiter import limiter
+from ..auth import (
+    _is_auth_enabled,
+    _get_paperless_url,
+    _verify_token_against_paperless,
+    _bearer_scheme,
+    _token_cache,
+    require_auth,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +30,14 @@ class LoginRequest(BaseModel):
 
 @router.get("/status")
 async def auth_status():
+    """Return whether authentication is enabled."""
     return {"auth_enabled": _is_auth_enabled()}
 
 
 @router.post("/login")
-async def login(body: LoginRequest):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest):
+    """Authenticate with Paperless and return a bearer token."""
     paperless_url = await _get_paperless_url()
     if not paperless_url:
         raise HTTPException(status_code=503, detail="Paperless not configured")
@@ -51,7 +65,9 @@ async def login(body: LoginRequest):
         data = response.json()
         token = data.get("token")
         if not token:
-            raise HTTPException(status_code=500, detail="No token in Paperless response")
+            raise HTTPException(
+                status_code=500, detail="No token in Paperless response"
+            )
         return {"token": token, "username": body.username}
     except HTTPException:
         raise
@@ -69,6 +85,7 @@ async def me(user: dict = Depends(require_auth)):
 async def logout(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ):
+    """Invalidate the current bearer token from the cache."""
     if credentials and credentials.scheme.lower() == "bearer":
         _token_cache.pop(credentials.credentials, None)
     return {"success": True}

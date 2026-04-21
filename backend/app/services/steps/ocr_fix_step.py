@@ -1,3 +1,9 @@
+"""OCR fix/refinement step for the document processing pipeline.
+
+Triggered by force_ocr_fix or force_ocr tags; applies an LLM pass to correct
+OCR errors in the existing ctx.ocr_text.
+"""
+
 import logging
 from typing import Any
 
@@ -7,9 +13,16 @@ logger = logging.getLogger(__name__)
 
 
 class OCRFixStep(AbstractStep):
+    """LLM-based OCR post-processing step.
+
+    Triggered by force_ocr_fix or force_ocr tags. Rewrites ctx.ocr_text
+    to fix recognition errors using the ocr_fix prompt template.
+    """
+
     name = "ocr_fix"
 
     def __init__(self, config):
+        """Initialize with config dict."""
         self.config = config
         self.force_ocr_tag = (
             config.get("force_ocr_tag", "force_ocr") if config else "force_ocr"
@@ -22,13 +35,16 @@ class OCRFixStep(AbstractStep):
 
     @classmethod
     async def from_config(cls, config):
+        """Factory: create an OCRFixStep from the config dict."""
         return cls(config)
 
     def can_handle(self, tags: set[str]) -> bool:
+        """Return True if force_ocr_fix or force_ocr tag is present."""
         return self.force_ocr_fix_tag in tags or self.force_ocr_tag in tags
 
     async def execute(self, ctx: StepContext) -> StepResult:
-        from ...database import get_session
+        """Apply OCR fix LLM pass to ctx.ocr_text and update the document content."""
+        from ...database import get_async_session
         from ...models import Prompt
         from sqlmodel import select
 
@@ -43,11 +59,12 @@ class OCRFixStep(AbstractStep):
             return StepResult(data={}, error=None)
 
         ocr_fix_prompt = None
-        with get_session() as session:
+        async with get_async_session() as session:
             stmt = select(Prompt).where(
-                Prompt.prompt_type == "ocr_fix", Prompt.is_active == True
+                Prompt.prompt_type == "ocr_fix", Prompt.is_active.is_(True)
             )
-            ocr_fix_prompt = session.exec(stmt).first()
+            result = await session.exec(stmt)
+            ocr_fix_prompt = result.first()
 
         if not ocr_fix_prompt:
             return StepResult(data={}, error=None)
@@ -55,7 +72,9 @@ class OCRFixStep(AbstractStep):
         try:
             fix_result = await ctx.llm.complete(
                 system_prompt=ocr_fix_prompt.system_prompt,
-                user_prompt=ocr_fix_prompt.user_template.replace("{content}", text[:10000]),
+                user_prompt=ocr_fix_prompt.user_template.replace(
+                    "{content}", text[:10000]
+                ),
                 json_mode=False,
             )
             fixed_text = (
@@ -79,4 +98,5 @@ class OCRFixStep(AbstractStep):
 
     @staticmethod
     async def _get_config(config: dict, key: str, default: str = None) -> str:
+        """Helper to read a config key with a default."""
         return config.get(key) if config else default

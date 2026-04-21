@@ -1,3 +1,9 @@
+"""APScheduler-based background scheduler for auto-processing Paperless documents.
+
+Supports configurable intervals, concurrent processing limits, and persistent state
+across restarts. Exposes start/stop/trigger/update functions and status queries.
+"""
+
 import logging
 import os
 import json
@@ -6,13 +12,25 @@ import threading
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+_MAX_CONCURRENT_PROCESSING = 3
 
 scheduler: Optional[AsyncIOScheduler] = None
 job_id = "auto_process_documents"
 lock = threading.Lock()
+
+_lock: Optional[asyncio.Lock] = None
+
+
+async def _get_lock() -> asyncio.Lock:
+    global _lock
+    if _lock is None:
+        _lock = asyncio.Lock()
+    return _lock
+
 
 DATA_DIR = os.environ.get(
     "DATA_DIR",
@@ -44,11 +62,12 @@ def _set_processing(doc_id: Optional[int] = None):
     state = _load_state()
     state["is_processing"] = True
     state["current_doc_id"] = doc_id
-    state["started_at"] = datetime.utcnow().isoformat()
+    state["started_at"] = datetime.now(timezone.utc).isoformat()
     _save_state(state)
 
 
 def _clear_processing():
+    """Reset the processing state file (called after each run or on interrupt)."""
     state = _load_state()
     state["is_processing"] = False
     state["current_doc_id"] = None
@@ -152,6 +171,11 @@ async def process_documents_task():
 
 
 def start_scheduler(interval_minutes: int = 5):
+    """Start (or restart) the APScheduler with the given interval in minutes.
+
+    Args:
+        interval_minutes: How often to run the auto-processing job.
+    """
     global scheduler
 
     if scheduler is None:
@@ -172,6 +196,7 @@ def start_scheduler(interval_minutes: int = 5):
 
 
 def stop_scheduler():
+    """Stop the scheduler and persist disabled state to the database."""
     global scheduler
 
     if scheduler and scheduler.running:
@@ -181,6 +206,7 @@ def stop_scheduler():
 
 
 def get_scheduler_status() -> dict:
+    """Return current scheduler status including running state and next run time."""
     global scheduler
 
     is_processing, current_doc_id = is_currently_processing()
@@ -214,6 +240,7 @@ def get_scheduler_status() -> dict:
 
 
 def update_scheduler_interval(interval_minutes: int):
+    """Update the polling interval of a running scheduler."""
     global scheduler
 
     if scheduler and scheduler.running:
@@ -232,7 +259,11 @@ def update_scheduler_interval(interval_minutes: int):
 
 
 def try_trigger_processing() -> tuple[bool, str]:
-    """Try to start processing. Returns (success, message)."""
+    """Try to mark processing as started; rejects if already in progress.
+
+    Returns:
+        (True, message) on success, (False, reason) if already running.
+    """
     with lock:
         is_running, doc_id = is_currently_processing()
         if is_running:
@@ -253,15 +284,18 @@ def clear_processing_state():
 
 
 async def process_tagged_documents() -> dict:
-    """Process all tagged documents. Handles state management. Returns result dict."""
-    from ..services.paperless import PaperlessClient
+    """Process all documents tagged with the legacy process_tag.
+
+    Returns:
+        Dict with "processed" count and "results" list.
+    """
+    from ..services.paperless_manager import PaperlessClientManager
     from ..services.processor import DocumentProcessor
 
     try:
-        paperless = await PaperlessClient.from_config()
+        paperless = await PaperlessClientManager.get_client()
         processor = DocumentProcessor(paperless)
         result = await processor.process_tagged_documents()
-        await paperless.close()
 
         if result.get("processed", 0) > 0:
             logger.info(f"Processed {result.get('processed')} documents")
@@ -273,11 +307,15 @@ async def process_tagged_documents() -> dict:
 
 
 async def process_modular_tagged_documents() -> dict:
-    """Process all modular-tagged documents. Returns result dict."""
-    from ..services.paperless import PaperlessClient
+    """Process all documents tagged with any modular trigger tag.
+
+    Returns:
+        Dict with "processed" count and "results" list.
+    """
+    from ..services.paperless_manager import PaperlessClientManager
     from ..services.processor import DocumentProcessor
 
-    paperless = await PaperlessClient.from_config()
+    paperless = await PaperlessClientManager.get_client()
     processor = DocumentProcessor(paperless)
     tag_map = await processor._get_modular_tag_map()
     trigger_tag_names = list(tag_map.values())
@@ -297,14 +335,25 @@ async def process_modular_tagged_documents() -> dict:
         except Exception as e:
             logger.warning(f"Failed to list docs for modular tag {tag_name!r}: {e}")
 
-    results = []
-    for doc_id in doc_ids:
-        result = await processor.process_document(doc_id)
-        results.append(result)
+    async def process_one(doc_id: int):
+        return await processor.process_document(doc_id)
 
-    await paperless.close()
+    sem = asyncio.Semaphore(_MAX_CONCURRENT_PROCESSING)
+
+    async def _limited_process(doc_id: int):
+        async with sem:
+            return await process_one(doc_id)
+
+    results = await asyncio.gather(
+        *[_limited_process(d) for d in doc_ids], return_exceptions=True
+    )
+
+    processed = sum(1 for r in results if not isinstance(r, Exception))
+    errors = [str(r) for r in results if isinstance(r, Exception)]
+    if errors:
+        logger.warning(f"Modular processing errors: {errors}")
     return {
         "success": True,
-        "processed": len(results),
-        "results": results,
+        "processed": processed,
+        "results": [r for r in results if not isinstance(r, Exception)],
     }

@@ -1,5 +1,5 @@
-import ProcessingPanel from '../components/ProcessingPanel';
+import ProcessingPanel from '../components/ProcessingPanel'
 
 export default function ProcessingPage() {
-  return <ProcessingPanel />;
+  return <ProcessingPanel />
 }

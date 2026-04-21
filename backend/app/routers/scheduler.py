@@ -1,3 +1,5 @@
+"""Scheduler control endpoints: start, stop, update interval, trigger."""
+
 from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel
 
