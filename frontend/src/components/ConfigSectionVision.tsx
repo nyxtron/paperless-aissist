@@ -76,7 +76,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             onChange={(e) => handleChange('llm_api_key_vision', e.target.value)}
             placeholder={
               secretsSet?.includes('llm_api_key_vision')
-                ? 'Already set - enter new value to update'
+                ? t('config.alreadySetPlaceholder')
                 : getApiKeyPlaceholder(config.llm_provider_vision)
             }
             className={fieldClass}

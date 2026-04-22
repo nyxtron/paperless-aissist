@@ -60,6 +60,7 @@
     "paperlessUrl": "Paperless URL",
     "apiToken": "API Token",
     "apiTokenPlaceholder": "Enter your Paperless API token",
+    "alreadySetPlaceholder": "Already set - enter new value to update",
     "tagDropdownHint": "Tag dropdowns populated from Paperless",
     "processTag": "Process Tag",
     "processTagHint": "Documents with this tag will be processed",

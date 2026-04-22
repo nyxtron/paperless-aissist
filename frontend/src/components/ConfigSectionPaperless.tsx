@@ -110,7 +110,7 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
             type="password"
             value={config.paperless_token || ''}
             onChange={(e) => handleChange('paperless_token', e.target.value)}
-            placeholder={hasPaperlessToken ? 'Already set - enter new value to update' : t('config.apiTokenPlaceholder')}
+            placeholder={hasPaperlessToken ? t('config.alreadySetPlaceholder') : t('config.apiTokenPlaceholder')}
             className={fieldClass}
           />
         </div>

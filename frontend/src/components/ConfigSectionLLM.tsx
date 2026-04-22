@@ -118,7 +118,7 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             onChange={(e) => handleChange('llm_api_key', e.target.value)}
             placeholder={
               secretsSet?.includes('llm_api_key')
-                ? 'Already set - enter new value to update'
+                ? t('config.alreadySetPlaceholder')
                 : getApiKeyPlaceholder(config.llm_provider)
             }
             className={fieldClass}
