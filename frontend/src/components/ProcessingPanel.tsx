@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { toast } from 'sonner'
+
 import { configApi, documentsApi, schedulerApi } from '../api/client'
 import { SchedulerStatus } from '../api/types'
-import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock } from 'lucide-react'
+import {
+  getCachedDocumentList,
+  invalidateDocumentListCache,
+  loadCachedDocumentList,
+} from '../utils/documentListCache'
 
 interface TaggedDocument {
   id: number
@@ -15,10 +21,8 @@ interface TaggedDocument {
 
 type DocumentListRefreshMode = 'automatic' | 'manual'
 
-let cachedProcessingDocuments: TaggedDocument[] | null = null
-
 export function clearProcessingDocumentCacheForTests() {
-  cachedProcessingDocuments = null
+  invalidateDocumentListCache('processing')
 }
 
 interface ProcessingStep {
@@ -66,20 +70,27 @@ export default function ProcessingPanel() {
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null)
   const [resultStepFilter, setResultStepFilter] = useState<'all' | 'failed' | 'completed'>('all')
   const [refreshMode, setRefreshMode] = useState<DocumentListRefreshMode>('automatic')
-  const [hasLoadedDocuments, setHasLoadedDocuments] = useState(cachedProcessingDocuments !== null)
+  const [hasLoadedDocuments, setHasLoadedDocuments] = useState(
+    getCachedDocumentList<TaggedDocument>('processing') !== null,
+  )
 
-  const loadDocuments = useCallback(async () => {
+  const loadDocuments = useCallback(async (options: { force?: boolean } = {}) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await documentsApi.getTagged()
-      const loadedDocuments = res.data.documents || []
-      cachedProcessingDocuments = loadedDocuments
+      const loadedDocuments = await loadCachedDocumentList<TaggedDocument>(
+        'processing',
+        async () => {
+          const res = await documentsApi.getTagged()
+          if (res.data.error) {
+            setError(res.data.error)
+          }
+          return res.data.documents || []
+        },
+        options,
+      )
       setDocuments(loadedDocuments)
       setHasLoadedDocuments(true)
-      if (res.data.error) {
-        setError(res.data.error)
-      }
     } catch (err: unknown) {
       const message = err instanceof Error && 'response' in err
         ? (err as { response?: { data?: { detail?: string; status?: number } } }).response?.data?.detail || (err instanceof Error ? err.message : 'Unknown error')
@@ -115,8 +126,9 @@ export default function ProcessingPanel() {
       if (!mounted) return
 
       setRefreshMode(mode)
-      if (cachedProcessingDocuments !== null) {
-        setDocuments(cachedProcessingDocuments)
+      const cached = getCachedDocumentList<TaggedDocument>('processing')
+      if (cached !== null) {
+        setDocuments(cached)
         setHasLoadedDocuments(true)
       }
       if (mode === 'automatic') {
@@ -139,7 +151,7 @@ export default function ProcessingPanel() {
     try {
       const res = await documentsApi.trigger()
       toast.success(t('processing.processedCount', { count: res.data.processed }))
-      loadDocuments()
+      loadDocuments({ force: true })
       loadSchedulerStatus()
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number; data?: { detail?: string } } }
@@ -161,7 +173,7 @@ export default function ProcessingPanel() {
       const res = await documentsApi.process(docId)
       setResult(res.data)
       setShowResult(true)
-      loadDocuments()
+      loadDocuments({ force: true })
       loadSchedulerStatus()
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } }
@@ -235,7 +247,7 @@ export default function ProcessingPanel() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={loadDocuments}
+            onClick={() => loadDocuments({ force: true })}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
           >

@@ -1,17 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { configApi, documentsApi } from '../api/client'
-import { extractApiError } from '../api/errorUtils'
-import type { ChatDocument, ChatMessage, ProcessingPreview } from '../api/types'
 import { Send, FileText, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { configApi, documentsApi } from '../api/client'
+import { extractApiError } from '../api/errorUtils'
+import type { ChatDocument, ChatMessage, ProcessingPreview } from '../api/types'
+import {
+  getCachedDocumentList,
+  invalidateDocumentListCache,
+  loadCachedDocumentList,
+} from '../utils/documentListCache'
+
 type DocumentListRefreshMode = 'automatic' | 'manual'
 
-let cachedChatDocuments: ChatDocument[] | null = null
-
 export function clearChatDocumentCacheForTests() {
-  cachedChatDocuments = null
+  invalidateDocumentListCache('chat')
 }
 
 export default function ChatPage() {
@@ -25,7 +29,9 @@ export default function ChatPage() {
   const [loadingDocs, setLoadingDocs] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshMode, setRefreshMode] = useState<DocumentListRefreshMode>('automatic')
-  const [hasLoadedDocuments, setHasLoadedDocuments] = useState(cachedChatDocuments !== null)
+  const [hasLoadedDocuments, setHasLoadedDocuments] = useState(
+    getCachedDocumentList<ChatDocument>('chat') !== null,
+  )
 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ChatDocument[]>([])
@@ -35,17 +41,22 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const loadDocuments = useCallback(async () => {
+  const loadDocuments = useCallback(async (options: { force?: boolean } = {}) => {
     setLoadingDocs(true)
     try {
-      const res = await documentsApi.getChatList()
-      const loadedDocuments = res.data.documents || []
-      cachedChatDocuments = loadedDocuments
+      const loadedDocuments = await loadCachedDocumentList<ChatDocument>(
+        'chat',
+        async () => {
+          const res = await documentsApi.getChatList()
+          if (res.data.error) {
+            setError(res.data.error)
+          }
+          return res.data.documents || []
+        },
+        options,
+      )
       setDocuments(loadedDocuments)
       setHasLoadedDocuments(true)
-      if (res.data.error) {
-        setError(res.data.error)
-      }
     } catch (err: unknown) {
       const { message } = extractApiError(err)
       setError(message)
@@ -69,8 +80,9 @@ export default function ChatPage() {
       if (!mounted) return
 
       setRefreshMode(mode)
-      if (cachedChatDocuments !== null) {
-        setDocuments(cachedChatDocuments)
+      const cached = getCachedDocumentList<ChatDocument>('chat')
+      if (cached !== null) {
+        setDocuments(cached)
         setHasLoadedDocuments(true)
       }
       if (mode === 'automatic') {
@@ -264,7 +276,7 @@ export default function ChatPage() {
 
           <div className="p-3 border-t bg-gray-50">
             <button
-              onClick={loadDocuments}
+              onClick={() => loadDocuments({ force: true })}
               disabled={loadingDocs}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
