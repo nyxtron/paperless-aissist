@@ -255,22 +255,20 @@ class LLMHandler:
         system_prompt: str,
         user_prompt: str = "",
         images: Optional[list[bytes]] = None,
-        pdf_bytes: Optional[bytes] = None,
         json_mode: bool = True,
         temperature: float = 0.3,
     ) -> dict[str, Any]:
-        """Send a vision/multimodal completion request.
+        """Send a vision/multimodal completion request, page-by-page.
 
         Args:
             system_prompt: System instructions.
             user_prompt: Optional text prompt.
-            images: JPEG image bytes (Ollama provider).
-            pdf_bytes: Raw PDF bytes (OpenAI provider, sent natively).
+            images: List of JPEG image bytes, one per PDF page.
             json_mode: If True, request JSON-formatted response.
             temperature: Sampling temperature.
 
         Returns:
-            A dict with extracted "text" or "raw".
+            A dict with concatenated "text" (or "raw") across all pages.
         """
         if images is None:
             images = []
@@ -280,12 +278,7 @@ class LLMHandler:
             )
         elif self.provider in ("openai", "grok"):
             return await self._openai_vision_complete(
-                system_prompt,
-                user_prompt,
-                images,
-                json_mode,
-                temperature,
-                pdf_bytes=pdf_bytes if self.provider == "openai" else None,
+                system_prompt, user_prompt, images, json_mode, temperature
             )
         else:
             raise Exception(f"Provider {self.provider} not supported for vision")
@@ -362,78 +355,75 @@ class LLMHandler:
         images: Optional[list[bytes]] = None,
         json_mode: bool = True,
         temperature: float = 0.3,
-        pdf_bytes: Optional[bytes] = None,
     ) -> dict[str, Any]:
-        """OpenAI-compatible vision implementation — handles PDF and image inputs."""
+        """OpenAI-compatible vision — one image_url per page, concatenated.
+
+        The OpenAI `type:"file"` (base64 PDF) content part is intentionally
+        not used: most OpenAI-compatible local runtimes (oMLX, llama.cpp,
+        Ollama OpenAI endpoint, LM Studio, vLLM) silently drop unknown
+        content parts, producing 200 OK responses with empty extractions.
+        `image_url` works across all of them and real OpenAI.
+        """
         if images is None:
             images = []
         import base64
 
         client = self.client
         url = "/chat/completions"
-        logger.info(f"OpenAI Vision calling: {url}, model: {self.model}")
+        combined_text: list[str] = []
 
-        if pdf_bytes:
-            logger.info("OpenAI Vision: sending PDF natively (all pages)")
-            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
-            content: list[dict] = [
-                {
-                    "type": "file",
-                    "file": {
-                        "filename": "document.pdf",
-                        "file_data": f"data:application/pdf;base64,{pdf_b64}",
-                    },
-                },
-            ]
-            if user_prompt:
-                content.append({"type": "text", "text": user_prompt})
-        else:
+        for i, img in enumerate(images):
+            img_b64 = base64.b64encode(img).decode("utf-8")
             logger.info(
-                f"OpenAI Vision: sending JPEG images (all {len(images)} page(s))"
+                f"OpenAI Vision page {i + 1}/{len(images)}: {url}, model: {self.model}"
             )
-            content = []
+
+            content: list[dict] = []
             if user_prompt:
                 content.append({"type": "text", "text": user_prompt})
-            for img in images:
-                img_b64 = base64.b64encode(img).decode("utf-8")
-                content.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
-                    }
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+                }
+            )
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": content},
+            ]
+
+            payload: dict[str, Any] = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
+
+            try:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                page_text = data["choices"][0]["message"]["content"].strip()
+                combined_text.append(page_text)
+            except httpx.HTTPError as e:
+                logger.error(
+                    f"OpenAI Vision error on page {i + 1}: {str(e)}"
+                )
+                raise Exception(
+                    f"OpenAI vision request failed on page {i + 1}: {str(e)}"
                 )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content},
-        ]
-
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-        }
+        full_text = "\n\n".join(combined_text)
 
         if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+            try:
+                return json.loads(full_text)
+            except json.JSONDecodeError:
+                return {"raw": full_text}
 
-        try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
-
-            text_content = data["choices"][0]["message"]["content"].strip()
-
-            if json_mode:
-                try:
-                    return json.loads(text_content)
-                except json.JSONDecodeError:
-                    return {"raw": text_content}
-
-            return {"text": text_content}
-        except httpx.HTTPError as e:
-            logger.error(f"OpenAI Vision error: {str(e)}")
-            raise Exception(f"OpenAI vision request failed: {str(e)}")
+        return {"text": full_text}
 
 
 class LLMHandlerManager:

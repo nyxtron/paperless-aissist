@@ -79,24 +79,16 @@ class VisionPipeline:
             raise ValueError("Vision LLM handler not initialized")
 
         logger.debug(
-            f"extract_text_from_pdf: provider={self.llm_handler.provider}, pdf_size={len(pdf_bytes)} bytes"
+            f"extract_text_from_pdf: provider={self.llm_handler.provider}, "
+            f"pdf_size={len(pdf_bytes)} bytes"
         )
 
-        if self.llm_handler.provider == "openai":
-            # Send PDF natively — OpenAI processes all pages automatically
-            result = await self.llm_handler.vision_complete(
-                system_prompt=prompt or "",
-                images=[],
-                pdf_bytes=pdf_bytes,
-                json_mode=False,
-            )
-        else:
-            images = await self.pdf_to_images(pdf_bytes)
-            result = await self.llm_handler.vision_complete(
-                system_prompt=prompt or "",
-                images=images,
-                json_mode=False,
-            )
+        images = await self.pdf_to_images(pdf_bytes)
+        result = await self.llm_handler.vision_complete(
+            system_prompt=prompt or "",
+            images=images,
+            json_mode=False,
+        )
 
         text = result.get("text", "") or result.get("raw", "")
         logger.debug(f"extract_text_from_pdf: extracted {len(text)} chars")
@@ -111,21 +103,12 @@ class VisionPipeline:
         if not self.llm_handler:
             raise ValueError("Vision LLM handler not initialized")
 
-        if self.llm_handler.provider == "openai":
-            result = await self.llm_handler.vision_complete(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                images=[],
-                pdf_bytes=pdf_bytes,
-                json_mode=False,
-            )
-        else:
-            images = await self.pdf_to_images(pdf_bytes)
-            result = await self.llm_handler.vision_complete(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                images=images,
-                json_mode=False,
-            )
+        images = await self.pdf_to_images(pdf_bytes)
+        result = await self.llm_handler.vision_complete(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            images=images,
+            json_mode=False,
+        )
 
         return result
