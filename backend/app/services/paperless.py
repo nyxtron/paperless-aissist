@@ -88,8 +88,19 @@ class PaperlessClient:
         response.raise_for_status()
         return response.json()
 
-    async def get_document_file(self, doc_id: int) -> bytes:
+    async def get_document_file(self, doc_id: int, original: bool = True) -> bytes:
+        """Fetch the document binary.
+
+        Args:
+            doc_id: Paperless document ID.
+            original: If True (default), fetch the originally-uploaded file via
+                ``?original=true`` rather than the OCRmyPDF archive PDF. Vision
+                OCR needs the pristine original, since the archive carries a
+                Tesseract text layer that defeats per-page text/vision routing.
+        """
         url = f"{self.base_url}/api/documents/{doc_id}/download/"
+        if original:
+            url += "?original=true"
         logger.debug(f"GET {url}")
         self._request_count += 1
         response = await self.client.get(url, headers=self._get_headers())
