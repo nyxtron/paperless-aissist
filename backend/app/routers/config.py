@@ -1,6 +1,7 @@
 """Configuration CRUD endpoints."""
 
 import logging
+import os
 from fastapi import APIRouter, HTTPException, Body
 from sqlmodel import select
 from typing import Optional
@@ -16,16 +17,62 @@ from ..services.log_stream import apply_log_level
 
 SENSITIVE_KEYS = {"paperless_token", "llm_api_key", "llm_api_key_vision"}
 
+# All known config keys that may be set via environment variables.
+# Extended with new temperature and max_tokens keys.
+KNOWN_CONFIG_KEYS = {
+    "paperless_url",
+    "process_tag",
+    "processed_tag",
+    "tag_blacklist",
+    "force_ocr_tag",
+    "force_ocr_fix_tag",
+    "ocr_post_process",
+    "enable_fallback_ocr",
+    "llm_provider",
+    "llm_model",
+    "llm_api_base",
+    "llm_temperature",
+    "llm_max_tokens",
+    "enable_vision",
+    "llm_provider_vision",
+    "llm_model_vision",
+    "llm_api_base_vision",
+    "llm_temperature_vision",
+    "llm_max_tokens_vision",
+    "llm_timeout",
+    "llm_timeout_vision",
+    "vision_pdf_mode",
+    "ocr_fix_max_chars",
+    "log_level",
+    "document_list_refresh_mode",
+    "auth_enabled",
+    "scheduler_auto_start",
+    "scheduler_interval",
+    "modular_tag_process",
+    "modular_tag_ocr",
+    "modular_tag_ocr_fix",
+    "modular_tag_title",
+    "modular_tag_correspondent",
+    "modular_tag_document_type",
+    "modular_tag_tags",
+    "modular_tag_fields",
+    "modular_processed_tag",
+}
+
 
 LLM_HANDLER_KEYS = {
     "llm_provider",
     "llm_model",
     "llm_api_base",
     "llm_api_key",
+    "llm_temperature",
+    "llm_max_tokens",
     "llm_provider_vision",
     "llm_model_vision",
     "llm_api_base_vision",
     "llm_api_key_vision",
+    "llm_temperature_vision",
+    "llm_max_tokens_vision",
 }
 
 
@@ -48,7 +95,11 @@ async def get_llm_config():
         config_dict = {c.key: c.value for c in config_list}
 
         def _get(key: str, default: str = "") -> str:
-            return config_dict.get(key) or default
+            val = config_dict.get(key)
+            if val:
+                return val
+            env_key = key.upper().replace("-", "_")
+            return os.environ.get(env_key, default)
 
         provider = _get("llm_provider", "ollama")
         api_base = _get("llm_api_base")
@@ -185,11 +236,17 @@ async def test_ollama_connection():
 
 @router.get("", response_model=ConfigResponse)
 async def get_configs():
-    """Return all non-sensitive config key-value pairs.
+    """Return all non-sensitive config key-value pairs with source metadata.
 
     Sensitive keys (tokens, API keys) are never returned. The ``secrets_set``
     field lists which sensitive keys have a non-empty value stored, so the UI
     knows whether a secret is already configured.
+
+    Source determination:
+    - ``"env"`` — value came from an environment variable (may also exist
+      in the DB with the same value, e.g. persisted from a previous run).
+    - ``"user"`` — value was explicitly changed via the web UI and differs
+      from the current environment variable (or no env var exists).
     """
     async with get_async_session() as session:
         stmt = select(Config)
@@ -197,13 +254,53 @@ async def get_configs():
         config_list = configs.all()
         data: dict[str, str] = {}
         secrets_set: list[str] = []
+        sources: dict[str, str] = {}
+        db_keys: set[str] = set()
+        db_vals: dict[str, str] = {}
+
         for c in config_list:
+            db_vals[c.key] = c.value
             if c.key in SENSITIVE_KEYS:
                 if c.value and c.value.strip():
                     secrets_set.append(c.key)
             else:
                 data[c.key] = c.value
-        return ConfigResponse(data=data, secrets_set=secrets_set)
+                db_keys.add(c.key)
+
+        # Determine source: compare DB values against env vars
+        for key in db_keys:
+            env_key = key.upper().replace("-", "_")
+            env_val = os.environ.get(env_key)
+            db_val = data.get(key, "")
+            if env_val and db_val == env_val:
+                sources[key] = "env"
+            elif env_val:
+                sources[key] = "user"
+
+        # Surface env-only values not yet in DB
+        for key in KNOWN_CONFIG_KEYS:
+            if key in SENSITIVE_KEYS or key in db_keys:
+                continue
+            env_key = key.upper().replace("-", "_")
+            env_val = os.environ.get(env_key)
+            if env_val:
+                data[key] = env_val
+                sources[key] = "env"
+
+        # Track source for sensitive keys without exposing values
+        for key in SENSITIVE_KEYS:
+            env_key = key.upper().replace("-", "_")
+            env_val = os.environ.get(env_key)
+            db_val = db_vals.get(key)
+            if db_val and db_val.strip():
+                if env_val and db_val == env_val:
+                    sources[key] = "env"
+                elif env_val:
+                    sources[key] = "user"
+            elif env_val:
+                sources[key] = "env"
+
+        return ConfigResponse(data=data, secrets_set=secrets_set, sources=sources)
 
 
 @router.get("/{key}")

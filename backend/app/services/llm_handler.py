@@ -7,6 +7,7 @@ completion. LLMHandler instances are managed by the singleton LLMHandlerManager.
 import asyncio
 import logging
 import json
+import os
 import httpx
 from typing import Optional, Any
 from ..exceptions import LLMUnavailableError
@@ -32,12 +33,16 @@ class LLMHandler:
         api_base: Optional[str] = None,
         api_key: Optional[str] = None,
         timeout: float = 600.0,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ):
         self.provider = provider
         self.model = model
         self.api_base = api_base or ""
         self.api_key = api_key
         self.timeout = timeout
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         self._client: Optional[httpx.AsyncClient] = None
         self._closed = False
 
@@ -99,7 +104,21 @@ class LLMHandler:
             timeout_str = await cls._get_config("llm_timeout")
         timeout = float(timeout_str) if timeout_str else 600.0
 
-        logger.info(f"Provider: {provider}, Model: {model}, API Base: {api_base}")
+        temperature_keys = [f"llm_temperature{suffix}"]
+        if for_vision:
+            temperature_keys.append("llm_temperature")
+        temperature = await cls._get_float_config(*temperature_keys)
+
+        max_token_keys = [f"llm_max_tokens{suffix}"]
+        if for_vision:
+            max_token_keys.append("llm_max_tokens")
+        max_tokens = await cls._get_int_config(*max_token_keys)
+
+        logger.info(
+            f"Provider: {provider}, Model: {model}, API Base: {api_base}, "
+            f"Temperature: {temperature}, "
+            f"Max Tokens: {max_tokens}"
+        )
 
         return cls(
             provider=provider,
@@ -107,6 +126,8 @@ class LLMHandler:
             api_base=api_base,
             api_key=api_key,
             timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
     @staticmethod
@@ -114,14 +135,51 @@ class LLMHandler:
         from .config_cache import ConfigCache
 
         cache = await ConfigCache.get_instance()
-        return await cache.get(key)
+        value = await cache.get(key)
+        if value:
+            return value
+        env_key = key.upper().replace("-", "_")
+        return os.environ.get(env_key, "")
+
+    @classmethod
+    async def _get_int_config(cls, *keys: str) -> Optional[int]:
+        for key in keys:
+            raw_value = await cls._get_config(key)
+            if not raw_value:
+                continue
+            try:
+                value = int(raw_value)
+            except ValueError:
+                logger.warning("Ignoring invalid integer config %s=%r", key, raw_value)
+                continue
+            if value > 0:
+                return value
+            logger.warning("Ignoring non-positive integer config %s=%r", key, raw_value)
+        return None
+
+    @classmethod
+    async def _get_float_config(cls, *keys: str) -> Optional[float]:
+        for key in keys:
+            raw_value = await cls._get_config(key)
+            if not raw_value:
+                continue
+            try:
+                value = float(raw_value)
+            except ValueError:
+                logger.warning("Ignoring invalid float config %s=%r", key, raw_value)
+                continue
+            if value >= 0:
+                return value
+            logger.warning("Ignoring negative float config %s=%r", key, raw_value)
+        return None
 
     async def complete(
         self,
         system_prompt: str,
         user_prompt: str,
         json_mode: bool = True,
-        temperature: float = 0.3,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> dict[str, Any]:
         """Send a text completion request to the configured LLM.
 
@@ -130,17 +188,24 @@ class LLMHandler:
             user_prompt: User prompt content.
             json_mode: If True, request JSON-formatted response.
             temperature: Sampling temperature (lower = more deterministic).
+            max_tokens: Optional generation limit for the response.
 
         Returns:
             A dict with "text"/"raw" keys on success.
         """
+        temperature = (
+            temperature if temperature is not None else self.temperature
+        )
+        if temperature is None:
+            temperature = 0.3
+        max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         if self.provider == "ollama":
             return await self._ollama_complete(
-                system_prompt, user_prompt, json_mode, temperature
+                system_prompt, user_prompt, json_mode, temperature, max_tokens
             )
         elif self.provider in ("openai", "grok"):
             return await self._openai_complete(
-                system_prompt, user_prompt, json_mode, temperature
+                system_prompt, user_prompt, json_mode, temperature, max_tokens
             )
         else:
             raise Exception(
@@ -153,6 +218,7 @@ class LLMHandler:
         user_prompt: str,
         json_mode: bool,
         temperature: float,
+        max_tokens: Optional[int],
     ) -> dict[str, Any]:
         """Internal Ollama /api/chat implementation."""
         client = self.client
@@ -167,13 +233,17 @@ class LLMHandler:
             {"role": "user", "content": user_prompt},
         ]
 
+        options: dict[str, Any] = {
+            "temperature": temperature,
+        }
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
+
         payload = {
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "options": {
-                "temperature": temperature,
-            },
+            "options": options,
         }
 
         if json_mode:
@@ -207,6 +277,7 @@ class LLMHandler:
         user_prompt: str,
         json_mode: bool,
         temperature: float,
+        max_tokens: Optional[int],
     ) -> dict[str, Any]:
         """Internal OpenAI-compatible /chat/completions implementation."""
         client = self.client
@@ -226,6 +297,8 @@ class LLMHandler:
             "messages": messages,
             "temperature": temperature,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
 
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
@@ -257,7 +330,8 @@ class LLMHandler:
         images: Optional[list[bytes]] = None,
         pdf_bytes: Optional[bytes] = None,
         json_mode: bool = True,
-        temperature: float = 0.3,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> dict[str, Any]:
         """Send a vision/multimodal completion request.
 
@@ -268,15 +342,22 @@ class LLMHandler:
             pdf_bytes: Raw PDF bytes (OpenAI provider, sent natively).
             json_mode: If True, request JSON-formatted response.
             temperature: Sampling temperature.
+            max_tokens: Optional generation limit for the response.
 
         Returns:
             A dict with extracted "text" or "raw".
         """
         if images is None:
             images = []
+        temperature = (
+            temperature if temperature is not None else self.temperature
+        )
+        if temperature is None:
+            temperature = 0.3
+        max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         if self.provider == "ollama":
             return await self._ollama_vision_complete(
-                system_prompt, user_prompt, images, json_mode, temperature
+                system_prompt, user_prompt, images, json_mode, temperature, max_tokens
             )
         elif self.provider in ("openai", "grok"):
             return await self._openai_vision_complete(
@@ -285,6 +366,7 @@ class LLMHandler:
                 images,
                 json_mode,
                 temperature,
+                max_tokens,
                 pdf_bytes=pdf_bytes if self.provider == "openai" else None,
             )
         else:
@@ -297,6 +379,7 @@ class LLMHandler:
         images: Optional[list[bytes]] = None,
         json_mode: bool = True,
         temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
     ) -> dict[str, Any]:
         """Ollama vision implementation — processes images page-by-page."""
         if images is None:
@@ -322,11 +405,15 @@ class LLMHandler:
                     "images": [img_b64],
                 },
             ]
+            options: dict[str, Any] = {"temperature": temperature}
+            if max_tokens is not None:
+                options["num_predict"] = max_tokens
+
             payload: dict[str, Any] = {
                 "model": self.model,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": temperature},
+                "options": options,
             }
             if json_mode:
                 payload["format"] = "json"
@@ -362,6 +449,7 @@ class LLMHandler:
         images: Optional[list[bytes]] = None,
         json_mode: bool = True,
         temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
         pdf_bytes: Optional[bytes] = None,
     ) -> dict[str, Any]:
         """OpenAI-compatible vision implementation — handles PDF and image inputs."""
@@ -399,6 +487,8 @@ class LLMHandler:
                         "messages": messages,
                         "temperature": temperature,
                     }
+                    if max_tokens is not None:
+                        payload["max_tokens"] = max_tokens
                     if json_mode:
                         payload["response_format"] = {"type": "json_object"}
 
@@ -440,6 +530,8 @@ class LLMHandler:
                 "messages": messages,
                 "temperature": temperature,
             }
+            if max_tokens is not None:
+                payload["max_tokens"] = max_tokens
 
             if json_mode:
                 payload["response_format"] = {"type": "json_object"}
