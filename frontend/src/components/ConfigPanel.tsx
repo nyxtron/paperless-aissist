@@ -44,6 +44,10 @@ export default function ConfigPanel() {
     vision_pdf_mode: 'auto',
     llm_timeout: '600',
     llm_timeout_vision: '600',
+    llm_temperature: '0.3',
+    llm_max_tokens: '',
+    llm_temperature_vision: '0.0',
+    llm_max_tokens_vision: '',
     log_level: 'INFO',
     ocr_fix_max_chars: '10000',
     document_list_refresh_mode: 'automatic',
@@ -59,6 +63,7 @@ export default function ConfigPanel() {
     auth_enabled: 'false',
   })
   const [secretsSet, setSecretsSet] = useState<string[]>([])
+  const [sources, setSources] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [initialAuthEnabled, setInitialAuthEnabled] = useState<'true' | 'false'>('false')
 
@@ -73,9 +78,14 @@ export default function ConfigPanel() {
   const loadConfigs = useCallback(async () => {
     try {
       const res = await configApi.getAll()
-      const { data, secrets_set } = res.data as { data: Record<string, string>; secrets_set: string[] }
+      const { data, secrets_set, sources: src } = res.data as {
+        data: Record<string, string>
+        secrets_set: string[]
+        sources: Record<string, string>
+      }
       setConfigs((prev) => ({ ...prev, ...data }))
       setSecretsSet(secrets_set || [])
+      setSources(src || {})
       setInitialAuthEnabled((data.auth_enabled as 'true' | 'false') || 'false')
     } catch (error) {
       console.error('Failed to load configs:', error)
@@ -171,16 +181,16 @@ export default function ConfigPanel() {
   const renderActiveSection = () => {
     switch (activeTab) {
       case 'paperless':
-        return <ConfigSectionPaperless config={configs} onSave={handleSave} secretsSet={secretsSet} />
+        return <ConfigSectionPaperless config={configs} onSave={handleSave} secretsSet={secretsSet} sources={sources} />
       case 'llm':
         return (
           <div className="space-y-4">
-            <ConfigSectionLLM config={configs} onSave={handleSave} secretsSet={secretsSet} />
-            <ConfigSectionVision config={configs} onSave={handleSave} secretsSet={secretsSet} />
+            <ConfigSectionLLM config={configs} onSave={handleSave} secretsSet={secretsSet} sources={sources} />
+            <ConfigSectionVision config={configs} onSave={handleSave} secretsSet={secretsSet} sources={sources} />
           </div>
         )
       case 'scheduler':
-        return <ConfigSectionScheduler config={configs} onSave={handleSave} />
+        return <ConfigSectionScheduler config={configs} onSave={handleSave} sources={sources} />
       case 'tags':
         return <ConfigSectionTags config={configs} onSave={handleSave} />
       case 'advanced':

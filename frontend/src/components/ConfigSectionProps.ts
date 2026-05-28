@@ -3,4 +3,5 @@ export interface ConfigSectionProps {
   onSave: (key: string, value: string) => Promise<void>
   onTest?: (key: string) => Promise<boolean>
   secretsSet?: string[]
+  sources?: Record<string, string>
 }

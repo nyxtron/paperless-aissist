@@ -5,15 +5,18 @@ import { schedulerApi } from '../api/client'
 import { Clock, Play, Square, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { SchedulerStatus } from '../api/types'
 import { buildPaperlessDocumentUrl } from '../utils/paperlessLinks'
+import { sourceBadgeClass } from './fieldStyles'
 
 interface SchedulerConfigSectionProps {
   config: Record<string, string>
   onSave: (key: string, value: string) => Promise<void>
+  sources?: Record<string, string>
 }
 
 export function ConfigSectionScheduler({
   config,
   onSave: _onSave,
+  sources,
 }: SchedulerConfigSectionProps) {
   const { t } = useTranslation()
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null)
@@ -25,6 +28,24 @@ export function ConfigSectionScheduler({
     config.paperless_url || schedulerStatus?.paperless_url,
     schedulerStatus?.current_doc_id,
   )
+
+  const renderSourceBadge = (key: string) => {
+    const source = sources?.[key]
+    if (!source) return null
+    const envKey = key.toUpperCase().replace(/-/g, '_')
+    return (
+      <span
+        title={
+          source === 'env'
+            ? t('config.sourceEnvTooltip', { key: envKey })
+            : t('config.sourceUserTooltip', { key: envKey })
+        }
+        className={`ml-1.5 text-xs px-1.5 py-0.5 rounded font-normal cursor-help ${sourceBadgeClass(source)}`}
+      >
+        {source === 'env' ? t('config.sourceEnv') : t('config.sourceUser')}
+      </span>
+    )
+  }
 
   const loadSchedulerStatus = useCallback(async () => {
     try {
@@ -80,6 +101,9 @@ export function ConfigSectionScheduler({
     }
   }
 
+  const autoStartEnv = sources?.['scheduler_auto_start'] === 'env'
+  const intervalEnv = sources?.['scheduler_interval'] === 'env'
+
   return (
     <div className="bg-white rounded-lg shadow p-6 space-y-6">
       <div className="flex items-center justify-between border-b pb-3 mb-4">
@@ -103,9 +127,18 @@ export function ConfigSectionScheduler({
         </div>
       </div>
 
+      {!schedulerStatus?.running && autoStartEnv && (
+        <div className="text-sm text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+          {t('config.schedulerAutoStartEnv')}
+        </div>
+      )}
+
       <div className="flex items-end gap-4">
         <div>
-          <label className={label}>{t('config.schedulerInterval')}</label>
+          <label className={label}>
+            {t('config.schedulerInterval')}
+            {intervalEnv && renderSourceBadge('scheduler_interval')}
+          </label>
           <input
             type="number"
             min="1"

@@ -1,13 +1,31 @@
 import { useTranslation } from 'react-i18next'
 import { ConfigSectionProps } from './ConfigSectionProps'
-import { fieldClass, labelClass, hintClass } from './fieldStyles'
+import { fieldClass, labelClass, hintClass, sourceBadgeClass } from './fieldStyles'
 
-export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectionProps) {
+export function ConfigSectionVision({ config, onSave, secretsSet, sources }: ConfigSectionProps) {
   const { t } = useTranslation()
   const visionEnabled = (config.enable_vision || 'false') === 'true'
 
   const handleChange = async (key: string, value: string) => {
     await onSave(key, value)
+  }
+
+  const renderSourceBadge = (key: string) => {
+    const source = sources?.[key]
+    if (!source) return null
+    const envKey = key.toUpperCase().replace(/-/g, '_')
+    return (
+      <span
+        title={
+          source === 'env'
+            ? t('config.sourceEnvTooltip', { key: envKey })
+            : t('config.sourceUserTooltip', { key: envKey })
+        }
+        className={`ml-1.5 text-xs px-1.5 py-0.5 rounded font-normal cursor-help ${sourceBadgeClass(source)}`}
+      >
+        {source === 'env' ? t('config.sourceEnv') : t('config.sourceUser')}
+      </span>
+    )
   }
 
   const getVisionModelPlaceholder = (provider: string) => {
@@ -43,7 +61,10 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>{t('config.provider')}</label>
+          <label className={labelClass}>
+            {t('config.provider')}
+            {renderSourceBadge('llm_provider_vision')}
+          </label>
           <select
             value={config.llm_provider_vision || 'ollama'}
             onChange={(e) => handleChange('llm_provider_vision', e.target.value)}
@@ -55,7 +76,10 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
           </select>
         </div>
         <div>
-          <label className={labelClass}>{t('config.visionModel')}</label>
+          <label className={labelClass}>
+            {t('config.visionModel')}
+            {renderSourceBadge('llm_model_vision')}
+          </label>
           <input
             type="text"
             value={config.llm_model_vision || ''}
@@ -65,7 +89,10 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
           />
         </div>
         <div>
-          <label className={labelClass}>{t('config.apiBaseUrl')}</label>
+          <label className={labelClass}>
+            {t('config.apiBaseUrl')}
+            {renderSourceBadge('llm_api_base_vision')}
+          </label>
           <input
             type="text"
             value={config.llm_api_base_vision || ''}
@@ -75,25 +102,10 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
           />
         </div>
         <div>
-          <label htmlFor="vision-pdf-mode" className={labelClass}>
-            {t('config.visionPdfMode')}
-          </label>
-          <select
-            id="vision-pdf-mode"
-            value={config.vision_pdf_mode || 'auto'}
-            onChange={(e) => handleChange('vision_pdf_mode', e.target.value)}
-            className={fieldClass}
-          >
-            <option value="auto">{t('config.visionPdfModeAuto')}</option>
-            <option value="native_pdf">{t('config.visionPdfModeNative')}</option>
-            <option value="page_images">{t('config.visionPdfModeImages')}</option>
-          </select>
-          <p className={hintClass}>{t('config.visionPdfModeHelp')}</p>
-        </div>
-        <div>
           <label className={labelClass}>
             {t('config.apiKey')}{' '}
             <span className="font-normal text-gray-400">({t('common.optional')})</span>
+            {renderSourceBadge('llm_api_key_vision')}
           </label>
           <input
             type="password"
@@ -102,23 +114,84 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             placeholder={
               secretsSet?.includes('llm_api_key_vision')
                 ? t('config.alreadySetPlaceholder')
-                : getApiKeyPlaceholder(config.llm_provider_vision)
+                : sources?.['llm_api_key_vision'] === 'env'
+                  ? t('config.envSetPlaceholder')
+                  : getApiKeyPlaceholder(config.llm_provider_vision)
             }
             className={fieldClass}
           />
           <p className={hintClass}>{t('config.apiKeyHint')}</p>
         </div>
-        <div>
-          <label className={labelClass}>{t('config.llmTimeoutVision')}</label>
-          <input
-            type="number"
-            min="30"
-            max="3600"
-            value={config.llm_timeout_vision || '600'}
-            onChange={(e) => handleChange('llm_timeout_vision', e.target.value)}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          />
-          <p className={hintClass}>{t('config.llmTimeoutVisionHint')}</p>
+      </div>
+
+      <div className="border-t border-blue-100 pt-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('config.visionLlmParams')}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="vision-pdf-mode" className={labelClass}>
+              {t('config.visionPdfMode')}
+              {renderSourceBadge('vision_pdf_mode')}
+            </label>
+            <select
+              id="vision-pdf-mode"
+              value={config.vision_pdf_mode || 'auto'}
+              onChange={(e) => handleChange('vision_pdf_mode', e.target.value)}
+              className={fieldClass}
+            >
+              <option value="auto">{t('config.visionPdfModeAuto')}</option>
+              <option value="native_pdf">{t('config.visionPdfModeNative')}</option>
+              <option value="page_images">{t('config.visionPdfModeImages')}</option>
+            </select>
+            <p className={hintClass}>{t('config.visionPdfModeHelp')}</p>
+          </div>
+          <div>
+            <label className={labelClass}>
+              {t('config.llmTimeoutVision')}
+              {renderSourceBadge('llm_timeout_vision')}
+            </label>
+            <input
+              type="number"
+              min="30"
+              max="3600"
+              value={config.llm_timeout_vision || '600'}
+              onChange={(e) => handleChange('llm_timeout_vision', e.target.value)}
+              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <p className={hintClass}>{t('config.llmTimeoutVisionHint')}</p>
+          </div>
+          <div>
+            <label className={labelClass}>
+              {t('config.temperature')}
+              {renderSourceBadge('llm_temperature_vision')}
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="2"
+              step="0.1"
+              value={config.llm_temperature_vision || ''}
+              onChange={(e) => handleChange('llm_temperature_vision', e.target.value)}
+              placeholder="0.0"
+              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <p className={hintClass}>{t('config.temperatureHint')}</p>
+          </div>
+          <div>
+            <label className={labelClass}>
+              {t('config.maxTokens')}
+              {renderSourceBadge('llm_max_tokens_vision')}
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={config.llm_max_tokens_vision || ''}
+              onChange={(e) => handleChange('llm_max_tokens_vision', e.target.value)}
+              placeholder="4092"
+              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <p className={hintClass}>{t('config.maxTokensHint')}</p>
+          </div>
         </div>
       </div>
     </div>

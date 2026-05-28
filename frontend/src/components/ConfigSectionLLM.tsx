@@ -4,9 +4,9 @@ import { Brain, RefreshCw, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { configApi } from '../api/client'
 import { ConfigSectionProps } from './ConfigSectionProps'
-import { fieldClass, labelClass, hintClass } from './fieldStyles'
+import { fieldClass, labelClass, hintClass, sourceBadgeClass } from './fieldStyles'
 
-export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionProps) {
+export function ConfigSectionLLM({ config, onSave, secretsSet, sources }: ConfigSectionProps) {
   const { t } = useTranslation()
   const [testing, setTesting] = useState(false)
 
@@ -36,6 +36,24 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
     } finally {
       setTesting(false)
     }
+  }
+
+  const renderSourceBadge = (key: string) => {
+    const source = sources?.[key]
+    if (!source) return null
+    const envKey = key.toUpperCase().replace(/-/g, '_')
+    return (
+      <span
+        title={
+          source === 'env'
+            ? t('config.sourceEnvTooltip', { key: envKey })
+            : t('config.sourceUserTooltip', { key: envKey })
+        }
+        className={`ml-1.5 text-xs px-1.5 py-0.5 rounded font-normal cursor-help ${sourceBadgeClass(source)}`}
+      >
+        {source === 'env' ? t('config.sourceEnv') : t('config.sourceUser')}
+      </span>
+    )
   }
 
   const getModelPlaceholder = (provider: string) => {
@@ -74,7 +92,10 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>{t('config.provider')}</label>
+          <label className={labelClass}>
+            {t('config.provider')}
+            {renderSourceBadge('llm_provider')}
+          </label>
           <select
             value={config.llm_provider || 'ollama'}
             onChange={(e) => handleChange('llm_provider', e.target.value)}
@@ -86,7 +107,10 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
           </select>
         </div>
         <div>
-          <label className={labelClass}>{t('config.model')}</label>
+          <label className={labelClass}>
+            {t('config.model')}
+            {renderSourceBadge('llm_model')}
+          </label>
           <input
             type="text"
             value={config.llm_model || ''}
@@ -96,7 +120,10 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
           />
         </div>
         <div>
-          <label className={labelClass}>{t('config.apiBaseUrl')}</label>
+          <label className={labelClass}>
+            {t('config.apiBaseUrl')}
+            {renderSourceBadge('llm_api_base')}
+          </label>
           <input
             type="text"
             value={config.llm_api_base || ''}
@@ -109,6 +136,7 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
           <label className={labelClass}>
             {t('config.apiKey')}{' '}
             <span className="font-normal text-gray-400">({t('common.optional')})</span>
+            {renderSourceBadge('llm_api_key')}
           </label>
           <input
             type="password"
@@ -117,7 +145,9 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             placeholder={
               secretsSet?.includes('llm_api_key')
                 ? t('config.alreadySetPlaceholder')
-                : getApiKeyPlaceholder(config.llm_provider)
+                : sources?.['llm_api_key'] === 'env'
+                  ? t('config.envSetPlaceholder')
+                  : getApiKeyPlaceholder(config.llm_provider)
             }
             className={fieldClass}
           />
@@ -152,7 +182,10 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
           <p className={hintClass}>{t('config.visionOcrHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.llmTimeout')}</label>
+          <label className={labelClass}>
+            {t('config.llmTimeout')}
+            {renderSourceBadge('llm_timeout')}
+          </label>
           <input
             type="number"
             min="30"
@@ -162,6 +195,45 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
           <p className={hintClass}>{t('config.llmTimeoutHint')}</p>
+        </div>
+      </div>
+
+      <div className="border-t pt-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('config.llmParams')}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>
+              {t('config.temperature')}
+              {renderSourceBadge('llm_temperature')}
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="2"
+              step="0.1"
+              value={config.llm_temperature || ''}
+              onChange={(e) => handleChange('llm_temperature', e.target.value)}
+              placeholder="0.3"
+              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <p className={hintClass}>{t('config.temperatureHint')}</p>
+          </div>
+          <div>
+            <label className={labelClass}>
+              {t('config.maxTokens')}
+              {renderSourceBadge('llm_max_tokens')}
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={config.llm_max_tokens || ''}
+              onChange={(e) => handleChange('llm_max_tokens', e.target.value)}
+              placeholder="∞"
+              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <p className={hintClass}>{t('config.maxTokensHint')}</p>
+          </div>
         </div>
       </div>
     </div>

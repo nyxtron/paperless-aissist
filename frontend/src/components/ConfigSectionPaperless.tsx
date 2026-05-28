@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { documentsApi } from '../api/client'
 import { Server, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { ConfigSectionProps } from './ConfigSectionProps'
-import { fieldClass, labelClass, hintClass } from './fieldStyles'
+import { fieldClass, labelClass, hintClass, sourceBadgeClass } from './fieldStyles'
 
 interface PaperlessTag {
   id: number
@@ -22,7 +22,7 @@ interface PaperlessStatus {
   correspondents: PaperlessItem[]
 }
 
-export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSectionProps) {
+export function ConfigSectionPaperless({ config, onSave, secretsSet, sources }: ConfigSectionProps) {
   const { t } = useTranslation()
   const [testing, setTesting] = useState(false)
   const [status, setStatus] = useState<PaperlessStatus>({
@@ -33,6 +33,24 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
   })
   const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null)
   const hasPaperlessToken = secretsSet?.includes('paperless_token') ?? false
+
+  const renderSourceBadge = (key: string) => {
+    const source = sources?.[key]
+    if (!source) return null
+    const envKey = key.toUpperCase().replace(/-/g, '_')
+    return (
+      <span
+        title={
+          source === 'env'
+            ? t('config.sourceEnvTooltip', { key: envKey })
+            : t('config.sourceUserTooltip', { key: envKey })
+        }
+        className={`ml-1.5 text-xs px-1.5 py-0.5 rounded font-normal cursor-help ${sourceBadgeClass(source)}`}
+      >
+        {source === 'env' ? t('config.sourceEnv') : t('config.sourceUser')}
+      </span>
+    )
+  }
 
   const handleTest = useCallback(async () => {
     setTesting(true)
@@ -90,7 +108,10 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>{t('config.paperlessUrl')}</label>
+          <label className={labelClass}>
+            {t('config.paperlessUrl')}
+            {renderSourceBadge('paperless_url')}
+          </label>
           <input
             type="text"
             value={config.paperless_url || ''}
@@ -100,7 +121,10 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
           />
         </div>
         <div>
-          <label className={labelClass}>{t('config.apiToken')}</label>
+          <label className={labelClass}>
+            {t('config.apiToken')}
+            {renderSourceBadge('paperless_token')}
+          </label>
           <input
             type="password"
             value={config.paperless_token || ''}
@@ -108,7 +132,9 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
             placeholder={
               hasPaperlessToken
                 ? t('config.alreadySetPlaceholder')
-                : t('config.apiTokenPlaceholder')
+                : sources?.['paperless_token'] === 'env'
+                  ? t('config.envSetPlaceholder')
+                  : t('config.apiTokenPlaceholder')
             }
             className={fieldClass}
           />
