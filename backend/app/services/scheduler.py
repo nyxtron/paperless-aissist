@@ -81,7 +81,12 @@ def is_currently_processing() -> tuple[bool, Optional[int]]:
 
 
 def load_scheduler_config() -> tuple[bool, int]:
-    """Load scheduler config from database. Returns (enabled, interval_minutes)."""
+    """Load scheduler config from database with environment variable fallbacks.
+
+    Checks DB first for ``scheduler_enabled`` and ``scheduler_interval``.
+    Falls back to ``SCHEDULER_AUTO_START`` and ``SCHEDULER_INTERVAL``
+    environment variables. Accepts ``true``/``1``/``yes`` for auto-start.
+    """
     try:
         from ..database import get_session
         from ..models import Config
@@ -90,13 +95,21 @@ def load_scheduler_config() -> tuple[bool, int]:
         with get_session() as session:
             stmt = select(Config).where(Config.key == "scheduler_enabled")
             enabled_config = session.exec(stmt).first()
-            enabled = enabled_config.value == "true" if enabled_config else False
+            enabled = enabled_config.value == "true" if enabled_config else None
 
             stmt = select(Config).where(Config.key == "scheduler_interval")
             interval_config = session.exec(stmt).first()
-            interval = int(interval_config.value) if interval_config else 5
+            interval = int(interval_config.value) if interval_config else None
 
-            return enabled, interval
+        if enabled is None:
+            env_auto = os.environ.get("SCHEDULER_AUTO_START", "").lower()
+            enabled = env_auto in ("true", "1", "yes")
+
+        if interval is None:
+            env_int = os.environ.get("SCHEDULER_INTERVAL")
+            interval = int(env_int) if env_int else 5
+
+        return enabled, interval
     except Exception as e:
         logger.error(f"Failed to load scheduler config: {e}")
         return False, 5
