@@ -1,11 +1,12 @@
 """FastAPI entry point for Paperless-AIssist.
 
 The application initializes the database, loads default prompts from the examples
-directory, configures logging, and manages scheduler lifecycle. All routes require
-authentication when auth is enabled.
+directory, configures logging, seeds environment variables into config, and
+manages scheduler lifecycle. All routes require authentication when auth is enabled.
 """
 
 import logging
+import os
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -14,7 +15,7 @@ from sqlmodel import select
 
 from .database import run_migrations, get_session
 from .models import Config
-from .routers import app_info, config, prompts, documents, stats, scheduler, auth as auth_router
+from .routers import app_info, config as config_router, prompts, documents, stats, scheduler, auth as auth_router
 from .auth import require_auth
 from .services.log_stream import BroadcastHandler, apply_log_level
 from .limiter import limiter
@@ -71,6 +72,31 @@ def get_config_value(key: str, default: str = "*") -> str:
         return config.value if config else default
 
 
+def _seed_env_configs():
+    """Seed environment variable values into the Config table on first startup.
+
+    Scans all known config keys and inserts entries for any that have
+    an environment variable set but no existing database row. This allows
+    all downstream consumers (Paperless client, LLM handler, test
+    connection) to find values from .env without individual fallback logic.
+    """
+    from .routers.config import KNOWN_CONFIG_KEYS, SENSITIVE_KEYS
+
+    with get_session() as session:
+        stmt = select(Config)
+        existing_keys = {c.key for c in session.exec(stmt).all()}
+
+        for key in sorted(KNOWN_CONFIG_KEYS | SENSITIVE_KEYS):
+            if key in existing_keys:
+                continue
+            env_key = key.upper().replace("-", "_")
+            env_val = os.environ.get(env_key)
+            if env_val:
+                session.add(Config(key=key, value=env_val))
+
+        session.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager.
@@ -110,6 +136,9 @@ async def lifespan(app: FastAPI):
                     updated_at=now,
                 )
                 session.add(db_prompt)
+
+    # Seed env vars into DB on first startup so all consumers find them
+    _seed_env_configs()
 
     from .services.scheduler import (
         clear_processing_state,
@@ -160,7 +189,7 @@ app.add_middleware(
 _auth_dep = [Depends(require_auth)]
 
 app.include_router(auth_router.router)
-app.include_router(config.router, dependencies=_auth_dep)
+app.include_router(config_router.router, dependencies=_auth_dep)
 app.include_router(prompts.router, dependencies=_auth_dep)
 app.include_router(documents.router, dependencies=_auth_dep)
 app.include_router(stats.router)

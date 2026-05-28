@@ -38,6 +38,7 @@ logs/
 # Docker
 !.dockerignore
 .worktrees/
+docker-compose.override.yml
 
 # Test artifacts
 .coverage

@@ -6,6 +6,7 @@ All requests include bearer token authentication.
 
 import httpx
 import logging
+import os
 import time
 from typing import Optional, Any
 from urllib.parse import urlparse, urlunparse
@@ -47,11 +48,15 @@ class PaperlessClient:
 
     @staticmethod
     async def _get_config(key: str) -> Optional[str]:
-        """Read a config key from ConfigCache."""
+        """Read a config key from ConfigCache, falling back to environment."""
         from .config_cache import ConfigCache
 
         cache = await ConfigCache.get_instance()
-        return await cache.get(key)
+        value = await cache.get(key)
+        if value:
+            return value
+        env_key = key.upper().replace("-", "_")
+        return os.environ.get(env_key, "")
 
     def _get_headers(self) -> dict:
         return {

@@ -18,10 +18,13 @@ class ConfigResponse(BaseModel):
     The ``secrets_set`` field lists which sensitive keys have a non-empty
     value stored in the database, so the UI knows whether a secret is
     already configured without knowing the actual value.
+    ``sources`` maps each key to its origin: ``"env"`` (from environment
+    variable) or ``"user"`` (set via the web UI).
     """
 
     data: dict[str, str]
     secrets_set: list[str] = []
+    sources: dict[str, str] = {}
 
 
 class ConfigDetailResponse(BaseModel):
