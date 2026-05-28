@@ -53,6 +53,50 @@ def test_config_sensitive_key_not_accessible(client):
         )
 
 
+def test_paperless_url_trailing_slash_is_stripped(client):
+    """paperless_url is normalized: surrounding whitespace and trailing slashes removed."""
+    response = client.post(
+        "/api/config",
+        json={"key": "paperless_url", "value": "  http://paperless.local///  "},
+    )
+    assert response.status_code == 200
+    assert response.json()["value"] == "http://paperless.local"
+
+    response = client.get("/api/config/paperless_url")
+    assert response.status_code == 200
+    assert response.json()["value"] == "http://paperless.local"
+
+
+def test_paperless_url_without_scheme_is_rejected(client):
+    """paperless_url without http(s):// scheme returns a clear 400."""
+    response = client.post(
+        "/api/config",
+        json={"key": "paperless_url", "value": "paperless.local"},
+    )
+    assert response.status_code == 400
+    assert "http://" in response.json()["detail"]
+
+
+def test_paperless_url_empty_value_is_allowed(client):
+    """Clearing paperless_url (empty string) is allowed and stays empty."""
+    response = client.post(
+        "/api/config",
+        json={"key": "paperless_url", "value": ""},
+    )
+    assert response.status_code == 200
+    assert response.json()["value"] == ""
+
+
+def test_other_config_keys_are_not_normalized(client):
+    """Normalization only applies to paperless_url — other keys keep trailing slashes."""
+    response = client.post(
+        "/api/config",
+        json={"key": "llm_api_base", "value": "http://localhost:11434/"},
+    )
+    assert response.status_code == 200
+    assert response.json()["value"] == "http://localhost:11434/"
+
+
 def test_stats_endpoints(client):
     """Stats endpoints return valid data."""
     response = client.get("/api/stats")

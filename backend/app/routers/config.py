@@ -226,7 +226,22 @@ async def set_config(data: ConfigUpdate = Body(...), description: Optional[str] 
 
     For sensitive keys (tokens, API keys), an empty/whitespace value is treated
     as a no-op: the existing value is preserved instead of being overwritten.
+
+    For ``paperless_url``, surrounding whitespace and trailing slashes are
+    stripped so downstream ``f"{base_url}/api/..."`` concatenations never
+    produce double slashes. A missing ``http://`` / ``https://`` scheme is
+    rejected with a 400 so misconfiguration surfaces immediately instead of
+    later as an opaque connection error.
     """
+    if data.key == "paperless_url":
+        normalized = (data.value or "").strip().rstrip("/")
+        if normalized and not normalized.lower().startswith(("http://", "https://")):
+            raise HTTPException(
+                status_code=400,
+                detail="paperless_url must start with http:// or https://",
+            )
+        data.value = normalized
+
     async with get_async_session() as session:
         stmt = select(Config).where(Config.key == data.key)
         config = await session.exec(stmt)
