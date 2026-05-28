@@ -99,13 +99,14 @@ volumes:
 
 ## LLM Providers
 
-The provider is selected per-model in Settings. Ollama runs locally; OpenAI and Grok require an API key. The vision model can use a different provider than the main LLM — configure it separately via `llm_provider_vision` and `llm_api_key_vision` (e.g. main = Ollama, vision = OpenAI).
+The provider is selected per-model in Settings. Ollama runs locally; OpenAI, Grok, and OpenRouter require an API key. The vision model can use a different provider than the main LLM — configure it separately via `llm_provider_vision` and `llm_api_key_vision` (e.g. main = Ollama, vision = OpenAI).
 
 | Provider | API Base URL | Notes |
 |----------|-------------|-------|
 | Ollama | `http://localhost:11434` | Local — no API key needed |
 | OpenAI | `https://api.openai.com/v1` | Requires API key |
 | Grok (xAI) | `https://api.x.ai/v1` | Requires API key |
+| OpenRouter | `https://openrouter.ai/api/v1` | Requires API key — model uses `vendor/model` namespace (e.g. `anthropic/claude-sonnet-4-6`) |
 
 > OpenAI-compatible endpoints (e.g. LM Studio, vLLM) also work — set the provider to `openai` and point the URL at your local server.
 
@@ -119,6 +120,7 @@ The provider is selected per-model in Settings. Ollama runs locally; OpenAI and 
 | Ollama | `qwen2.5:7b` | Lighter option for slower hardware |
 | OpenAI | `gpt-4o-mini` | Fast and cost-effective |
 | Grok | `grok-3-mini` | xAI alternative |
+| OpenRouter | `anthropic/claude-sonnet-4-6` | Strong general-purpose pick — see [openrouter.ai/models](https://openrouter.ai/models) for the full list |
 
 ### Vision (OCR)
 
@@ -128,6 +130,7 @@ The provider is selected per-model in Settings. Ollama runs locally; OpenAI and 
 | Ollama | `qwen2.5vl:7b` | Good text extraction |
 | OpenAI | `gpt-4o` | Sends PDF natively — all pages at once |
 | Grok | `grok-2-vision-1212` | xAI vision alternative |
+| OpenRouter | `openai/gpt-4o` | Image-based (page-by-page JPEG); PDF-native upload is OpenAI-direct only |
 
 Pull Ollama models before use:
 ```bash

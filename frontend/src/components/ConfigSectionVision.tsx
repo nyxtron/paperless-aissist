@@ -13,12 +13,14 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
   const getVisionModelPlaceholder = (provider: string) => {
     if (provider === 'openai') return 'gpt-4o'
     if (provider === 'grok') return 'grok-2-vision-1212'
+    if (provider === 'openrouter') return 'openai/gpt-4o'
     return 'qwen2.5vl:7b'
   }
 
   const getApiBasePlaceholder = (provider: string) => {
     if (provider === 'openai') return 'https://api.openai.com/v1'
     if (provider === 'grok') return 'https://api.x.ai/v1'
+    if (provider === 'openrouter') return 'https://openrouter.ai/api/v1'
     return 'http://localhost:11434'
   }
 
@@ -52,6 +54,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             <option value="ollama">Ollama</option>
             <option value="openai">OpenAI</option>
             <option value="grok">Grok (xAI)</option>
+            <option value="openrouter">OpenRouter</option>
           </select>
         </div>
         <div>

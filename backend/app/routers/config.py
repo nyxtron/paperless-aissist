@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ..database import get_async_session
 from ..models import Config
 from ..schemas import ConfigResponse, ConfigDetailResponse, ConfigDeleteResponse
+from ..services.llm_handler import OPENAI_COMPATIBLE_PROVIDERS
 from ..services.log_stream import apply_log_level
 
 
@@ -156,7 +157,7 @@ async def test_ollama_connection():
     config = await get_llm_config()
 
     # Test main LLM
-    if config["provider"] in ("openai", "grok"):
+    if config["provider"] in OPENAI_COMPATIBLE_PROVIDERS:
         main_result = await test_openai_url(config["api_base"], config["api_key"])
     else:
         main_result = await test_ollama_url(config["api_base"])
@@ -168,7 +169,7 @@ async def test_ollama_connection():
 
     # Test vision LLM if enabled
     if config["enable_vision"]:
-        if config["provider_vision"] in ("openai", "grok"):
+        if config["provider_vision"] in OPENAI_COMPATIBLE_PROVIDERS:
             vision_result = await test_openai_url(
                 config["api_base_vision"], config["api_key_vision"]
             )

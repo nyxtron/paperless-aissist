@@ -1,4 +1,9 @@
-"""LLM client supporting Ollama and OpenAI-compatible APIs (including Grok).
+"""LLM client supporting Ollama and OpenAI-compatible APIs.
+
+Supported providers: Ollama, OpenAI, Grok (xAI), OpenRouter. The OpenAI-
+compatible providers share the ``/chat/completions`` path; OpenRouter adds
+``HTTP-Referer`` and ``X-Title`` headers for attribution and rate-limit
+scoping.
 
 Provides text completion (with optional JSON mode) and vision multimodal
 completion. LLMHandler instances are managed by the singleton LLMHandlerManager.
@@ -13,13 +18,19 @@ from ..exceptions import LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
+OPENAI_COMPATIBLE_PROVIDERS = frozenset({"openai", "grok", "openrouter"})
+
+OPENROUTER_REFERER = "https://github.com/nyxtron/paperless-aissist"
+OPENROUTER_TITLE = "Paperless-AIssist"
+
 
 class LLMHandler:
     """HTTP client for LLM inference via Ollama or OpenAI-compatible APIs.
 
     Attributes:
-        provider: "ollama", "openai", or "grok".
-        model: Model name passed to the API.
+        provider: ``ollama``, ``openai``, ``grok``, or ``openrouter``.
+        model: Model name passed to the API. For OpenRouter, use the
+            ``vendor/model`` namespace form (e.g. ``anthropic/claude-sonnet-4-6``).
         api_base: Base URL for the API endpoint.
         api_key: Optional API key for authenticated endpoints.
         timeout: Request timeout in seconds.
@@ -47,6 +58,11 @@ class LLMHandler:
             headers = {"Content-Type": "application/json"}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
+            if self.provider == "openrouter":
+                # OpenRouter uses these for app attribution and per-app rate limits.
+                # See https://openrouter.ai/docs/api-reference/overview#headers
+                headers["HTTP-Referer"] = OPENROUTER_REFERER
+                headers["X-Title"] = OPENROUTER_TITLE
             self._client = httpx.AsyncClient(
                 base_url=self.api_base,
                 timeout=self.timeout,
@@ -92,7 +108,11 @@ class LLMHandler:
         if not provider:
             provider = "ollama"
         if not model:
-            model = "llama3" if not for_vision else "llava"
+            if provider == "openrouter":
+                # OpenRouter requires the vendor/model namespace form.
+                model = "openai/gpt-4o-mini" if not for_vision else "openai/gpt-4o"
+            else:
+                model = "llama3" if not for_vision else "llava"
 
         timeout_str = await cls._get_config(f"llm_timeout{suffix}")
         if for_vision and not timeout_str:
@@ -138,7 +158,7 @@ class LLMHandler:
             return await self._ollama_complete(
                 system_prompt, user_prompt, json_mode, temperature
             )
-        elif self.provider in ("openai", "grok"):
+        elif self.provider in OPENAI_COMPATIBLE_PROVIDERS:
             return await self._openai_complete(
                 system_prompt, user_prompt, json_mode, temperature
             )
@@ -278,13 +298,15 @@ class LLMHandler:
             return await self._ollama_vision_complete(
                 system_prompt, user_prompt, images, json_mode, temperature
             )
-        elif self.provider in ("openai", "grok"):
+        elif self.provider in OPENAI_COMPATIBLE_PROVIDERS:
             return await self._openai_vision_complete(
                 system_prompt,
                 user_prompt,
                 images,
                 json_mode,
                 temperature,
+                # PDF-native file upload is an OpenAI-only capability. Grok and
+                # OpenRouter (which proxies many backends) fall back to JPEGs.
                 pdf_bytes=pdf_bytes if self.provider == "openai" else None,
             )
         else:
