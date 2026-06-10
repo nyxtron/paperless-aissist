@@ -220,7 +220,7 @@ export default function ChatPage() {
               searchResults.length === 0 ? (
                 <div className="p-4 text-sm text-gray-500 text-center">{t('chat.noResults')}</div>
               ) : (
-                searchResults.slice(0, 5).map((doc) => (
+                searchResults.map((doc) => (
                   <button
                     key={doc.id}
                     onClick={() => selectDocument(doc.id)}

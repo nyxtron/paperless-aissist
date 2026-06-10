@@ -70,7 +70,7 @@ async def search_documents(query: str = Query(..., max_length=500)):
                 "title": doc.get("title"),
                 "created": doc.get("created"),
             }
-            for doc in docs[:5]
+            for doc in docs
         ]
         return {"results": results}
     except Exception as e:
