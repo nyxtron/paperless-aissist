@@ -133,3 +133,39 @@ async def test_update_document_maps_created_date_to_paperless_created_field():
     assert client.client.patch.await_args.kwargs["json"] == {"created": "2026-04-28"}
 
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_tags_follows_pagination_across_pages():
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    page1 = [{"id": i, "name": f"tag-{i}"} for i in range(1, 21)]
+    page2 = [{"id": i, "name": f"tag-{i}"} for i in range(21, 41)]
+    page3 = [{"id": i, "name": f"tag-{i}"} for i in range(41, 61)]
+    client.client.get = AsyncMock(
+        side_effect=[
+            make_response(page1, next_url=f"{BASE_URL}/api/tags/?page=2"),
+            make_response(page2, next_url=f"{BASE_URL}/api/tags/?page=3"),
+            make_response(page3, next_url=None),
+        ]
+    )
+
+    tags = await client.get_tags()
+
+    assert len(tags) == 60
+    assert client.client.get.call_count == 3
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_document_types_single_page_is_not_truncated():
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    items = [{"id": i, "name": f"type-{i}"} for i in range(1, 11)]
+    client.client.get = AsyncMock(return_value=make_response(items, next_url=None))
+
+    result = await client.get_document_types()
+
+    assert len(result) == 10
+    assert client.client.get.call_count == 1
+
+    await client.close()

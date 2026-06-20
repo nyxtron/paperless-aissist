@@ -49,6 +49,26 @@ describe('ConfigSectionAdvanced', () => {
     })
   })
 
+  it('renders MCP toggle and calls handleChange on change', () => {
+    const onSave = vi.fn()
+
+    // auth_enabled=true → its select shows 'common.enabled'
+    // mcp_enabled=false → its select shows 'common.disabled' (unique among all selects)
+    render(
+      <ConfigSectionAdvanced
+        config={{ auth_enabled: 'true', mcp_enabled: 'false' }}
+        onSave={onSave}
+      />,
+    )
+
+    expect(screen.getByText('config.mcpEnabled')).toBeInTheDocument()
+
+    const select = screen.getByDisplayValue('common.disabled')
+    fireEvent.change(select, { target: { value: 'true' } })
+
+    expect(onSave).toHaveBeenCalledWith('mcp_enabled', 'true')
+  })
+
   it('saves document list refresh mode changes', () => {
     const onSave = vi.fn()
 

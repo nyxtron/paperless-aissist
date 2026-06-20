@@ -68,6 +68,7 @@ export default function ConfigPanel() {
     modular_tag_fields: '',
     modular_processed_tag: '',
     auth_enabled: 'false',
+    mcp_enabled: 'false',
   })
   const [secretsSet, setSecretsSet] = useState<string[]>([])
   const [saving, setSaving] = useState(false)

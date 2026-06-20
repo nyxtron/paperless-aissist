@@ -1,22 +1,26 @@
 # Paperless-AIssist
 
-AI-powered document processing middleware for [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx).
+AI document processing for [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) that you control, step by step.
 
-Tag a document with `ai-process` and it gets automatically classified, titled, tagged, and enriched with custom fields. Works with [Ollama](https://ollama.ai) (local), [OpenAI](https://openai.com), [Grok (xAI)](https://x.ai), and [OpenRouter](https://openrouter.ai).
+Paperless-AIssist lets you decide exactly what runs on each document: tag it with `ai-process` for the full pipeline, or use step tags like `ai-title`, `ai-ocr`, or `ai-fields` to run only the steps you need.
+
+Run metadata cheaply on local [Ollama](https://ollama.ai) and reserve a paid vision model for the documents you tag for OCR — text and vision models are configured separately. Works with Ollama (local), [OpenAI](https://openai.com), [Grok (xAI)](https://x.ai), and [OpenRouter](https://openrouter.ai).
 
 ## Features
 
+- **Modular tag workflows** — run only the steps you need per document (`ai-title`, `ai-ocr`, `ai-tags`, `ai-fields`, …), or the whole pipeline with `ai-process`
+- **Separate text & vision models** — keep metadata generation on a local Ollama model and reserve a paid vision model for the documents you tag for OCR; each is configured independently
+- **Configurable prompts** — every step is driven by prompts you edit in the web UI, with bundled samples to start from
 - **Correspondent, document type & tag classification** — LLM picks from your existing Paperless metadata
 - **Title generation** — replaces scanned filenames with meaningful titles
-- **Custom field extraction** — pulls structured data into Paperless custom fields
+- **Custom field extraction** — pulls structured data into Paperless custom fields, including optional per-document-type fields
 - **Vision OCR** — uses vision models (Ollama, OpenAI, Grok, OpenRouter) to read documents directly from page images
 - **OCR post-processing** — LLM corrects OCR errors before classification
 - **Document date detection** — updates the Paperless document date when a reliable original date is found
 - **Document chat** — ask questions about any document via the web UI
 - **Document search & preview** — search Paperless documents from the Chat page; preview what AI processing would do without modifying Paperless
-- **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
 - **Automation API** — trigger, stop, and check processing from cron, Home Assistant, or custom scripts
-- **Modular tag workflows** — trigger only the steps you need per document (`ai-title`, `ai-tags`, `ai-fields`, etc.) instead of the full pipeline
+- **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
 - **Multilingual UI** — web interface available in English and German
 - **Optional authentication** — protect the web UI with your Paperless-ngx credentials; disabled by default
 
@@ -311,6 +315,51 @@ Once enabled, the UI redirects unauthenticated users to a login page. Sign in wi
 | `POST /api/auth/login` | Exchange Paperless credentials for a token |
 | `GET /api/auth/me` | Returns the authenticated user info |
 | `POST /api/auth/logout` | Invalidates the token in the server cache |
+
+## MCP (Model Context Protocol)
+
+Paperless-AIssist exposes an MCP server so you can control document processing directly from Claude Desktop or any other MCP-compatible client.
+
+### Enable the MCP server
+
+Enable it in **Settings → Advanced → MCP Server** — it takes effect immediately, no restart needed. The server is off by default. You can also set the `MCP_ENABLED=true` environment variable as a fallback.
+
+Once enabled, the MCP endpoint is available at `/mcp/` (note the trailing slash) on the same port as the web UI. It uses the [streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http), so a persistent connection is not required.
+
+### Authentication
+
+All MCP requests must carry a valid Automation API token in the `Authorization` header. Generate a `paia_` token in **Settings → Advanced → Automation API** — the same token used for the REST Automation API.
+
+### Available tools
+
+| Tool | What it does |
+|------|-------------|
+| `list_pending` | List documents currently tagged for AI processing |
+| `list_prompts` | List all configured prompts |
+| `get_prompt` | Get the content of a specific prompt by name |
+| `get_status` | Get the current processing status and last run result |
+| `preview_processing` | Preview what AI processing would do to a document without modifying Paperless |
+| `process_document` | Trigger processing for a single document |
+| `process_all` | Start processing all pending tagged documents |
+| `stop_processing` | Request a stop for the current processing run |
+| `test_prompt` | Test a prompt against a document without writing any results |
+
+### Claude Desktop configuration
+
+Add the following to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "paperless-aissist": {
+      "url": "http://paperless-aissist.local:8000/mcp/",
+      "headers": { "Authorization": "Bearer paia_your_token_here" }
+    }
+  }
+}
+```
+
+Replace `paperless-aissist.local:8000` with the hostname and port where Paperless-AIssist is reachable from your desktop.
 
 ## Architecture
 

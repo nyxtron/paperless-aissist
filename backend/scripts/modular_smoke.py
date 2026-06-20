@@ -1,7 +1,8 @@
-"""Test modular tag-driven workflows.
+"""Manual smoke check for modular tag-driven workflows against a live Paperless.
 
-Usage:
-  python3 test_modular.py [--doc-id N]
+Not a unit test — requires a running Paperless (and Ollama for LLM steps).
+Run from the backend/ directory:
+  python3 scripts/modular_smoke.py [--doc-id N]
 
 Defaults to doc 35. Covers every individual modular tag plus combination scenarios.
 OCR steps run but are no-ops when vision is disabled in config.
@@ -12,8 +13,9 @@ import sys
 import os
 import argparse
 
-sys.path.insert(0, os.path.dirname(__file__))
-os.environ.setdefault("DATA_DIR", os.path.join(os.path.dirname(__file__), "data"))
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _BACKEND_DIR)
+os.environ.setdefault("DATA_DIR", os.path.join(_BACKEND_DIR, "data"))
 
 from app.services.paperless import PaperlessClient
 from app.services.processor import DocumentProcessor, MODULAR_TAG_DEFAULTS

@@ -1,5 +1,9 @@
 """Application-wide constants."""
 
+import os
+
+APP_VERSION = os.environ.get("APP_VERSION", "dev")
+
 PAPERLESS_TIMEOUT = 60.0
 DEFAULT_PAGE_SIZE = 100
 DEFAULT_FETCH_SIZE = 1000

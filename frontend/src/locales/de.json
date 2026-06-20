@@ -164,6 +164,8 @@
     "authEnabledHint": "Wenn aktiviert, müssen sich Benutzer mit ihren Paperless-ngx-Zugangsdaten anmelden",
     "authEnabledWarning": "Sie werden nach dem Speichern sofort zur Anmeldeseite weitergeleitet.",
     "authRequiresPaperless": "Die Paperless-URL muss konfiguriert sein, bevor die Anmeldung aktiviert werden kann.",
+    "mcpEnabled": "MCP-Server",
+    "mcpEnabledHint": "Stellt die Tools von Paperless-AIssist KI-Assistenten (z. B. Claude Desktop) über MCP unter /mcp/ bereit. Authentifiziert mit deinem Automation-API-Token. Standardmäßig aus; wirkt sofort.",
     "documentListRefreshMode": "Dokumentenlisten laden",
     "documentListRefreshAutomatic": "Automatisch",
     "documentListRefreshManual": "Manuell",

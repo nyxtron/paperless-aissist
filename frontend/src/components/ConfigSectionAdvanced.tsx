@@ -138,6 +138,18 @@ export function ConfigSectionAdvanced({
             </p>
           )}
         </div>
+        <div className="w-48">
+          <label className={labelClass}>{t('config.mcpEnabled')}</label>
+          <select
+            value={config.mcp_enabled || 'false'}
+            onChange={(e) => handleChange('mcp_enabled', e.target.value)}
+            className={fieldClass}
+          >
+            <option value="false">{t('common.disabled')}</option>
+            <option value="true">{t('common.enabled')}</option>
+          </select>
+          <p className={hintClass}>{t('config.mcpEnabledHint')}</p>
+        </div>
         <div className="w-64">
           <label htmlFor="document-list-refresh-mode" className={labelClass}>
             {t('config.documentListRefreshMode')}

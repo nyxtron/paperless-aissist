@@ -6,6 +6,8 @@ authentication when auth is enabled.
 """
 
 import logging
+import os
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -14,6 +16,7 @@ from sqlmodel import select
 
 from .database import run_migrations, get_session
 from .models import Config
+from .constants import APP_VERSION
 from .routers import (
     app_info,
     automation,
@@ -29,11 +32,18 @@ from .services.log_stream import BroadcastHandler, apply_log_level
 from .limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from .mcp.server import build_mcp_app
 
 _broadcast_handler = BroadcastHandler()
 _broadcast_handler.setFormatter(
     logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 )
+
+# Build the MCP ASGI sub-app once at import time so the lifespan context manager
+# and the app.mount() call both reference the same Starlette app object.
+# The gate middleware inside the sub-app checks mcp_enabled live per request.
+_mcp_app = build_mcp_app()
+
 
 def _attach_broadcast_handler():
     """Re-attach broadcast handler after uvicorn replaces logging config."""
@@ -139,7 +149,11 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             _logger.error(f"Failed to auto-start scheduler: {e}")
 
-    yield
+    # Enter the MCP app's lifespan so its StreamableHTTPSessionManager task group
+    # starts and stops alongside the FastAPI app. FastAPI does not run the lifespan
+    # of mounted sub-apps, so we must do this explicitly.
+    async with _mcp_app.lifespan(_mcp_app):
+        yield
 
     from .services.paperless_manager import PaperlessClientManager
     from .services.llm_handler import LLMHandlerManager
@@ -153,16 +167,27 @@ run_migrations()
 app = FastAPI(
     title="Paperless-AIssist",
     description="AI-powered document processing for Paperless-ngx",
-    version="1.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Self-hosted app: permissive CORS by default — the web UI is same-origin
+# (nginx proxies /api) and the Automation API is server-to-server, so this only
+# matters for cross-origin browser callers. Set CORS_ALLOW_ORIGINS to a
+# comma-separated list to restrict; leave unset (or "*") to allow all.
+_cors_origins_raw = os.environ.get("CORS_ALLOW_ORIGINS", "*").strip()
+_cors_origins = (
+    ["*"]
+    if _cors_origins_raw in ("", "*")
+    else [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -178,6 +203,8 @@ app.include_router(stats.router)
 app.include_router(scheduler.router, dependencies=_auth_dep)
 app.include_router(automation.router)
 app.include_router(app_info.router)
+
+app.mount("/mcp", _mcp_app)
 
 
 @app.get("/api/status")
