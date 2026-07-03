@@ -13,6 +13,61 @@ from ..exceptions import LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_json_value(text: str) -> Optional[str]:
+    """Return the first balanced JSON object/array substring in text, or None.
+
+    Scans for the first '{' or '[' and returns up to its matching close, honoring
+    quoted strings and escapes so braces inside string values don't confuse it.
+    """
+    start = next((i for i, ch in enumerate(text) if ch in "{["), None)
+    if start is None:
+        return None
+    open_ch = text[start]
+    close_ch = "}" if open_ch == "{" else "]"
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def _loads_llm_json(content: str) -> Any:
+    """Parse JSON from an LLM response, tolerating code fences and stray prose.
+
+    Some models wrap their JSON in a ```json ... ``` fence (or prepend a word)
+    even in JSON mode. Try a direct parse first, then recover the first balanced
+    object/array. Falls back to {"raw": content} so callers keep the old contract.
+    """
+    try:
+        return json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    candidate = _extract_json_value(content)
+    if candidate is not None:
+        try:
+            return json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {"raw": content}
+
+
 OPENAI_COMPATIBLE_PROVIDERS = frozenset({"openai", "grok", "openrouter"})
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_REFERER = "https://github.com/nyxtron/paperless-aissist"
@@ -293,10 +348,7 @@ class LLMHandler:
             )
 
             if json_mode:
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                    return {"raw": content}
+                return _loads_llm_json(content)
 
             return {"text": content}
         except httpx.HTTPError as e:
@@ -345,10 +397,7 @@ class LLMHandler:
             logger.debug(f"OpenAI response[:300]={content[:300]!r} tokens={usage}")
 
             if json_mode:
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                    return {"raw": content}
+                return _loads_llm_json(content)
 
             return {"text": content}
         except httpx.HTTPError as e:
