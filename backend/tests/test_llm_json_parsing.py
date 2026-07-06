@@ -39,5 +39,16 @@ def test_braces_inside_strings_are_respected():
     assert _loads_llm_json('{"evidence": "amount {net}"}') == {"evidence": "amount {net}"}
 
 
+def test_duplicated_objects_take_the_first():
+    # Follow-up in issue #35: the model sometimes emits the object twice.
+    raw = '{"created_date":"2019-04-25","confidence":"high"}\n{"created_date":"2019-04-25","confidence":"high"}'
+    assert _loads_llm_json(raw) == {"created_date": "2019-04-25", "confidence": "high"}
+
+
+def test_fenced_duplicated_objects_take_the_first():
+    raw = '```json\n{"confidence":"high"}\n{"confidence":"high"}\n```'
+    assert _loads_llm_json(raw) == {"confidence": "high"}
+
+
 def test_unparseable_falls_back_to_raw():
     assert _loads_llm_json("not json at all") == {"raw": "not json at all"}
