@@ -53,9 +53,9 @@ class FieldsStep(AbstractStep):
         from ...models import Prompt
         from sqlmodel import select
 
+        doc = await ctx.paperless.get_document(ctx.doc_id)
         text = ctx.ocr_text
         if not text:
-            doc = await ctx.paperless.get_document(ctx.doc_id)
             text = doc.get("content", "").strip() if doc.get("content") else ""
 
         if not text:
@@ -64,6 +64,12 @@ class FieldsStep(AbstractStep):
         combined_fields: dict[str, str] = {}
         custom_fields = await ctx.paperless.get_custom_fields()
         cf_list = ", ".join(cf["name"] for cf in custom_fields)
+        cf_id_to_name = {cf["id"]: cf["name"] for cf in custom_fields}
+        doc_cf_list = ", ".join(
+            cf_id_to_name[entry["field"]]
+            for entry in doc.get("custom_fields", [])
+            if entry.get("field") in cf_id_to_name
+        )
 
         async with get_async_session() as session:
             stmt = select(Prompt).where(
@@ -82,12 +88,11 @@ class FieldsStep(AbstractStep):
 
         if extract_prompt_data:
             try:
-                custom_fields = await ctx.paperless.get_custom_fields()
-                cf_list = ", ".join(cf["name"] for cf in custom_fields)
                 user_msg = (
                     extract_prompt_data["user_template"]
                     .replace("{content}", text[:10000])
                     .replace("{custom_fields_list}", cf_list)
+                    .replace("{document_custom_fields_list}", doc_cf_list)
                 )
                 extract_result = await ctx.llm.complete(
                     system_prompt=extract_prompt_data["system_prompt"],
@@ -106,7 +111,6 @@ class FieldsStep(AbstractStep):
 
         detected_type = ctx.detected_type
         if not detected_type:
-            doc = await ctx.paperless.get_document(ctx.doc_id)
             if doc.get("document_type"):
                 doc_types = await ctx.paperless.get_document_types()
                 detected_type = next(
@@ -140,6 +144,7 @@ class FieldsStep(AbstractStep):
                     type_specific_prompt_data["user_template"]
                     .replace("{content}", text[:10000])
                     .replace("{custom_fields_list}", cf_list)
+                    .replace("{document_custom_fields_list}", doc_cf_list)
                 )
                 type_result = await ctx.llm.complete(
                     system_prompt=type_specific_prompt_data["system_prompt"],
@@ -158,7 +163,6 @@ class FieldsStep(AbstractStep):
         if not combined_fields:
             return StepResult(data={}, error=None)
 
-        doc = await ctx.paperless.get_document(ctx.doc_id)
         field_name_to_id = {cf["name"].lower(): cf["id"] for cf in custom_fields}
 
         existing_cf = {cf["field"]: cf["value"] for cf in doc.get("custom_fields", [])}
