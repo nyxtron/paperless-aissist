@@ -546,7 +546,11 @@ async def process_modular_tagged_documents() -> dict:
     async def process_one(doc_id: int):
         return await processor.process_document(doc_id)
 
-    sem = asyncio.Semaphore(await get_max_concurrent_processing())
+    max_parallel = await get_max_concurrent_processing()
+    logger.info(
+        "Processing %d documents (up to %d in parallel)", len(doc_ids), max_parallel
+    )
+    sem = asyncio.Semaphore(max_parallel)
 
     async def _limited_process(doc_id: int):
         async with sem:
