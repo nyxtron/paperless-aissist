@@ -9,6 +9,8 @@ import json
 import logging
 import time
 import re
+
+import httpx
 from typing import Optional, Any
 from datetime import datetime, timezone
 from sqlmodel import select
@@ -477,15 +479,54 @@ Available Custom Fields: [{custom_fields_list}]"""
         doc_type_id: int | None,
     ) -> None:
         """Apply title, correspondent, and document type updates to Paperless."""
-        if title or correspondent_id is not None or doc_type_id is not None:
-            if title and len(title) > 128:
-                title = title[:TITLE_MAX_LENGTH]
+        if not (title or correspondent_id is not None or doc_type_id is not None):
+            return
+        if title and len(title) > 128:
+            title = title[:TITLE_MAX_LENGTH]
+        try:
             await self.paperless.update_document(
                 doc_id,
                 title=title,
                 correspondent=correspondent_id,
                 document_type=doc_type_id,
             )
+        except httpx.HTTPStatusError as e:
+            if (
+                e.response is None
+                or e.response.status_code != 400
+                or "does not exist" not in e.response.text
+            ):
+                raise
+            # A referenced correspondent or document type was deleted in Paperless
+            # after our metadata cache picked it up. Refresh the cache, drop the
+            # stale references, and retry with what is still valid.
+            correspondents = await self.paperless.get_correspondents(force_refresh=True)
+            doc_types = await self.paperless.get_document_types(force_refresh=True)
+            valid_correspondents = {c["id"] for c in correspondents}
+            valid_doc_types = {dt["id"] for dt in doc_types}
+
+            dropped = []
+            if correspondent_id is not None and correspondent_id not in valid_correspondents:
+                dropped.append(f"correspondent {correspondent_id}")
+                correspondent_id = None
+            if doc_type_id is not None and doc_type_id not in valid_doc_types:
+                dropped.append(f"document type {doc_type_id}")
+                doc_type_id = None
+
+            if not dropped:
+                raise
+
+            logger.warning(
+                f"Doc {doc_id}: dropped stale metadata references after cache refresh "
+                f"({', '.join(dropped)})"
+            )
+            if title or correspondent_id is not None or doc_type_id is not None:
+                await self.paperless.update_document(
+                    doc_id,
+                    title=title,
+                    correspondent=correspondent_id,
+                    document_type=doc_type_id,
+                )
 
     async def _apply_tag_updates(
         self,
