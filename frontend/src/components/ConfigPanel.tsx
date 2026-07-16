@@ -57,6 +57,7 @@ export default function ConfigPanel() {
     llm_num_ctx_vision: '',
     log_level: 'INFO',
     ocr_fix_max_chars: '10000',
+    max_concurrent_processing: '3',
     document_list_refresh_mode: 'automatic',
     modular_tag_process: '',
     modular_tag_ocr: '',

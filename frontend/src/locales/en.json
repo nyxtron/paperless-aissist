@@ -172,6 +172,8 @@
     "documentListRefreshModeHint": "Controls whether Process and Chat load document lists automatically or only after pressing Refresh.",
     "ocrFixMaxChars": "OCR Fix Max Chars",
     "ocrFixMaxCharsHint": "OCR fix is skipped above this length to avoid replacing long document text with a shortened LLM result.",
+    "maxConcurrentProcessing": "Parallel Documents",
+    "maxConcurrentProcessingHint": "How many documents are processed at the same time. Set to 1 for sequential processing on low-power hardware.",
     "automationApi": "Automation API",
     "automationApiHint": "Use a dedicated Paperless-AIssist token to trigger processing from cron, Home Assistant, or custom scripts.",
     "automationToken": "Automation API token",
