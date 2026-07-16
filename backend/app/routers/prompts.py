@@ -100,6 +100,10 @@ async def get_prompt_templates():
                 "name": "{custom_fields_list}",
                 "description": "List of available custom fields",
             },
+            {
+                "name": "{document_custom_fields_list}",
+                "description": "Custom fields already assigned to the document",
+            },
             {"name": "{title}", "description": "Original document title"},
             {"name": "{created_date}", "description": "Current document date"},
             {"name": "{current_date}", "description": "Current date"},

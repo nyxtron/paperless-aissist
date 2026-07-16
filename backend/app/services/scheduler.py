@@ -16,7 +16,22 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-_MAX_CONCURRENT_PROCESSING = 3
+_DEFAULT_MAX_CONCURRENT_PROCESSING = 3
+
+
+async def get_max_concurrent_processing() -> int:
+    """Return the configured parallel processing limit (default 3, minimum 1)."""
+    from .config_cache import ConfigCache
+
+    try:
+        cache = await ConfigCache.get_instance()
+        value = int(await cache.get("max_concurrent_processing", ""))
+    except (ValueError, TypeError):
+        return _DEFAULT_MAX_CONCURRENT_PROCESSING
+    except Exception as e:
+        logger.warning(f"Could not read max_concurrent_processing: {e}")
+        return _DEFAULT_MAX_CONCURRENT_PROCESSING
+    return max(1, value)
 
 scheduler: Optional[AsyncIOScheduler] = None
 job_id = "auto_process_documents"
@@ -531,7 +546,11 @@ async def process_modular_tagged_documents() -> dict:
     async def process_one(doc_id: int):
         return await processor.process_document(doc_id)
 
-    sem = asyncio.Semaphore(_MAX_CONCURRENT_PROCESSING)
+    max_parallel = await get_max_concurrent_processing()
+    logger.info(
+        "Processing %d documents (up to %d in parallel)", len(doc_ids), max_parallel
+    )
+    sem = asyncio.Semaphore(max_parallel)
 
     async def _limited_process(doc_id: int):
         async with sem:

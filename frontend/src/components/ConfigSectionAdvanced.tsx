@@ -179,6 +179,20 @@ export function ConfigSectionAdvanced({
           />
           <p className={hintClass}>{t('config.ocrFixMaxCharsHint')}</p>
         </div>
+        <div className="w-48">
+          <label htmlFor="max-concurrent-processing" className={labelClass}>
+            {t('config.maxConcurrentProcessing')}
+          </label>
+          <input
+            id="max-concurrent-processing"
+            type="number"
+            min="1"
+            value={config.max_concurrent_processing || '3'}
+            onChange={(e) => handleChange('max_concurrent_processing', e.target.value)}
+            className={fieldClass}
+          />
+          <p className={hintClass}>{t('config.maxConcurrentProcessingHint')}</p>
+        </div>
         <div className="w-full border-t pt-4 mt-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">

@@ -69,6 +69,23 @@ describe('ConfigSectionAdvanced', () => {
     expect(onSave).toHaveBeenCalledWith('mcp_enabled', 'true')
   })
 
+  it('saves the parallel processing limit', () => {
+    const onSave = vi.fn()
+
+    render(
+      <ConfigSectionAdvanced
+        config={{ max_concurrent_processing: '3' }}
+        onSave={onSave}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('config.maxConcurrentProcessing'), {
+      target: { value: '1' },
+    })
+
+    expect(onSave).toHaveBeenCalledWith('max_concurrent_processing', '1')
+  })
+
   it('saves document list refresh mode changes', () => {
     const onSave = vi.fn()
 
