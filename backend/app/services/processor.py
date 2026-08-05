@@ -916,6 +916,15 @@ Available Custom Fields: [{custom_fields_list}]"""
                 doc_id, title, correspondent_id, doc_type_id
             )
 
+            accumulated_update.pop("text", None)
+            accumulated_update.pop("content", None)
+
+            if accumulated_update:
+                await self.paperless.update_document(doc_id, **accumulated_update)
+
+            # The tag swap is the commit point: it runs only after every value has
+            # been accepted by Paperless. If a custom field or date is rejected, the
+            # trigger tags stay put and the scheduler picks the document up again.
             tag_ids_to_add = [
                 t for t in existing_tag_ids if t not in doc.get("tags", [])
             ]
@@ -929,12 +938,6 @@ Available Custom Fields: [{custom_fields_list}]"""
                 await self._apply_tag_updates(
                     doc_id, doc_tag_names, tag_ids_to_add, tag_ids_to_remove
                 )
-
-            accumulated_update.pop("text", None)
-            accumulated_update.pop("content", None)
-
-            if accumulated_update:
-                await self.paperless.update_document(doc_id, **accumulated_update)
         except Exception as e:
             error_detail = str(e)
             if hasattr(e, "response") and e.response is not None:
