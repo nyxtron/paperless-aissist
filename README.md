@@ -252,6 +252,8 @@ Legacy override tags `force_ocr` and `force-ocr-fix` are still supported for com
 
 Documents tagged with any modular tag are picked up by the scheduler and the process queue alongside `ai-process` documents.
 
+Up to **3 documents** are processed in parallel by default. The limit can be changed in **Settings → Advanced → Parallel Documents** — set it to `1` for sequential processing on low-power hardware, e.g. when a single machine runs both the vision and text models in Ollama. Each run logs the active limit.
+
 ## Prompts
 
 All processing steps are driven by configurable prompts managed in the **Prompts** page of the web UI.
@@ -284,6 +286,8 @@ Both `extract` and `type_specific` can be active at the same time — their resu
 The **Document Type Filter** on a `type_specific` prompt limits it to run only when the document is classified as that type. For example: `document_type_filter = Rechnung` runs the prompt only for invoices.
 
 `type_specific` requires a known document type to decide whether to run. When the `document_type` prompt (or `classify`) is active, it uses the newly detected type. When running `ai-fields` alone, the processor falls back to the document's existing document type in Paperless — so type-specific extraction works without also adding `ai-document-type`.
+
+Prompts see every custom field defined in Paperless via `{custom_fields_list}`. Use `{document_custom_fields_list}` instead to offer only the fields already assigned to the document — useful when a Paperless workflow assigns fields per document type and the LLM should not fill anything else.
 
 ### Load Samples
 
