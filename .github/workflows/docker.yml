@@ -1,10 +1,12 @@
 name: Build and Push to Docker Hub
 
-# This workflow triggers only when a tag starting with 'v' is pushed
+# Triggers when a tag starting with 'v' is pushed. Can also be started by hand
+# against a tag, for the rare case where GitHub drops the tag push event.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -50,8 +52,9 @@ jobs:
         with:
           images: nyxtronlab/paperless-aissist
           tags: |
-            # Always add the git tag (e.g. v1.2.3 or v1.2.3-dev)
-            type=ref,event=tag
+            # Always add the git tag (e.g. v1.2.3 or v1.2.3-dev), whether the run
+            # came from the tag push or was started manually against that tag
+            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
             # Add short SHA for every build (e.g. sha-abc1234)
             type=sha
             # Add :latest tag only if the tag does NOT contain a hyphen (no -dev, -beta, -rc, etc.)
