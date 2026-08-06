@@ -2,41 +2,52 @@
 
 ## Supported Versions
 
-We release patches for security vulnerabilities. Which versions are currently supported with security updates:
+Paperless-AIssist is maintained by one person in their spare time. Security fixes
+go into the next release from the current line — there are no backports to older
+versions, so please upgrade before reporting.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
+| Version           | Supported          |
+| ----------------- | ------------------ |
+| Latest release    | :white_check_mark: |
+| Anything older    | :x:                |
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please send an email to: [SECURITY_EMAIL]
+Please report vulnerabilities privately through GitHub, not in a public issue:
 
-Please include the following information:
+**[Report a vulnerability](https://github.com/nyxtron/paperless-aissist/security/advisories/new)**
+(also reachable via the repository's *Security* tab → *Report a vulnerability*)
 
-- Type of vulnerability
-- Full paths of source file(s) related to the vulnerability
-- Location of the affected source code
-- Any special configuration required to reproduce the issue
-- Step-by-step instructions to reproduce the issue
-- Proof-of-concept or exploit code (if possible)
-- Impact of the issue
+Helpful details, as far as you have them:
 
-We will acknowledge your email within 24 hours, and will send a more detailed response within 48 hours indicating the next steps in handling your report.
+- What kind of vulnerability it is, and what an attacker could do with it
+- The affected version and how the instance is deployed
+- The source files or endpoints involved
+- Steps to reproduce, and any configuration needed to trigger it
+- Proof-of-concept code, if you have it
 
-## Disclosure Policy
+I aim to reply within a week and will keep you posted while working on a fix.
+If you have not heard back after two weeks, feel free to send a reminder in the
+advisory thread.
 
-- Once we receive a vulnerability report, our team will initiate an investigation
-- We will not disclose the vulnerability until a fix is available
-- We will keep you informed of our progress
-- Public disclosure will be made after the fix is released
+## Disclosure
 
-## Security Best Practices
+Reports stay private until a fixed release is available. Once it ships, the
+advisory is published and I am happy to credit you unless you prefer otherwise.
+If a report turns out to affect a dependency rather than this project, I will
+say so and point you to the right place.
 
-When deploying Paperless-AIssist:
+## Deploying Paperless-AIssist safely
 
-1. **Keep credentials secure** - Never commit API tokens to version control
-2. **Use environment variables** - Store sensitive data in environment variables
-3. **Network isolation** - Consider running in an isolated network segment
-4. **Regular updates** - Keep the application updated to the latest version
-5. **Monitor access** - Review logs regularly for suspicious activity
+Paperless-AIssist holds an API token for your Paperless-ngx instance and can read
+and modify your documents. Treat it as trusted infrastructure:
+
+1. **Do not expose it to the internet.** It is built for a private network. If you
+   need remote access, put it behind a VPN or an authenticating reverse proxy.
+2. **Turn on the login.** *Settings → Advanced → Anmeldung erforderlich* validates
+   users against your Paperless instance. It is off by default.
+3. **Keep the Automation API token secret.** It is shown once when generated and
+   stored only as a hash; anyone holding it can trigger processing.
+4. **Protect the data volume.** `/app/data` holds the configuration database
+   including your Paperless token.
+5. **Update regularly.** Fixes ship in the latest release only.
