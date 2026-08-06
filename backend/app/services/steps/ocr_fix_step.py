@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_OCR_FIX_MAX_CHARS = 10000
 
+# An OCR correction keeps the text roughly intact. A much shorter reply means the
+# model summarized or stopped early, so the result is discarded instead of
+# overwriting the document.
+MIN_RESULT_LENGTH_RATIO = 0.8
+
 
 class OCRFixStep(AbstractStep):
     """LLM-based OCR post-processing step.
@@ -105,7 +110,7 @@ class OCRFixStep(AbstractStep):
             fix_result = await ctx.llm.complete(
                 system_prompt=ocr_fix_prompt.system_prompt,
                 user_prompt=ocr_fix_prompt.user_template.replace(
-                    "{content}", text[:10000]
+                    "{content}", text[: self.ocr_fix_max_chars]
                 ),
                 json_mode=False,
             )
@@ -114,6 +119,28 @@ class OCRFixStep(AbstractStep):
             )
 
             if fixed_text:
+                # The corrected text replaces the whole document content, so a reply
+                # that is much shorter than the original is a summary or a truncated
+                # generation — writing it back would destroy document text.
+                if len(fixed_text) < len(text) * MIN_RESULT_LENGTH_RATIO:
+                    logger.warning(
+                        "OCRFixStep: discarding result for doc %s — %d chars returned "
+                        "for %d chars of input, keeping the original text",
+                        ctx.doc_id,
+                        len(fixed_text),
+                        len(text),
+                    )
+                    return StepResult(
+                        data={},
+                        error=None,
+                        details={
+                            "reason": "result_too_short",
+                            "original_length": len(text),
+                            "result_length": len(fixed_text),
+                        },
+                        skipped=True,
+                    )
+
                 ctx.ocr_text = fixed_text
                 logger.debug(f"OCRFixStep: fixed text for doc {ctx.doc_id}")
                 return StepResult(data={"text": fixed_text}, error=None)
