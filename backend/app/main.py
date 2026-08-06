@@ -141,6 +141,13 @@ async def lifespan(app: FastAPI):
     clear_processing_state()
 
     _logger = logging.getLogger(__name__)
+
+    _auth_env = os.environ.get("AUTH_ENABLED")
+    if _auth_env is not None and _auth_env.lower() not in ("false", "0", "no"):
+        _logger.info(
+            "Authentication is enforced by AUTH_ENABLED and cannot be turned off in the web UI"
+        )
+
     enabled, interval = load_scheduler_config()
     if enabled:
         try:

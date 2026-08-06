@@ -40,10 +40,19 @@ def hash_automation_token(token: str) -> str:
 
 
 def _is_auth_enabled() -> bool:
-    """Check whether authentication is enabled (env var or config flag)."""
+    """Check whether authentication is enabled.
+
+    The setting in the web UI decides. AUTH_ENABLED=true is the one exception:
+    it keeps auth switched on regardless, so an operator who enforces it cannot
+    lose that protection through the UI. Any other value only acts as the
+    default until the UI setting exists.
+    """
     env_val = os.environ.get("AUTH_ENABLED")
-    if env_val is not None:
-        return env_val.lower() not in ("false", "0", "no")
+    env_enabled = (
+        env_val is not None and env_val.lower() not in ("false", "0", "no")
+    )
+    if env_enabled:
+        return True
     with get_session() as session:
         stmt = select(Config).where(Config.key == "auth_enabled")
         cfg = session.exec(stmt).first()
