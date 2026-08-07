@@ -48,5 +48,10 @@ ENV PGID=1000
 
 EXPOSE 8080
 
+# Probes the backend through nginx, so an unreachable uvicorn marks the
+# container unhealthy instead of going unnoticed.
+HEALTHCHECK --interval=60s --timeout=10s --start-period=45s --retries=3 \
+    CMD curl -fsS http://localhost:8080/health || exit 1
+
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/app/supervisord.conf"]

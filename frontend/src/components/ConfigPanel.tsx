@@ -67,7 +67,7 @@ export default function ConfigPanel() {
     modular_tag_document_type: '',
     modular_tag_tags: '',
     modular_tag_fields: '',
-    modular_processed_tag: '',
+
     auth_enabled: 'false',
     mcp_enabled: 'false',
   })
@@ -112,6 +112,7 @@ export default function ConfigPanel() {
         configApi.set(key, value)
           .catch((e) => {
             console.error(`Failed to save ${key}:`, e)
+            toast.error(t('config.saveKeyFailed', { key }))
           })
           .finally(resolve)
         return
@@ -122,6 +123,7 @@ export default function ConfigPanel() {
           await configApi.set(key, value)
         } catch (e) {
           console.error(`Failed to save ${key}:`, e)
+          toast.error(t('config.saveKeyFailed', { key }))
         }
         resolve()
       }, 1000)

@@ -105,6 +105,55 @@ def run_migrations(database_url: str = DATABASE_URL) -> None:
         )
         command.stamp(alembic_cfg, base_rev)
 
+    if existing_tables:
+        _backup_database(database_url, alembic_cfg, logger)
+
     logger.info("Running Alembic migrations...")
     command.upgrade(alembic_cfg, "head")
     logger.info("Migrations complete")
+
+
+def _backup_database(database_url: str, alembic_cfg, logger) -> None:
+    """Copy the database aside before a schema migration changes it.
+
+    Only runs when a migration is actually pending, so a normal restart does not
+    accumulate copies. Never blocks startup: a failed backup is logged and the
+    migration proceeds.
+    """
+    import shutil
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import create_engine
+
+    _BACKUPS_TO_KEEP = 3
+
+    try:
+        db_file = pathlib.Path(database_url.replace("sqlite:///", ""))
+        if not db_file.exists():
+            return
+
+        engine = create_engine(database_url)
+        try:
+            with engine.connect() as conn:
+                current = MigrationContext.configure(conn).get_current_revision()
+        finally:
+            engine.dispose()
+
+        if current == ScriptDirectory.from_config(alembic_cfg).get_current_head():
+            return
+
+        backup_dir = db_file.parent / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        target = backup_dir / f"{db_file.stem}-{current or 'pre-alembic'}{db_file.suffix}"
+        shutil.copy2(db_file, target)
+        logger.info("Database backed up to %s before migrating", target)
+
+        stale = sorted(
+            backup_dir.glob(f"{db_file.stem}-*{db_file.suffix}"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )[_BACKUPS_TO_KEEP:]
+        for old in stale:
+            old.unlink(missing_ok=True)
+    except Exception as e:
+        logger.warning("Could not back up the database before migrating: %s", e)

@@ -220,3 +220,20 @@ async def status():
         "status": "running",
         "service": "Paperless-AIssist",
     }
+
+
+@app.get("/api/health")
+async def health():
+    """Container health probe: confirms the app can reach its database.
+
+    Deliberately unauthenticated so Docker and reverse proxies can call it.
+    """
+    from fastapi import HTTPException
+
+    try:
+        with get_session() as session:
+            session.exec(select(Config).limit(1)).first()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Health check failed: {e}")
+        raise HTTPException(status_code=503, detail="database unavailable")
+    return {"status": "healthy", "version": APP_VERSION}

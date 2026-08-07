@@ -19,6 +19,15 @@ STRUCTURAL_KEYS = {
     "value",
     "thought",
     "reasoning",
+    # Commentary the model tends to add, plus llm_handler's fallback key for a
+    # reply it could not parse as JSON. None of these are custom fields.
+    "raw",
+    "text",
+    "note",
+    "notes",
+    "answer",
+    "error",
+    "explanation",
 }
 
 
@@ -100,7 +109,7 @@ class FieldsStep(AbstractStep):
                     json_mode=True,
                 )
 
-                if extract_result and isinstance(extract_result, dict):
+                if extract_result and isinstance(extract_result, (dict, list)):
                     combined_fields.update(
                         self._extract_fields_from_result(extract_result)
                     )
@@ -151,7 +160,7 @@ class FieldsStep(AbstractStep):
                     user_prompt=user_msg,
                     json_mode=True,
                 )
-                if type_result and isinstance(type_result, dict):
+                if type_result and isinstance(type_result, (dict, list)):
                     combined_fields.update(
                         self._extract_fields_from_result(type_result)
                     )
@@ -184,23 +193,41 @@ class FieldsStep(AbstractStep):
         return StepResult(data={}, error=None)
 
     @staticmethod
-    def _extract_fields_from_result(result: dict) -> dict[str, str]:
+    def _extract_fields_from_result(result: Any) -> dict[str, str]:
+        """Read extracted fields from whatever shape the model replied in.
+
+        A structured reply wins: once a list of field/value pairs is found, the
+        rest of the response is commentary and must not become fields of its own.
+        Only a reply that carries no structure at all is read as a flat mapping.
+        """
         fields: dict[str, str] = {}
-        items = []
 
-        if "custom_fields" in result:
-            items = result["custom_fields"]
-        elif "extract" in result:
-            for k, v in result["extract"].items():
-                if v:
-                    fields[k.lower().replace("_", " ")] = v
+        # The bundled extract prompt asks for a bare JSON array of field/value pairs.
+        if isinstance(result, list):
+            items = result
+        elif isinstance(result, dict):
+            if "custom_fields" in result:
+                items = result["custom_fields"]
+            elif "extract" in result and isinstance(result["extract"], dict):
+                return {
+                    k.lower().replace("_", " "): v
+                    for k, v in result["extract"].items()
+                    if v
+                }
+            elif "field" in result and "value" in result:
+                items = [result]
+            else:
+                # No structure to go by — treat the reply itself as field/value pairs.
+                return {
+                    key.lower(): value
+                    for key, value in result.items()
+                    if key not in STRUCTURAL_KEYS and isinstance(value, str) and value
+                }
+        else:
             return fields
-        elif "field" in result and "value" in result:
-            items = [result]
 
-        for key, value in result.items():
-            if key not in STRUCTURAL_KEYS and isinstance(value, str) and value:
-                fields[key.lower()] = value
+        if not isinstance(items, list):
+            return fields
 
         for item in items:
             if isinstance(item, dict) and item.get("field") and item.get("value"):
