@@ -8,5 +8,4 @@ export const MODULAR_TAG_DEFAULTS: Record<string, string> = {
   modular_tag_document_type: 'ai-document-type',
   modular_tag_tags: 'ai-tags',
   modular_tag_fields: 'ai-fields',
-  modular_processed_tag: 'ai-processed',
 }

@@ -54,6 +54,17 @@ export function ConfigSectionTags({ config, onSave }: ConfigSectionProps) {
           <p className={hintClass}>{t('config.modularTagOcrFixHint')}</p>
         </div>
         <div>
+          <label className={labelClass}>{t('config.modularTagDate')}</label>
+          <input
+            type="text"
+            className={fieldClass}
+            value={config.modular_tag_date || ''}
+            placeholder={MODULAR_TAG_DEFAULTS.modular_tag_date}
+            onChange={(e) => handleChange('modular_tag_date', e.target.value)}
+          />
+          <p className={hintClass}>{t('config.modularTagDateHint')}</p>
+        </div>
+        <div>
           <label className={labelClass}>{t('config.modularTagTitle')}</label>
           <input
             type="text"
@@ -107,17 +118,6 @@ export function ConfigSectionTags({ config, onSave }: ConfigSectionProps) {
             onChange={(e) => handleChange('modular_tag_fields', e.target.value)}
           />
           <p className={hintClass}>{t('config.modularTagFieldsHint')}</p>
-        </div>
-        <div>
-          <label className={labelClass}>{t('config.modularProcessedTag')}</label>
-          <input
-            type="text"
-            className={fieldClass}
-            value={config.modular_processed_tag || ''}
-            placeholder={MODULAR_TAG_DEFAULTS.modular_processed_tag}
-            onChange={(e) => handleChange('modular_processed_tag', e.target.value)}
-          />
-          <p className={hintClass}>{t('config.modularProcessedTagHint')}</p>
         </div>
       </div>
     </div>
