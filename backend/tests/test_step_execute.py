@@ -384,6 +384,279 @@ class TestCorrespondentStep:
 
         assert result.data == {"correspondent": 1}
 
+    @pytest.mark.asyncio
+    async def test_parses_two_stage_json_response(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """CorrespondentStep accepts the {name, is_existing} JSON shape."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "Amazon", "is_existing": true}', "raw": ""}
+        )
+
+        step = await CorrespondentStep.from_config(ctx.config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 1}
+
+    @pytest.mark.asyncio
+    async def test_parses_json_mode_parsed_dict(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """In json_mode, complete() returns the parsed JSON dict directly
+        ({"name", "is_existing"}), not wrapped in {"text": ...} — the step must
+        read the name from it."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"name": "Amazon", "is_existing": True}
+        )
+
+        step = await CorrespondentStep.from_config(ctx.config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 1}
+
+    @pytest.mark.asyncio
+    async def test_creates_from_parsed_dict_result(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """Creation works when complete() returns a parsed JSON dict naming an
+        unknown correspondent."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"name": "Telekom", "is_existing": False}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock(
+            return_value=({"id": 99, "name": "Telekom"}, True)
+        )
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 99}
+        ctx.paperless.get_or_create_correspondent.assert_awaited_once_with("Telekom")
+
+    @pytest.mark.asyncio
+    async def test_completes_with_json_mode_off(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """The step never turns json_mode on: the bundled prompt asks for JSON
+        and _parse_response extracts it, so installs with a legacy/edited prompt
+        keep working."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(return_value={"text": "Amazon", "raw": ""})
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        await step.execute(ctx)
+
+        assert mock_llm.complete.await_args.kwargs["json_mode"] is False
+
+    @pytest.mark.asyncio
+    async def test_reuses_existing_when_model_claims_new(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A proposed name matching an existing entry is reused, not created,
+        even when the model flags it as new and creation is enabled. Uses the
+        {"text": ...} shape complete() returns with json_mode off."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "amazon", "is_existing": false}', "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 1}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_normalized_duplicate_blocks_create(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """Case and whitespace differences do not trigger a duplicate create."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": "  hornbach  ", "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 3}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_creates_new_correspondent_when_enabled(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """An unmatched name is created when creation is enabled, and logged
+        via StepResult.details for later review."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "Telekom", "is_existing": false}', "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock(
+            return_value=({"id": 99, "name": "Telekom"}, True)
+        )
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 99}
+        ctx.paperless.get_or_create_correspondent.assert_awaited_once_with("Telekom")
+        assert result.details["created_correspondent"] == {"id": 99, "name": "Telekom"}
+
+    @pytest.mark.asyncio
+    async def test_reuses_when_get_or_create_returns_existing(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """When the client resolves a concurrent create to an existing entry
+        (created=False), the step reuses it without logging a creation."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "Telekom", "is_existing": false}', "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock(
+            return_value=({"id": 42, "name": "Telekom"}, False)
+        )
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 42}
+        assert "created_correspondent" not in result.details
+
+    @pytest.mark.asyncio
+    async def test_does_not_create_when_disabled(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """An unmatched name is dropped (strict default) when creation is off."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "Telekom", "is_existing": false}', "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        step = await CorrespondentStep.from_config(ctx.config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_does_not_create_from_untrusted_raw_reply(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A non-JSON reply may be matched against existing entries but must
+        never be turned into a new correspondent (the raw-fallback trap)."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={
+                "text": "Der Absender ist vermutlich die Firma Emons.",
+                "raw": "",
+            }
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_does_not_create_none_sentinel_with_punctuation(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """"None." (trailing punctuation) is a no-sender sentinel, not a name."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "None.", "is_existing": false}', "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_does_not_create_when_model_claims_existing_but_no_match(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """is_existing=true with no match is the surest sign of a mangled name;
+        the step reuses-or-drops, never creates."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={
+                "text": '{"name": "Deutsche Telekom AG", "is_existing": true}',
+                "raw": "",
+            }
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_does_not_create_implausibly_long_name(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A prose-length 'name' is rejected by the plausibility gate."""
+        self._setup_db(mock_get_session)
+        long_name = "Der Absender dieses Dokuments ist vermutlich die Firma Emons"
+        mock_llm.complete = AsyncMock(
+            return_value={
+                "text": json.dumps({"name": long_name, "is_existing": False}),
+                "raw": "",
+            }
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_create_failure_is_noop_not_fatal(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A create failure must not fail the document: the step returns a no-op
+        (no error) so the remaining steps still run."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "Telekom", "is_existing": false}', "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock(
+            side_effect=Exception("boom")
+        )
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        assert result.error is None
+        assert "correspondent_create_failed" in result.details
+
 
 @patch("app.database.get_async_session")
 class TestDocumentTypeStep:

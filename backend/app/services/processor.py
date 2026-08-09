@@ -352,9 +352,15 @@ Available Custom Fields: [{custom_fields_list}]"""
             FieldsStep,
         )
 
+        # A preview must not write to Paperless. The correspondent step is the
+        # only one that can (creating a new correspondent), so force its opt-in
+        # flag off here regardless of the live config — otherwise a preview would
+        # leave an orphaned correspondent behind, contradicting what the
+        # docstring, the MCP tool and the UI all promise.
+        preview_config = {**config_dict, "correspondent_create_new": "false"}
         steps = [
             await TitleStep.from_config(config_dict),
-            await CorrespondentStep.from_config(config_dict),
+            await CorrespondentStep.from_config(preview_config),
             await DocumentTypeStep.from_config(config_dict),
             await TagsStep.from_config(config_dict),
             await FieldsStep.from_config(config_dict),

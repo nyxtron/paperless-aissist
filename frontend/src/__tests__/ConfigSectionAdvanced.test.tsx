@@ -52,11 +52,11 @@ describe('ConfigSectionAdvanced', () => {
   it('renders MCP toggle and calls handleChange on change', () => {
     const onSave = vi.fn()
 
-    // auth_enabled=true → its select shows 'common.enabled'
+    // auth_enabled=true / correspondent_create_new=true → their selects show 'common.enabled'
     // mcp_enabled=false → its select shows 'common.disabled' (unique among all selects)
     render(
       <ConfigSectionAdvanced
-        config={{ auth_enabled: 'true', mcp_enabled: 'false' }}
+        config={{ auth_enabled: 'true', mcp_enabled: 'false', correspondent_create_new: 'true' }}
         onSave={onSave}
       />,
     )
@@ -67,6 +67,49 @@ describe('ConfigSectionAdvanced', () => {
     fireEvent.change(select, { target: { value: 'true' } })
 
     expect(onSave).toHaveBeenCalledWith('mcp_enabled', 'true')
+  })
+
+  it('saves the correspondent creation toggle', () => {
+    const onSave = vi.fn()
+
+    render(
+      <ConfigSectionAdvanced
+        config={{ correspondent_create_new: 'false' }}
+        onSave={onSave}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('config.correspondentCreateNew'), {
+      target: { value: 'true' },
+    })
+
+    expect(onSave).toHaveBeenCalledWith('correspondent_create_new', 'true')
+  })
+
+  it('warns in amber when correspondent creation is enabled', () => {
+    render(
+      <ConfigSectionAdvanced
+        config={{ correspondent_create_new: 'true' }}
+        onSave={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('config.correspondentCreateNewWarning'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows no correspondent warning when creation is disabled', () => {
+    render(
+      <ConfigSectionAdvanced
+        config={{ correspondent_create_new: 'false' }}
+        onSave={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.queryByText('config.correspondentCreateNewWarning'),
+    ).not.toBeInTheDocument()
   })
 
   it('saves the parallel processing limit', () => {
