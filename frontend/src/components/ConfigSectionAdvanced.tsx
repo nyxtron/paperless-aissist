@@ -106,8 +106,8 @@ export function ConfigSectionAdvanced({
         <h2 className="text-lg font-semibold text-gray-800">{t('config.applicationSection')}</h2>
       </div>
 
-      <div className="flex flex-wrap gap-4">
-        <div className="w-48">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">
+        <div>
           <label className={labelClass}>{t('config.logLevel')}</label>
           <select
             value={config.log_level || 'INFO'}
@@ -121,7 +121,7 @@ export function ConfigSectionAdvanced({
           </select>
           <p className={hintClass}>{t('config.logLevelHint')}</p>
         </div>
-        <div className="w-48">
+        <div>
           <label className={labelClass}>{t('config.authEnabled')}</label>
           <select
             value={config.auth_enabled || 'false'}
@@ -138,7 +138,7 @@ export function ConfigSectionAdvanced({
             </p>
           )}
         </div>
-        <div className="w-48">
+        <div>
           <label className={labelClass}>{t('config.mcpEnabled')}</label>
           <select
             value={config.mcp_enabled || 'false'}
@@ -150,7 +150,7 @@ export function ConfigSectionAdvanced({
           </select>
           <p className={hintClass}>{t('config.mcpEnabledHint')}</p>
         </div>
-        <div className="w-64">
+        <div>
           <label htmlFor="document-list-refresh-mode" className={labelClass}>
             {t('config.documentListRefreshMode')}
           </label>
@@ -165,7 +165,7 @@ export function ConfigSectionAdvanced({
           </select>
           <p className={hintClass}>{t('config.documentListRefreshModeHint')}</p>
         </div>
-        <div className="w-48">
+        <div>
           <label htmlFor="ocr-fix-max-chars" className={labelClass}>
             {t('config.ocrFixMaxChars')}
           </label>
@@ -179,7 +179,7 @@ export function ConfigSectionAdvanced({
           />
           <p className={hintClass}>{t('config.ocrFixMaxCharsHint')}</p>
         </div>
-        <div className="w-48">
+        <div>
           <label htmlFor="max-concurrent-processing" className={labelClass}>
             {t('config.maxConcurrentProcessing')}
           </label>
@@ -193,7 +193,7 @@ export function ConfigSectionAdvanced({
           />
           <p className={hintClass}>{t('config.maxConcurrentProcessingHint')}</p>
         </div>
-        <div className="w-full border-t pt-4 mt-2">
+        <div className="sm:col-span-2 lg:col-span-3 border-t pt-4 mt-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
