@@ -46,11 +46,12 @@ class PaperlessClient:
         self.token = token
         self.client = httpx.AsyncClient(timeout=PAPERLESS_TIMEOUT)
         self._metadata_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-        # Bumped whenever a metadata write invalidates the cache. A GET that was
-        # already in flight when the bump happened refuses to store its (now
-        # stale) snapshot, so a freshly created entry cannot be masked until the
-        # TTL expires.
-        self._metadata_generation = 0
+        # Per-cache-key generation, bumped whenever a write invalidates that
+        # key. A GET that was already in flight when its key's generation changed
+        # refuses to store its (now stale) snapshot, so a freshly created entry
+        # cannot be masked until the TTL expires. Keeping it per key means a
+        # correspondent write does not discard an in-flight tags/types fetch.
+        self._metadata_generation: dict[str, int] = {}
         # Serializes refresh+match+create in get_or_create_correspondent so two
         # documents proposing the same new correspondent cannot both create it.
         self._correspondent_write_lock = asyncio.Lock()
@@ -215,14 +216,14 @@ class PaperlessClient:
         ):
             return cached[1]
 
-        generation_at_start = self._metadata_generation
+        generation_at_start = self._metadata_generation.get(cache_key, 0)
         fetch_size = await self._get_fetch_size()
         separator = "&" if "?" in url else "?"
         paged_url = f"{url}{separator}page_size={fetch_size}"
         data = await self._get_all_pages(paged_url, await self._get_max_pages())
-        # Skip storing if a write invalidated the cache while this GET was in
+        # Skip storing if a write invalidated this key while the GET was in
         # flight: our snapshot predates the write and would hide the new entry.
-        if self._metadata_generation == generation_at_start:
+        if self._metadata_generation.get(cache_key, 0) == generation_at_start:
             self._metadata_cache[cache_key] = (now, data)
         return data
 
@@ -279,7 +280,9 @@ class PaperlessClient:
         logger.debug(f"POST {url} → {response.status_code}")
         response.raise_for_status()
         self._metadata_cache.pop("correspondents", None)
-        self._metadata_generation += 1
+        self._metadata_generation["correspondents"] = (
+            self._metadata_generation.get("correspondents", 0) + 1
+        )
         return response.json()
 
     async def get_or_create_correspondent(

@@ -555,12 +555,31 @@ class TestCorrespondentStep:
     async def test_does_not_create_from_untrusted_raw_reply(
         self, mock_get_session, ctx, mock_llm
     ):
-        """A non-JSON reply may be matched against existing entries but must
-        never be turned into a new correspondent (the raw-fallback trap)."""
+        """A short, plausible NON-JSON reply must not be created from — the only
+        thing that may block it is the trust check, so the fixture is a bare word
+        (`Emons`) that clears the plausibility gate and reaches the trust gate."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(return_value={"text": "Emons", "raw": ""})
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        assert result.details.get("correspondent_create_skipped") == "untrusted_response"
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_is_existing_string_true_blocks_create(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A model returning is_existing as the string "true" (not a bool) with no
+        match must still be treated as claimed-existing and not created."""
         self._setup_db(mock_get_session)
         mock_llm.complete = AsyncMock(
             return_value={
-                "text": "Der Absender ist vermutlich die Firma Emons.",
+                "text": '{"name": "Deutsche Telekom AG", "is_existing": "true"}',
                 "raw": "",
             }
         )
@@ -572,6 +591,65 @@ class TestCorrespondentStep:
 
         assert result.data == {}
         ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_quoted_name_reuses_existing_not_duplicate(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A quoted name (`"Amazon"`, echoed from the candidate list) must match
+        the existing unquoted `Amazon` and be reused, not created as a duplicate."""
+        self._setup_db(mock_get_session)
+        payload = json.dumps({"name": '"Amazon"', "is_existing": False})
+        mock_llm.complete = AsyncMock(return_value={"text": payload, "raw": ""})
+        ctx.paperless.get_or_create_correspondent = AsyncMock()
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 1}
+        ctx.paperless.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_create_with_missing_id_is_noop_not_fatal(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A 2xx create whose body lacks `id` must be a no-op (error=None), not a
+        KeyError that the outer handler turns into a fatal step."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "Telekom", "is_existing": false}', "raw": ""}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock(
+            return_value=({"name": "Telekom"}, True)  # no "id" key
+        )
+
+        config = {**ctx.config, "correspondent_create_new": "true"}
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {}
+        assert result.error is None
+        assert "correspondent_create_failed" in result.details
+
+    @pytest.mark.asyncio
+    async def test_parses_json_object_with_trailing_noise(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """A valid JSON object followed by a stray brace must still be parsed
+        (balanced scan), not dropped by a greedy match."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={
+                "text": '{"name": "Amazon", "is_existing": true} }',
+                "raw": "",
+            }
+        )
+
+        step = await CorrespondentStep.from_config(ctx.config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 1}
 
     @pytest.mark.asyncio
     async def test_does_not_create_none_sentinel_with_punctuation(
@@ -1764,3 +1842,47 @@ class TestApplyMetadataUpdate:
         )
 
         mock_paperless.update_document.assert_not_called()
+
+
+@patch("app.database.get_async_session")
+class TestPreviewNeverCreates:
+    @pytest.mark.asyncio
+    async def test_preview_does_not_create_even_with_flag_on(
+        self, mock_get_session, mock_paperless, mock_llm
+    ):
+        """process_document_preview must never create a correspondent, even when
+        the live config has correspondent_create_new on and the model proposes a
+        brand-new name. Locks the preview guard so removing it fails the suite."""
+        prompt = MagicMock(spec=Prompt)
+        prompt.system_prompt = "sys"
+        prompt.user_template = "{content} {correspondents_list}"
+        prompt.is_active = True
+        session = AsyncMock()
+        session.exec = AsyncMock(
+            return_value=MagicMock(first=MagicMock(return_value=prompt))
+        )
+        mock_get_session.return_value.__aenter__.return_value = session
+
+        # A brand-new sender not in the mock correspondents list.
+        mock_llm.complete = AsyncMock(
+            return_value={"text": '{"name": "Telekom", "is_existing": false}', "raw": ""}
+        )
+        mock_paperless.get_or_create_correspondent = AsyncMock()
+
+        from app.services.processor import DocumentProcessor
+
+        processor = DocumentProcessor(paperless=mock_paperless)
+        processor._get_config_dict = AsyncMock(
+            return_value={
+                "modular_tag_process": "ai-process",
+                "correspondent_create_new": "true",  # ON at the instance level
+            }
+        )
+
+        with patch(
+            "app.services.processor.LLMHandlerManager.get_handler",
+            AsyncMock(return_value=mock_llm),
+        ):
+            await processor.process_document_preview(1)
+
+        mock_paperless.get_or_create_correspondent.assert_not_awaited()

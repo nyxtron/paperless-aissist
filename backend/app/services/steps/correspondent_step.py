@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from ..llm_handler import _extract_json_value
 from ..paperless import normalize_name
 from .base import AbstractStep, StepContext, StepResult
 
@@ -103,8 +104,9 @@ class CorrespondentStep(AbstractStep):
         """
         # A dict that itself carries the name is a parsed JSON object (trusted).
         if isinstance(result, dict) and isinstance(result.get("name"), str):
-            name = result["name"].strip()
-            return _Proposal(name, result.get("is_existing"), True) if name else None
+            name = CorrespondentStep._clean_name(result["name"])
+            is_existing = CorrespondentStep._coerce_bool(result.get("is_existing"))
+            return _Proposal(name, is_existing, True) if name else None
 
         if isinstance(result, dict):
             raw = (result.get("text") or "").strip() or (result.get("raw") or "").strip()
@@ -117,26 +119,63 @@ class CorrespondentStep(AbstractStep):
 
         parsed = CorrespondentStep._extract_json_object(raw)
         if isinstance(parsed, dict) and isinstance(parsed.get("name"), str):
-            name = parsed["name"].strip()
-            return _Proposal(name, parsed.get("is_existing"), True) if name else None
+            name = CorrespondentStep._clean_name(parsed["name"])
+            is_existing = CorrespondentStep._coerce_bool(parsed.get("is_existing"))
+            return _Proposal(name, is_existing, True) if name else None
 
         # Not valid JSON: treat the whole reply as a bare name, but untrusted —
         # good enough to match an existing correspondent, never to create one.
-        return _Proposal(raw, None, False)
+        return _Proposal(CorrespondentStep._clean_name(raw), None, False)
 
     @staticmethod
     def _extract_json_object(text: str) -> Optional[Any]:
-        """Parse ``text`` as JSON, or the first ``{...}`` object embedded in it."""
+        """Parse ``text`` as JSON, or the first balanced JSON object within it.
+
+        Reuses the LLM handler's balanced-brace scanner so a stray brace later in
+        the reply can't swallow the object (a greedy ``{.*}`` would).
+        """
         try:
             return json.loads(text)
         except (ValueError, TypeError):
             pass
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
+        candidate = _extract_json_value(text)
+        if candidate:
             try:
-                return json.loads(match.group(0))
+                return json.loads(candidate)
             except (ValueError, TypeError):
                 return None
+        return None
+
+    @staticmethod
+    def _clean_name(name: str) -> str:
+        """Strip surrounding whitespace and wrapping quotes from a proposed name.
+
+        The prompt lists candidates in quotes and asks for the exact name, so the
+        model sometimes echoes them back quoted. The quotes must be removed from
+        the name itself — not just for validation — otherwise the quoted string is
+        matched and created verbatim, duplicating the unquoted entry.
+        """
+        cleaned = name.strip()
+        if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in "\"'":
+            cleaned = cleaned[1:-1]
+        return cleaned.strip().strip("\"'").strip()
+
+    @staticmethod
+    def _coerce_bool(value: Any) -> Optional[bool]:
+        """Coerce a model-provided is_existing flag to a real tri-state bool.
+
+        Accepts native booleans and the common string spellings; anything else
+        (a stray type, or None) is 'unknown' (None), so `is True` cannot be
+        walked past by a string like ``"true"``.
+        """
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in {"true", "yes", "1"}:
+                return True
+            if v in {"false", "no", "0"}:
+                return False
         return None
 
     @staticmethod
@@ -266,6 +305,11 @@ class CorrespondentStep(AbstractStep):
                 created, was_created = await ctx.paperless.get_or_create_correspondent(
                     proposal.name
                 )
+                # Read the id inside the try: a 2xx with an unexpected body would
+                # otherwise raise KeyError here and land in the outer handler as a
+                # fatal step error — exactly the case the no-op below avoids.
+                new_id = created["id"]
+                new_name = created.get("name") or proposal.name
             except Exception as create_error:
                 # A create failure must not fail the document (which would strip
                 # title/type/tags and retry forever): fall back to the no-op the
@@ -283,19 +327,19 @@ class CorrespondentStep(AbstractStep):
 
             if not was_created:
                 # A concurrent run created it first; reuse without noise.
-                return StepResult(data={"correspondent": created["id"]}, error=None)
+                return StepResult(data={"correspondent": new_id}, error=None)
 
             logger.info(
-                f"CorrespondentStep: created correspondent '{created['name']}' "
-                f"(id={created['id']}) for doc {ctx.doc_id}"
+                f"CorrespondentStep: created correspondent '{new_name}' "
+                f"(id={new_id}) for doc {ctx.doc_id}"
             )
             return StepResult(
-                data={"correspondent": created["id"]},
+                data={"correspondent": new_id},
                 error=None,
                 details={
                     "created_correspondent": {
-                        "id": created["id"],
-                        "name": created["name"],
+                        "id": new_id,
+                        "name": new_name,
                     }
                 },
             )
