@@ -70,6 +70,7 @@ export default function ConfigPanel() {
 
     auth_enabled: 'false',
     mcp_enabled: 'false',
+    correspondent_create_new: 'false',
   })
   const [secretsSet, setSecretsSet] = useState<string[]>([])
   const [saving, setSaving] = useState(false)

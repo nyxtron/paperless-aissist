@@ -151,6 +151,26 @@ export function ConfigSectionAdvanced({
           <p className={hintClass}>{t('config.mcpEnabledHint')}</p>
         </div>
         <div>
+          <label htmlFor="correspondent-create-new" className={labelClass}>
+            {t('config.correspondentCreateNew')}
+          </label>
+          <select
+            id="correspondent-create-new"
+            value={config.correspondent_create_new || 'false'}
+            onChange={(e) => handleChange('correspondent_create_new', e.target.value)}
+            className={fieldClass}
+          >
+            <option value="false">{t('common.disabled')}</option>
+            <option value="true">{t('common.enabled')}</option>
+          </select>
+          <p className={hintClass}>{t('config.correspondentCreateNewHint')}</p>
+          {config.correspondent_create_new === 'true' && (
+            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              {t('config.correspondentCreateNewWarning')}
+            </p>
+          )}
+        </div>
+        <div>
           <label htmlFor="document-list-refresh-mode" className={labelClass}>
             {t('config.documentListRefreshMode')}
           </label>

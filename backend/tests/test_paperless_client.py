@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -131,6 +132,168 @@ async def test_update_document_maps_created_date_to_paperless_created_field():
     await client.update_document(1051, created_date="2026-04-28")
 
     assert client.client.patch.await_args.kwargs["json"] == {"created": "2026-04-28"}
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_reuses_existing_without_posting():
+    """A case/whitespace-insensitive match is reused; no POST is made."""
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    client.client.get = AsyncMock(
+        return_value=make_response([{"id": 1, "name": "Deutsche Telekom"}])
+    )
+    client.client.post = AsyncMock()
+
+    corr, created = await client.get_or_create_correspondent("deutsche  telekom")
+
+    assert (corr, created) == ({"id": 1, "name": "Deutsche Telekom"}, False)
+    client.client.post.assert_not_awaited()
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_posts_and_invalidates_cache_when_absent():
+    """An unmatched name is created; the correspondents cache is invalidated so
+    the next lookup re-reads the API and sees the new entry."""
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    client.client.get = AsyncMock(
+        return_value=make_response([{"id": 1, "name": "Amazon"}])
+    )
+    create_response = MagicMock()
+    create_response.raise_for_status = MagicMock()
+    create_response.json.return_value = {"id": 7, "name": "Telekom"}
+    client.client.post = AsyncMock(return_value=create_response)
+
+    corr, created = await client.get_or_create_correspondent("Telekom")
+
+    assert (corr, created) == ({"id": 7, "name": "Telekom"}, True)
+    assert client.client.post.await_args.args[0] == f"{BASE_URL}/api/correspondents/"
+    assert client.client.post.await_args.kwargs["json"] == {"name": "Telekom"}
+    # The internal force_refresh read counts as one GET; the cache was then
+    # invalidated by the create, so a follow-up lookup hits the API again.
+    await client.get_correspondents()
+    assert client.client.get.call_count == 2
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_recovers_from_create_conflict():
+    """If the POST fails (a concurrent create or server-side uniqueness rule),
+    the list is re-read under the lock and the now-present entry is reused."""
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    client.client.get = AsyncMock(
+        side_effect=[
+            make_response([{"id": 1, "name": "Amazon"}]),
+            make_response([{"id": 1, "name": "Amazon"}, {"id": 42, "name": "Telekom"}]),
+        ]
+    )
+    client.client.post = AsyncMock(side_effect=Exception("409 unique"))
+
+    corr, created = await client.get_or_create_correspondent("Telekom")
+
+    assert (corr, created) == ({"id": 42, "name": "Telekom"}, False)
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_reraises_when_conflict_recovery_finds_nothing():
+    """A genuine create failure (not a duplicate) still propagates."""
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    client.client.get = AsyncMock(
+        return_value=make_response([{"id": 1, "name": "Amazon"}])
+    )
+    client.client.post = AsyncMock(side_effect=Exception("500 server error"))
+
+    with pytest.raises(Exception, match="500 server error"):
+        await client.get_or_create_correspondent("Telekom")
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_inflight_get_does_not_cache_stale_snapshot_after_write():
+    """A GET whose fetch was in flight when a write bumped the generation must
+    not store its stale snapshot, or a just-created entry would be masked until
+    the TTL expires."""
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+
+    async def bump_then_return(url, headers=None):
+        # Simulate a create landing between the cache check and this fetch.
+        client._metadata_generation["correspondents"] = (
+            client._metadata_generation.get("correspondents", 0) + 1
+        )
+        return make_response([{"id": 1, "name": "Amazon"}])
+
+    client.client.get = AsyncMock(side_effect=bump_then_return)
+
+    result = await client.get_correspondents()
+
+    assert result == [{"id": 1, "name": "Amazon"}]
+    assert "correspondents" not in client._metadata_cache
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_lock_serializes_concurrent_creates():
+    """Three concurrent get_or_create for the same new name must produce exactly
+    one POST — the lock makes the later callers see (and reuse) what the first
+    created. Without the lock all three would refresh empty and POST."""
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    state = {"items": [], "next_id": 500}
+
+    async def get_mock(url, headers=None):
+        return make_response(list(state["items"]))
+
+    async def post_mock(url, headers=None, json=None):
+        # Latency so, without the lock, the other callers would POST too.
+        await asyncio.sleep(0.02)
+        item = {"id": state["next_id"], "name": json["name"]}
+        state["next_id"] += 1
+        state["items"].append(item)
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json.return_value = item
+        return response
+
+    client.client.get = AsyncMock(side_effect=get_mock)
+    client.client.post = AsyncMock(side_effect=post_mock)
+
+    results = await asyncio.gather(
+        *[client.get_or_create_correspondent("Deutsche Telekom") for _ in range(3)]
+    )
+
+    assert client.client.post.await_count == 1
+    assert {r[0]["id"] for r in results} == {500}
+    assert [r[1] for r in results].count(True) == 1  # exactly one reported "created"
+
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_create_invalidates_only_its_own_key_generation():
+    """A correspondent write must not discard an in-flight fetch of a different
+    collection: the generation counter is per cache key, so a tags GET that was
+    in flight during a correspondent create still caches."""
+    client = PaperlessClient(base_url=BASE_URL, token="token")
+    # Prime nothing; simulate a create bumping the correspondents generation
+    # while a tags GET is mid-flight.
+    async def tags_get(url, headers=None):
+        client._metadata_generation["correspondents"] = (
+            client._metadata_generation.get("correspondents", 0) + 1
+        )
+        return make_response([{"id": 1, "name": "ai-process"}])
+
+    client.client.get = AsyncMock(side_effect=tags_get)
+    result = await client.get_tags()
+
+    assert result == [{"id": 1, "name": "ai-process"}]
+    # The tags snapshot IS cached because only the correspondents key changed.
+    assert "tags" in client._metadata_cache
 
     await client.close()
 
