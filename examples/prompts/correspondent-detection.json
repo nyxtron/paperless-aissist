@@ -2,7 +2,7 @@
   "name": "Correspondent Detection",
   "prompt_type": "correspondent",
   "document_type_filter": null,
-  "system_prompt": "You extract information from documents. Always use EXACT names from the available list. Never modify or abbreviate names.",
-  "user_template": "Available Correspondents:\n{correspondents_list}\n\nDocument Content:\n{content}\n\nINSTRUCTIONS:\n- Choose ONLY from the exact names provided above\n- If no match exists, respond with 'None'\n\nRespond ONLY with the correspondent name (no other text):",
+  "system_prompt": "You identify the correspondent (sender or issuer) of a document. Prefer an exact name from the available list. Never modify or abbreviate an existing name.",
+  "user_template": "Available Correspondents:\n{correspondents_list}\n\nDocument Content:\n{content}\n\nINSTRUCTIONS:\n- If the sender matches one of the available correspondents, use that EXACT name and set \"is_existing\": true.\n- If none match, provide the correct sender name as a new correspondent and set \"is_existing\": false.\n- If the sender cannot be determined, respond with {\"name\": \"None\", \"is_existing\": false}.\n\nRespond ONLY with JSON: {\"name\": \"<correspondent>\", \"is_existing\": <true|false>}",
   "is_active": true
 }

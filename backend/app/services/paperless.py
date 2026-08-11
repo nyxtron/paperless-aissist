@@ -4,8 +4,10 @@ Supports document CRUD, listing with pagination, and metadata entity fetching.
 All requests include bearer token authentication.
 """
 
+import asyncio
 import httpx
 import logging
+import re
 import time
 from typing import Optional, Any
 from urllib.parse import urlparse, urlunparse
@@ -17,6 +19,17 @@ from ..constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_name(name: str) -> str:
+    """Normalize a metadata name for duplicate detection.
+
+    Casefolds and collapses internal whitespace so that names differing only in
+    case or spacing (e.g. "Deutsche  Telekom" vs "deutsche telekom") compare
+    equal. Shared by the client and the correspondent step so both sides of a
+    get-or-create decision agree on what counts as the same entry.
+    """
+    return re.sub(r"\s+", " ", name or "").strip().casefold()
 
 
 class PaperlessClient:
@@ -33,6 +46,15 @@ class PaperlessClient:
         self.token = token
         self.client = httpx.AsyncClient(timeout=PAPERLESS_TIMEOUT)
         self._metadata_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        # Per-cache-key generation, bumped whenever a write invalidates that
+        # key. A GET that was already in flight when its key's generation changed
+        # refuses to store its (now stale) snapshot, so a freshly created entry
+        # cannot be masked until the TTL expires. Keeping it per key means a
+        # correspondent write does not discard an in-flight tags/types fetch.
+        self._metadata_generation: dict[str, int] = {}
+        # Serializes refresh+match+create in get_or_create_correspondent so two
+        # documents proposing the same new correspondent cannot both create it.
+        self._correspondent_write_lock = asyncio.Lock()
         self._request_count = 0
         self._paged_request_count = 0
 
@@ -194,11 +216,15 @@ class PaperlessClient:
         ):
             return cached[1]
 
+        generation_at_start = self._metadata_generation.get(cache_key, 0)
         fetch_size = await self._get_fetch_size()
         separator = "&" if "?" in url else "?"
         paged_url = f"{url}{separator}page_size={fetch_size}"
         data = await self._get_all_pages(paged_url, await self._get_max_pages())
-        self._metadata_cache[cache_key] = (now, data)
+        # Skip storing if a write invalidated this key while the GET was in
+        # flight: our snapshot predates the write and would hide the new entry.
+        if self._metadata_generation.get(cache_key, 0) == generation_at_start:
+            self._metadata_cache[cache_key] = (now, data)
         return data
 
     async def update_document(
@@ -237,6 +263,67 @@ class PaperlessClient:
         logger.debug(f"PATCH {url} → {response.status_code}")
         response.raise_for_status()
         return response.json()
+
+    async def _create_correspondent(self, name: str) -> dict[str, Any]:
+        """POST a new correspondent and return the created entity.
+
+        Invalidates the cached correspondents collection (and bumps the metadata
+        generation) so the new entry is visible to subsequent lookups. Prefer
+        get_or_create_correspondent(); this is the raw write it builds on.
+        """
+        url = f"{self.base_url}/api/correspondents/"
+        logger.debug(f"POST {url} name={name!r}")
+        self._request_count += 1
+        response = await self.client.post(
+            url, headers=self._get_headers(), json={"name": name}
+        )
+        logger.debug(f"POST {url} → {response.status_code}")
+        response.raise_for_status()
+        self._metadata_cache.pop("correspondents", None)
+        self._metadata_generation["correspondents"] = (
+            self._metadata_generation.get("correspondents", 0) + 1
+        )
+        return response.json()
+
+    async def get_or_create_correspondent(
+        self, name: str
+    ) -> tuple[dict[str, Any], bool]:
+        """Return ``(correspondent, created)`` for ``name``.
+
+        Reuses an existing correspondent whenever one matches
+        case/whitespace-insensitively; otherwise creates it. Refresh + match +
+        POST run under a lock so that concurrent documents (Paperless-aissist
+        processes several at once) proposing the same new name cannot each
+        create a duplicate — Paperless only rejects exact-string collisions. The
+        lock is held only around the metadata read and the write, never across
+        the LLM call, which has already completed before this is invoked.
+
+        If the POST fails (a concurrent writer, or a server-side uniqueness
+        rule), the list is re-read under the lock and the now-present entry is
+        reused; the error propagates only when nothing matches afterwards.
+        """
+        target = normalize_name(name)
+        async with self._correspondent_write_lock:
+            correspondents = await self.get_correspondents(force_refresh=True)
+            match = next(
+                (c for c in correspondents if normalize_name(c["name"]) == target),
+                None,
+            )
+            if match:
+                return match, False
+
+            try:
+                created = await self._create_correspondent(name)
+                return created, True
+            except Exception:
+                correspondents = await self.get_correspondents(force_refresh=True)
+                match = next(
+                    (c for c in correspondents if normalize_name(c["name"]) == target),
+                    None,
+                )
+                if match:
+                    return match, False
+                raise
 
     @property
     def is_closed(self) -> bool:
