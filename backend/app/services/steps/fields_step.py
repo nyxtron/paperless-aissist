@@ -7,6 +7,7 @@ Triggered by ai-process or ai-fields tag; uses the extract prompt template
 import logging
 from typing import Any
 
+from ...exceptions import LLMUnavailableError
 from .base import AbstractStep, StepContext, StepResult
 
 logger = logging.getLogger(__name__)
@@ -113,6 +114,9 @@ class FieldsStep(AbstractStep):
                     combined_fields.update(
                         self._extract_fields_from_result(extract_result)
                     )
+            except LLMUnavailableError:
+                # A dead provider must not read as "this document has no fields".
+                raise
             except Exception as e:
                 logger.warning(
                     f"FieldsStep: extract prompt failed for doc {ctx.doc_id}: {e}"
@@ -164,6 +168,8 @@ class FieldsStep(AbstractStep):
                     combined_fields.update(
                         self._extract_fields_from_result(type_result)
                     )
+            except LLMUnavailableError:
+                raise
             except Exception as e:
                 logger.warning(
                     f"FieldsStep: type_specific prompt failed for doc {ctx.doc_id}: {e}"
