@@ -734,6 +734,11 @@ Available Custom Fields: [{custom_fields_list}]"""
                             f"    ✓ {step_instance.name} completed ({duration_ms}ms)"
                         )
 
+                except LLMUnavailableError:
+                    # Belongs to the retry handler below. Caught here it would be filed as
+                    # a permanent document failure, and a provider that is briefly down
+                    # would cost the document its run.
+                    raise
                 except Exception as step_error:
                     duration_ms = int((time.time() - step_start) * 1000)
                     add_step(step_instance.name, "failed", duration_ms, str(step_error))

@@ -19,6 +19,30 @@ logger = logging.getLogger(__name__)
 
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+DATE_KEYS = ("created_date", "confidence", "evidence")
+
+
+def _date_payload(response: Any) -> dict[str, Any] | None:
+    """Pull the date object out of a reply, or None if there isn't one.
+
+    JSON mode hands over the parsed object directly. A reply the parser could
+    not make sense of arrives as {"raw": ...}, and text mode wraps it in
+    {"text": ...} — both may still hold the object as a string, so they get one
+    more attempt before the step gives up.
+    """
+    if not isinstance(response, dict):
+        return None
+    if any(key in response for key in DATE_KEYS):
+        return response
+    wrapped = response.get("text") or response.get("raw")
+    if not isinstance(wrapped, str):
+        return None
+    try:
+        parsed = json.loads(wrapped.strip())
+    except ValueError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
 
 class DateStep(AbstractStep):
     """Detect the original document date when the date modular tag is present."""
@@ -82,19 +106,16 @@ class DateStep(AbstractStep):
             .replace("{current_date}", current_date)
         )
 
-        try:
-            response = await ctx.llm.complete(
-                system_prompt=prompt.system_prompt,
-                user_prompt=user_msg,
-                json_mode=True,
-            )
-            if any(key in response for key in ("created_date", "confidence", "evidence")):
-                payload = response
-            else:
-                raw = (response.get("text") or response.get("raw") or "").strip()
-                payload = json.loads(raw)
-        except Exception as exc:
-            return StepResult(error=f"invalid date response: {exc}")
+        # Deliberately not wrapped in try/except: an unreachable provider has to reach the
+        # processor's retry handler instead of being filed as a bad date reply.
+        response = await ctx.llm.complete(
+            system_prompt=prompt.system_prompt,
+            user_prompt=user_msg,
+            json_mode=True,
+        )
+        payload = _date_payload(response)
+        if payload is None:
+            return StepResult(error="invalid date response: reply carried no date fields")
 
         created_date = payload.get("created_date")
         confidence = str(payload.get("confidence") or "low").lower()

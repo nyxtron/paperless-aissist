@@ -7,29 +7,30 @@ completion. LLMHandler instances are managed by the singleton LLMHandlerManager.
 import asyncio
 import logging
 import json
+import re
 import httpx
-from typing import Optional, Any
-from ..exceptions import LLMUnavailableError
+from typing import Iterator, Optional, Any
+from ..exceptions import LLMError, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
 
-def _extract_json_value(text: str) -> Optional[str]:
-    """Return the first balanced JSON object/array substring in text, or None.
+_WHITESPACE_RE = re.compile(r"\s+")
+_OPENERS = {"}": "{", "]": "["}
 
-    Scans for the first '{' or '[' and returns up to its matching close, honoring
-    quoted strings and escapes so braces inside string values don't confuse it.
+
+def _iter_json_candidates(text: str) -> Iterator[str]:
+    """Yield every balanced JSON object/array in text, in the order they appear.
+
+    One pass, honoring quoted strings and escapes so braces inside string values
+    neither open nor close a candidate. A value cut off mid-object is never
+    completed and therefore never yielded.
     """
-    start = next((i for i, ch in enumerate(text) if ch in "{["), None)
-    if start is None:
-        return None
-    open_ch = text[start]
-    close_ch = "}" if open_ch == "{" else "]"
-    depth = 0
+    stack: list[str] = []
+    start = 0
     in_string = False
     escaped = False
-    for i in range(start, len(text)):
-        ch = text[i]
+    for i, ch in enumerate(text):
         if in_string:
             if escaped:
                 escaped = False
@@ -38,34 +39,136 @@ def _extract_json_value(text: str) -> Optional[str]:
             elif ch == '"':
                 in_string = False
         elif ch == '"':
-            in_string = True
-        elif ch == open_ch:
-            depth += 1
-        elif ch == close_ch:
-            depth -= 1
-            if depth == 0:
-                return text[start : i + 1]
-    return None
+            if stack:
+                in_string = True
+        elif ch in "{[":
+            if not stack:
+                start = i
+            stack.append(ch)
+        elif ch in _OPENERS:
+            if not stack:
+                continue
+            if stack[-1] != _OPENERS[ch]:
+                stack.clear()
+                continue
+            stack.pop()
+            if not stack:
+                yield text[start : i + 1]
 
 
-def _loads_llm_json(content: str) -> Any:
+def _rank_json_candidate(value: Any) -> int:
+    """Rate how much a parsed value resembles an answer rather than commentary.
+
+    Every prompt asks for an object or a list of objects, so those rank highest
+    and an empty list ranks just below — the extract prompt uses it for "nothing
+    found". A bracketed number in prose ("see entry [3]") parses cleanly but can
+    never be an answer, so it scores zero and is passed over.
+    """
+    if isinstance(value, dict):
+        return 2
+    if isinstance(value, list):
+        if value and all(isinstance(item, dict) for item in value):
+            return 2
+        if not value:
+            return 1
+    return 0
+
+
+def _extract_json_value(text: str, prompt: str = "") -> Optional[str]:
+    """Return the JSON value in text most likely to be the model's own answer.
+
+    Models restate the format they were asked for, so a reply can hold both our
+    example and the real answer. Position cannot tell them apart — some models
+    quote the example first, others append it afterwards as a "this is the shape
+    I followed" note — but the example is ours, so pass ``prompt`` and a value
+    repeated from it verbatim gives way to one that is not. It only ever gives
+    way: a reply holding nothing else is the answer, however much it reads like
+    the example, and our prompts print the answers for the empty cases in full.
+
+    Of what remains the best-shaped value wins, ties going to the last, so a
+    bracketed aside like "see entry [3]" cannot displace a real answer.
+    """
+    if not isinstance(text, str):
+        return None
+    echoed = _WHITESPACE_RE.sub("", prompt) if prompt else ""
+    best: Optional[tuple[int, str]] = None
+    best_including_quotes: Optional[tuple[int, str]] = None
+    for candidate in _iter_json_candidates(text):
+        try:
+            value = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        rank = _rank_json_candidate(value)
+        if not rank:
+            continue
+        if best_including_quotes is None or rank >= best_including_quotes[0]:
+            best_including_quotes = (rank, candidate)
+        if value and echoed and _WHITESPACE_RE.sub("", candidate) in echoed:
+            continue
+        if best is None or rank >= best[0]:
+            best = (rank, candidate)
+    # Quoting only decides between an example and an answer standing side by side.
+    # When it would leave nothing at all the reply simply matches what we asked for,
+    # which is what a well-behaved model does — the date prompt spells out its own
+    # "no date found" object, and dropping that would fail the document instead.
+    chosen = best or best_including_quotes
+    return chosen[1] if chosen else None
+
+
+def _loads_llm_json(content: str, prompt: str = "") -> Any:
     """Parse JSON from an LLM response, tolerating code fences and stray prose.
 
     Some models wrap their JSON in a ```json ... ``` fence (or prepend a word)
-    even in JSON mode. Try a direct parse first, then recover the first balanced
-    object/array. Falls back to {"raw": content} so callers keep the old contract.
+    even in JSON mode. Try a direct parse first, then recover the value that
+    reads like the answer. Pass the prompt that produced the reply so an example
+    quoted back from it is not mistaken for one. Falls back to {"raw": content}
+    so callers keep the old contract.
     """
     try:
         return json.loads(content)
     except (json.JSONDecodeError, TypeError):
         pass
-    candidate = _extract_json_value(content)
+    candidate = _extract_json_value(content, prompt)
     if candidate is not None:
         try:
             return json.loads(candidate)
         except (json.JSONDecodeError, TypeError):
             pass
     return {"raw": content}
+
+
+# Worth another run. Any other status means the request itself was refused, and
+# sending it again unchanged would only be refused again.
+RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+def _llm_error_for(error: httpx.HTTPError, message: str) -> LLMError:
+    """Pick the exception that says whether this failure is worth retrying.
+
+    A provider that is unreachable or rate-limiting gets another run. A refused
+    key, an unknown model or a rejected parameter does not: the processor drops
+    its log entry before retrying, so filing those as transient would loop the
+    document every scheduler pass and leave no record of why.
+    """
+    response = getattr(error, "response", None)
+    if response is not None and response.status_code not in RETRYABLE_STATUS:
+        return LLMError(message)
+    return LLMUnavailableError(message)
+
+
+def _http_error_detail(error: httpx.HTTPError) -> str:
+    """Describe an httpx error including the server's own explanation.
+
+    str() on a status error names only the code and URL, so the sentence that
+    says what the server actually objected to gets dropped — which is exactly
+    the part needed to tell a rejected parameter from an unreachable host.
+    """
+    detail = str(error)
+    response = getattr(error, "response", None)
+    if response is None:
+        return detail
+    body = (response.text or "").strip()
+    return f"{detail} - {body[:500]}" if body else detail
 
 
 OPENAI_COMPATIBLE_PROVIDERS = frozenset({"openai", "grok", "openrouter"})
@@ -348,12 +451,13 @@ class LLMHandler:
             )
 
             if json_mode:
-                return _loads_llm_json(content)
+                return _loads_llm_json(content, f"{system_prompt}\n{user_prompt}")
 
             return {"text": content}
         except httpx.HTTPError as e:
-            logger.error(f"Ollama error connecting to {url}: {str(e)}")
-            raise LLMUnavailableError(f"Ollama request failed: {str(e)}")
+            detail = _http_error_detail(e)
+            logger.error(f"Ollama error connecting to {url}: {detail}")
+            raise _llm_error_for(e, f"Ollama request failed: {detail}")
 
     async def _openai_complete(
         self,
@@ -384,8 +488,9 @@ class LLMHandler:
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
 
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        # No response_format: LM Studio rejects json_object outright, and OpenAI
+        # rejects it whenever the word "json" is missing from the prompt, which
+        # users are free to edit away. The reply is parsed leniently instead.
 
         try:
             response = await client.post(url, json=payload)
@@ -397,12 +502,13 @@ class LLMHandler:
             logger.debug(f"OpenAI response[:300]={content[:300]!r} tokens={usage}")
 
             if json_mode:
-                return _loads_llm_json(content)
+                return _loads_llm_json(content, f"{system_prompt}\n{user_prompt}")
 
             return {"text": content}
         except httpx.HTTPError as e:
-            logger.error(f"OpenAI error connecting to {url}: {str(e)}")
-            raise LLMUnavailableError(f"OpenAI request failed: {str(e)}")
+            detail = _http_error_detail(e)
+            logger.error(f"OpenAI error connecting to {url}: {detail}")
+            raise _llm_error_for(e, f"OpenAI request failed: {detail}")
 
     async def vision_complete(
         self,
@@ -578,8 +684,6 @@ class LLMHandler:
                     }
                     if max_tokens is not None:
                         payload["max_tokens"] = max_tokens
-                    if json_mode:
-                        payload["response_format"] = {"type": "json_object"}
 
                     response = await client.post(url, json=payload)
                     response.raise_for_status()
@@ -622,9 +726,6 @@ class LLMHandler:
             if max_tokens is not None:
                 payload["max_tokens"] = max_tokens
 
-            if json_mode:
-                payload["response_format"] = {"type": "json_object"}
-
             response = await client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
@@ -639,8 +740,9 @@ class LLMHandler:
 
             return {"text": text_content}
         except httpx.HTTPError as e:
-            logger.error(f"OpenAI Vision error: {str(e)}")
-            raise Exception(f"OpenAI vision request failed: {str(e)}")
+            detail = _http_error_detail(e)
+            logger.error(f"OpenAI Vision error: {detail}")
+            raise Exception(f"OpenAI vision request failed: {detail}")
 
 
 class LLMHandlerManager:
