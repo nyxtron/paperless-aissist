@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/status")
+# Two of the three endpoints sit under /process/, so that is the path people reach for
+# when they need the third. Kept out of the schema: /status stays the documented one,
+# this only spares the guess a 404 that our JSON error body makes hard to spot.
+@router.get("/process/status", include_in_schema=False)
 async def status():
     """Return the current processing state."""
     logger.info("Automation API status requested")
