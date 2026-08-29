@@ -368,6 +368,9 @@ def start_scheduler(interval_minutes: int = 5):
         trigger=IntervalTrigger(minutes=interval_minutes),
         id=job_id,
         replace_existing=True,
+        # Check once right away; waiting a full interval before the first run makes
+        # pressing Start look like nothing happened.
+        next_run_time=datetime.now(timezone.utc),
     )
     scheduler.start()
     save_scheduler_config(True, interval_minutes)
