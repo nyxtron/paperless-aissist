@@ -605,6 +605,24 @@ Available Custom Fields: [{custom_fields_list}]"""
         tag_id_to_name = {t["id"]: t["name"] for t in all_tags}
         doc_tag_names = {tag_id_to_name.get(tid, "") for tid in doc.get("tags", [])}
 
+        step_instances = await self._build_steps()
+        config_dict = await self._get_config_dict()
+
+        # The batch list is a snapshot. By the time a document's turn comes its trigger
+        # tags may already be gone, and running anyway would write metadata and swap in
+        # the processed tag for a document nobody asked about any more.
+        if not any(step.can_handle(doc_tag_names) for step in step_instances):
+            logger.info(
+                "  - Document %s skipped: no trigger tag left to act on", doc_id
+            )
+            return {
+                "success": True,
+                "skipped": True,
+                "document_id": doc_id,
+                "title": doc.get("title"),
+                "reason": "no trigger tag left to act on",
+            }
+
         log_id = await self._log_processing(
             doc_id=doc_id,
             doc_title=doc.get("title"),
@@ -615,9 +633,6 @@ Available Custom Fields: [{custom_fields_list}]"""
             error_message=None,
             processing_time_ms=0,
         )
-
-        step_instances = await self._build_steps()
-        config_dict = await self._get_config_dict()
         trigger_metadata = self._get_processing_trigger_metadata(
             doc_tag_names,
             config_dict,
@@ -1062,8 +1077,13 @@ Available Custom Fields: [{custom_fields_list}]"""
             result = await self.process_document(doc["id"])
             results.append(result)
 
-        processed = sum(1 for result in results if result.get("success") is True)
-        failed = len(results) - processed
+        skipped = sum(1 for result in results if result.get("skipped"))
+        processed = sum(
+            1
+            for result in results
+            if result.get("success") is True and not result.get("skipped")
+        )
+        failed = len(results) - processed - skipped
         metrics = self.paperless.get_metrics()
         logger.debug(
             "Legacy process-tag run: processed=%d, requests=%d (paged=%d), duration=%.2fs",
