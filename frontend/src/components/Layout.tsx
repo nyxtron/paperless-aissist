@@ -121,7 +121,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 md:flex">
-      <aside className="hidden md:flex md:flex-col w-72 bg-white border-r border-gray-200">
+      <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-screen md:overflow-y-auto w-72 bg-white border-r border-gray-200">
         {navContent}
       </aside>
 

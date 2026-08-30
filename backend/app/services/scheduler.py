@@ -368,6 +368,9 @@ def start_scheduler(interval_minutes: int = 5):
         trigger=IntervalTrigger(minutes=interval_minutes),
         id=job_id,
         replace_existing=True,
+        # Check once right away; waiting a full interval before the first run makes
+        # pressing Start look like nothing happened.
+        next_run_time=datetime.now(timezone.utc),
     )
     scheduler.start()
     save_scheduler_config(True, interval_minutes)
@@ -560,14 +563,19 @@ async def process_modular_tagged_documents() -> dict:
         *[_limited_process(d) for d in doc_ids], return_exceptions=True
     )
 
+    # A document whose trigger tag disappeared while it queued is neither work done
+    # nor a failure, so it stays out of both counts.
+    scored_results = [
+        r for r in results if isinstance(r, Exception) or not r.get("skipped")
+    ]
     successful_results = [
         r
-        for r in results
+        for r in scored_results
         if not isinstance(r, Exception) and r.get("success") is True
     ]
     failed_results = [
         r
-        for r in results
+        for r in scored_results
         if isinstance(r, Exception) or r.get("success") is not True
     ]
     processed = len(successful_results)

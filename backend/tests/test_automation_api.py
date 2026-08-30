@@ -84,6 +84,38 @@ def test_automation_status_accepts_generated_token(client):
     assert "current_doc_id" not in data
 
 
+def test_status_is_also_reachable_under_the_process_prefix(client):
+    """Start and stop live under /process/, so that is where people look for status.
+
+    Guessing it used to land on a 404 whose JSON body reads like a valid reply, which
+    left at least one Home Assistant sensor reporting "idle" indefinitely (#42).
+    """
+    headers, _ = _automation_headers(client)
+
+    canonical = client.get("/api/automation/status", headers=headers)
+    guessed = client.get("/api/automation/process/status", headers=headers)
+
+    assert guessed.status_code == 200
+    assert guessed.json().keys() == canonical.json().keys()
+    assert guessed.json()["is_processing"] == canonical.json()["is_processing"]
+
+
+def test_the_alias_is_behind_the_same_token(client):
+    """Whatever the canonical path answers unauthenticated, the alias answers too."""
+    canonical = client.get("/api/automation/status")
+    guessed = client.get("/api/automation/process/status")
+
+    assert canonical.status_code == 401
+    assert guessed.status_code == canonical.status_code
+
+
+def test_only_the_documented_status_path_is_in_the_schema(client):
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert "/api/automation/status" in paths
+    assert "/api/automation/process/status" not in paths
+
+
 def test_automation_status_reports_active_documents_with_runtime(client):
     headers, _ = _automation_headers(client)
     scheduler_service._set_processing()
