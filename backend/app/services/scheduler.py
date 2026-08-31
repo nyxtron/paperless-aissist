@@ -530,7 +530,9 @@ async def process_modular_tagged_documents() -> dict:
         return {"success": True, "processed": 0, "results": []}
 
     docs = await paperless.list_documents(tags_any=sorted(trigger_tag_ids))
-    doc_ids = {doc["id"] for doc in docs}
+    # Dedupe without losing the order: a set would hand the documents out by hash,
+    # so the run would ignore the order the Process list shows.
+    doc_ids = list(dict.fromkeys(doc["id"] for doc in docs))
 
     logger.debug(
         "Scheduler modular scan: %d docs matched across %d trigger tags",
