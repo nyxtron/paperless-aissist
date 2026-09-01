@@ -46,6 +46,33 @@ _in_flight_docs: set[int] = set()
 _in_flight_lock = asyncio.Lock()
 
 
+def close_interrupted_runs() -> int:
+    """Settle log rows left at "processing" by a run that never finished.
+
+    A row is written when a document starts and only rewritten when the run
+    ends, so a restart mid-batch leaves it saying "processing" for good and the
+    dashboard keeps showing that document as busy. Nothing else reconciles it:
+    the scheduler clears its own state file on startup but not these rows.
+
+    Returns how many rows were settled.
+    """
+    from ..database import get_session
+
+    with get_session() as session:
+        stmt = select(ProcessingLog).where(ProcessingLog.status == "processing")
+        stale = list(session.exec(stmt))
+        for row in stale:
+            row.status = "failed"
+            row.error_message = "Processing was interrupted before it finished"
+            session.add(row)
+    if stale:
+        logger.warning(
+            "Settled %d processing log entries left behind by an interrupted run",
+            len(stale),
+        )
+    return len(stale)
+
+
 class DocumentProcessor:
     """Coordinates step-based AI document processing.
 

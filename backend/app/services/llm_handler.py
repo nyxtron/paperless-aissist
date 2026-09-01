@@ -156,6 +156,28 @@ def _llm_error_for(error: httpx.HTTPError, message: str) -> LLMError:
     return LLMUnavailableError(message)
 
 
+# A reply that ends for any of these reasons is incomplete, whatever text came with
+# it. A page that is simply blank always ends with "stop", so these never fire on the
+# back of a duplex scan — measured against Ollama and the OpenAI-compatible servers.
+TRUNCATED_FINISH_REASONS = frozenset({"length", "content_filter"})
+
+
+def _incomplete_reason(data: dict) -> Optional[str]:
+    """Name the reason a reply was cut short, or None if it ran to the end.
+
+    Only positively bad values count. An absent field means the server does not
+    report one, and treating that as a failure would break models that leave it
+    out entirely.
+    """
+    reason = data.get("done_reason")
+    if reason is None:
+        choices = data.get("choices") or [{}]
+        reason = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
+    if isinstance(reason, str) and reason in TRUNCATED_FINISH_REASONS:
+        return reason
+    return None
+
+
 def _http_error_detail(error: httpx.HTTPError) -> str:
     """Describe an httpx error including the server's own explanation.
 
@@ -617,8 +639,16 @@ class LLMHandler:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
                 data = response.json()
+                cut_short = _incomplete_reason(data)
+                if cut_short:
+                    raise LLMError(
+                        f"Ollama vision reply for page {i + 1} was cut short "
+                        f"({cut_short}); the page was not fully read"
+                    )
                 content = data.get("message", {}).get("content", "").strip()
                 combined_text.append(content)
+            except LLMError:
+                raise
             except Exception as e:
                 logger.error(
                     f"Ollama Vision error on page {i + 1}: {type(e).__name__}, {repr(e)}"
@@ -665,7 +695,7 @@ class LLMHandler:
                     f"OpenAI Vision: sending JPEG images page-by-page ({len(images)} page(s))"
                 )
                 combined_text = []
-                for img in images:
+                for page_no, img in enumerate(images, start=1):
                     img_b64 = base64.b64encode(img).decode("utf-8")
                     content = []
                     if user_prompt:
@@ -691,6 +721,12 @@ class LLMHandler:
                     response = await client.post(url, json=payload)
                     response.raise_for_status()
                     data = response.json()
+                    cut_short = _incomplete_reason(data)
+                    if cut_short:
+                        raise LLMError(
+                            f"OpenAI vision reply for page {page_no} was cut short "
+                            f"({cut_short}); the page was not fully read"
+                        )
                     content_text = data["choices"][0]["message"]["content"].strip()
                     combined_text.append(content_text)
 
@@ -733,6 +769,12 @@ class LLMHandler:
             response.raise_for_status()
             data = response.json()
 
+            cut_short = _incomplete_reason(data)
+            if cut_short:
+                raise LLMError(
+                    f"OpenAI vision reply was cut short ({cut_short}); "
+                    "the document was not fully read"
+                )
             text_content = data["choices"][0]["message"]["content"].strip()
 
             if json_mode:

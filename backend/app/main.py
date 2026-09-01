@@ -140,6 +140,10 @@ async def lifespan(app: FastAPI):
 
     clear_processing_state()
 
+    from .services.processor import close_interrupted_runs
+
+    close_interrupted_runs()
+
     _logger = logging.getLogger(__name__)
 
     _auth_env = os.environ.get("AUTH_ENABLED")
