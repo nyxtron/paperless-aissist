@@ -623,9 +623,12 @@ class LLMHandler:
                 logger.error(
                     f"Ollama Vision error on page {i + 1}: {type(e).__name__}, {repr(e)}"
                 )
-                raise Exception(
-                    f"Ollama vision request failed on page {i + 1}: {repr(e)}"
-                )
+                message = f"Ollama vision request failed on page {i + 1}: {repr(e)}"
+                # Same shape as the text paths, so a run can tell a dead vision
+                # endpoint from a document it simply could not read.
+                if isinstance(e, httpx.HTTPError):
+                    raise _llm_error_for(e, message)
+                raise LLMError(message)
 
         full_text = "\n\n".join(combined_text)
 
@@ -742,7 +745,7 @@ class LLMHandler:
         except httpx.HTTPError as e:
             detail = _http_error_detail(e)
             logger.error(f"OpenAI Vision error: {detail}")
-            raise Exception(f"OpenAI vision request failed: {detail}")
+            raise _llm_error_for(e, f"OpenAI vision request failed: {detail}")
 
 
 class LLMHandlerManager:
