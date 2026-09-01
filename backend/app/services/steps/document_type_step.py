@@ -7,6 +7,7 @@ prompt to classify the document and set ctx.detected_type for downstream steps.
 import logging
 from typing import Any
 
+from ...exceptions import LLMError
 from .base import AbstractStep, StepContext, StepResult
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,11 @@ class DocumentTypeStep(AbstractStep):
                     return StepResult(data={"document_type": dt_id}, error=None)
 
             return StepResult(data={}, error=None)
-
+        except LLMError:
+            # A provider that is down or refusing fails every document alike.
+            # Filed as a step error it looks like a fault of this document, and
+            # the run has no way to notice it should stop.
+            raise
         except Exception as e:
             logger.warning(f"DocumentTypeStep: failed for doc {ctx.doc_id}: {e}")
             return StepResult(data={}, error=str(e))

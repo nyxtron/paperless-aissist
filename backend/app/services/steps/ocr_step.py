@@ -7,6 +7,7 @@ vision LLM and stores the result as the document's content.
 import logging
 from typing import Any
 
+from ...exceptions import LLMError
 from .base import AbstractStep, StepContext, StepResult
 from ..vision import VisionPipeline
 
@@ -79,7 +80,11 @@ class OCRStep(AbstractStep):
             logger.debug(f"OCRStep: extracted {len(text)} chars for doc {ctx.doc_id}")
 
             return StepResult(data={"text": text}, error=None)
-
+        except LLMError:
+            # A provider that is down or refusing fails every document alike.
+            # Filed as a step error it looks like a fault of this document, and
+            # the run has no way to notice it should stop.
+            raise
         except Exception as e:
             logger.warning(f"OCRStep: vision OCR failed for doc {ctx.doc_id}: {e}")
             return StepResult(data={}, error=str(e))

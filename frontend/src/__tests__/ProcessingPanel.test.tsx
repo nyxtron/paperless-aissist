@@ -286,3 +286,61 @@ describe('ProcessingPanel', () => {
     expect(screen.getByText(/Rechnungsdatum: Dienstag, 28. April 2026/)).toBeInTheDocument()
   })
 })
+
+describe('ProcessingPanel stopped-run notice', () => {
+  beforeEach(() => {
+    clearProcessingDocumentCacheForTests()
+    mocks.mockGetConfig.mockResolvedValue({ data: { value: 'automatic' } })
+    mocks.mockGetTagged.mockResolvedValue({
+      data: { paperless_url: 'http://paperless.test/', documents: [] },
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('explains why a run gave up early', async () => {
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        interval_minutes: 5,
+        next_run: null,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_stop: {
+          reason: 'Ollama request failed: All connection attempts failed',
+          failures: 3,
+          at: '2026-09-01T08:24:49+00:00',
+        },
+      },
+    })
+
+    render(<ProcessingPanel />)
+
+    await waitFor(() => {
+      expect(screen.getByText('processing.runStoppedTitle')).toBeInTheDocument()
+    })
+  })
+
+  it('says nothing when no run was stopped', async () => {
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        interval_minutes: 5,
+        next_run: null,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_stop: null,
+      },
+    })
+
+    render(<ProcessingPanel />)
+
+    await waitFor(() => expect(mocks.mockGetStatus).toHaveBeenCalled())
+    expect(screen.queryByText('processing.runStoppedTitle')).not.toBeInTheDocument()
+  })
+})

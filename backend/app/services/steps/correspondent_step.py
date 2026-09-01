@@ -16,6 +16,7 @@ from typing import Any, Optional
 
 from ..llm_handler import _extract_json_value
 from ..paperless import normalize_name
+from ...exceptions import LLMError
 from .base import AbstractStep, StepContext, StepResult
 
 logger = logging.getLogger(__name__)
@@ -344,6 +345,11 @@ class CorrespondentStep(AbstractStep):
                 },
             )
 
+        except LLMError:
+            # A provider that is down or refusing fails every document alike.
+            # Filed as a step error it looks like a fault of this document, and
+            # the run has no way to notice it should stop.
+            raise
         except Exception as e:
             logger.warning(f"CorrespondentStep: failed for doc {ctx.doc_id}: {e}")
             return StepResult(data={}, error=str(e))

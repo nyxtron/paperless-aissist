@@ -163,3 +163,53 @@ async def test_an_unreachable_host_stays_retryable():
     with pytest.raises(LLMUnavailableError):
         await handler.complete("system", "user", json_mode=True)
     await handler.close()
+
+
+class TestVisionErrorsAreClassifiedLikeTextOnes:
+    """The vision paths used to raise a bare Exception (issue #46).
+
+    That made them invisible to anything reasoning about provider failures: an
+    ai-ocr batch against a dead vision endpoint ran every document instead of
+    stopping, and a transient outage was filed as a permanent failure.
+    """
+
+    def _vision_handler(self, provider: str, transport: httpx.AsyncBaseTransport):
+        handler = LLMHandler(
+            provider=provider, model="vision-model", api_base="http://vision.test/v1"
+        )
+        handler._client = httpx.AsyncClient(
+            base_url=handler.api_base,
+            headers={"Content-Type": "application/json"},
+            transport=transport,
+        )
+        return handler
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider", ["openai", "ollama"])
+    async def test_an_unreachable_vision_endpoint_is_retryable(self, provider):
+        class DeadTransport(httpx.AsyncBaseTransport):
+            async def handle_async_request(self, request):
+                raise httpx.ConnectError("no route to host", request=request)
+
+        handler = self._vision_handler(provider, DeadTransport())
+
+        with pytest.raises(LLMUnavailableError):
+            await handler.vision_complete(
+                system_prompt="Read this", images=[b"page"], json_mode=False
+            )
+        await handler.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider", ["openai", "ollama"])
+    async def test_a_refused_vision_request_is_permanent(self, provider):
+        handler = self._vision_handler(
+            provider, StatusTransport(401, {"error": "invalid api key"})
+        )
+
+        with pytest.raises(LLMError) as excinfo:
+            await handler.vision_complete(
+                system_prompt="Read this", images=[b"page"], json_mode=False
+            )
+        await handler.close()
+
+        assert not isinstance(excinfo.value, LLMUnavailableError)

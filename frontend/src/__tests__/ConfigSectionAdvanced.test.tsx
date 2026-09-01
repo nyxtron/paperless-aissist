@@ -129,6 +129,23 @@ describe('ConfigSectionAdvanced', () => {
     expect(onSave).toHaveBeenCalledWith('max_concurrent_processing', '1')
   })
 
+  it('saves the consecutive failure limit', () => {
+    const onSave = vi.fn()
+
+    render(
+      <ConfigSectionAdvanced
+        config={{ max_consecutive_failures: '3' }}
+        onSave={onSave}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('config.maxConsecutiveFailures'), {
+      target: { value: '0' },
+    })
+
+    expect(onSave).toHaveBeenCalledWith('max_consecutive_failures', '0')
+  })
+
   it('saves document list refresh mode changes', () => {
     const onSave = vi.fn()
 

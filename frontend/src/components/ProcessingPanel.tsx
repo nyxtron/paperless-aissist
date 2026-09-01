@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { configApi, documentsApi, schedulerApi } from '../api/client'
@@ -314,6 +314,24 @@ export default function ProcessingPanel() {
               })}
             </span>
           )}
+        </div>
+      )}
+
+      {schedulerStatus?.last_stop && !schedulerStatus.is_processing && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle size={16} />
+            <span>{t('processing.runStoppedTitle')}</span>
+            <span className="font-normal text-amber-700">
+              {new Date(schedulerStatus.last_stop.at).toLocaleString()}
+            </span>
+          </div>
+          <p className="mt-1">
+            {t('processing.runStoppedBody', {
+              failures: schedulerStatus.last_stop.failures,
+              reason: schedulerStatus.last_stop.reason,
+            })}
+          </p>
         </div>
       )}
 

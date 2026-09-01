@@ -178,6 +178,8 @@
     "ocrFixMaxCharsHint": "Die OCR-Korrektur wird oberhalb dieser Länge übersprungen, damit langer Dokumenttext nicht durch ein gekürztes KI-Ergebnis ersetzt wird.",
     "maxConcurrentProcessing": "Parallele Dokumente",
     "maxConcurrentProcessingHint": "Wie viele Dokumente gleichzeitig verarbeitet werden. Für sequenzielle Verarbeitung auf schwacher Hardware auf 1 stellen.",
+    "maxConsecutiveFailures": "Abbruch nach Fehlern",
+    "maxConsecutiveFailuresHint": "Beendet einen Lauf nach so vielen Provider-Fehlern hintereinander, damit sich ein Stapel nicht durch alle Dokumente mahlt, während der KI-Anbieter nicht erreichbar ist. Die Dokumente behalten ihre Tags und werden beim nächsten Lauf erneut geholt. 0 schaltet den Abbruch ab.",
     "automationApi": "Automation API",
     "automationApiHint": "Nutze einen eigenen Paperless-AIssist Token, um die Verarbeitung über Cron, Home Assistant oder eigene Skripte zu starten.",
     "automationToken": "Automation API-Token",
@@ -297,7 +299,9 @@
     "processingBtn": "Verarbeitung",
     "processBtn": "Verarbeiten",
     "processedCount": "{{count}} Dokumente verarbeitet",
-    "alreadyProcessing": "Verarbeitung läuft bereits"
+    "alreadyProcessing": "Verarbeitung läuft bereits",
+    "runStoppedTitle": "Letzter Lauf vorzeitig beendet",
+    "runStoppedBody": "{{failures}} Provider-Fehler in Folge: {{reason}}"
   },
   "logs": {
     "title": "System-Protokolle",

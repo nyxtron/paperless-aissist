@@ -133,7 +133,9 @@ class PaperlessClient:
         max_page_limit: Optional[int] = None,
     ) -> list[dict]:
         fetch_size = await self._get_fetch_size()
-        params: dict[str, Any] = {"page_size": fetch_size}
+        # Pin the order rather than relying on the Paperless default, so paging
+        # through a large result set cannot reshuffle it between pages.
+        params: dict[str, Any] = {"page_size": fetch_size, "ordering": "-created"}
         if tags:
             params["tags__id__all"] = ",".join(map(str, tags))
         if tags_any:
