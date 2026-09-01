@@ -76,6 +76,20 @@ class OCRStep(AbstractStep):
             )
             text = vision_result.get("text", "") or vision_result.get("raw", "")
 
+            # Pages are joined with blank lines, so a document whose pages all came
+            # back empty reads as "\n\n" — truthy, and enough to overwrite the
+            # content Paperless already had with nothing.
+            if not text.strip():
+                logger.warning(
+                    f"OCRStep: vision OCR returned no text for doc {ctx.doc_id}, "
+                    "leaving the existing content alone"
+                )
+                return StepResult(
+                    data={},
+                    details={"reason": "vision OCR returned no text"},
+                    skipped=True,
+                )
+
             ctx.ocr_text = text
             logger.debug(f"OCRStep: extracted {len(text)} chars for doc {ctx.doc_id}")
 
