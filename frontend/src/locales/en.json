@@ -178,6 +178,8 @@
     "ocrFixMaxCharsHint": "OCR fix is skipped above this length to avoid replacing long document text with a shortened LLM result.",
     "maxConcurrentProcessing": "Parallel Documents",
     "maxConcurrentProcessingHint": "How many documents are processed at the same time. Set to 1 for sequential processing on low-power hardware.",
+    "maxConsecutiveFailures": "Stop After Failures",
+    "maxConsecutiveFailuresHint": "End a run after this many provider failures in a row, so a batch does not grind through every document while the AI provider is down. Tagged documents keep their tags and are picked up again on the next run. Set to 0 to never stop.",
     "automationApi": "Automation API",
     "automationApiHint": "Use a dedicated Paperless-AIssist token to trigger processing from cron, Home Assistant, or custom scripts.",
     "automationToken": "Automation API token",
@@ -297,7 +299,9 @@
     "processingBtn": "Processing",
     "processBtn": "Process",
     "processedCount": "Processed {{count}} documents",
-    "alreadyProcessing": "Already processing"
+    "alreadyProcessing": "Already processing",
+    "runStoppedTitle": "Last run stopped early",
+    "runStoppedBody": "{{failures}} provider failures in a row: {{reason}}"
   },
   "logs": {
     "title": "System Logs",

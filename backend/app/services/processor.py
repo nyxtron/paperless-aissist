@@ -37,7 +37,7 @@ from ..models import (
 )
 from .paperless import PaperlessClient
 from .llm_handler import LLMHandlerManager
-from ..exceptions import LLMUnavailableError
+from ..exceptions import LLMError, LLMUnavailableError
 from ..constants import CONTENT_TRUNCATION_LIMIT, TITLE_MAX_LENGTH
 from .vision import VisionPipeline
 from .config_cache import ConfigCache
@@ -666,6 +666,7 @@ Available Custom Fields: [{custom_fields_list}]"""
 
         step_records: list[dict] = []
         accumulated_update: dict[str, Any] = {}
+        provider_failure = False
 
         def add_step(
             name: str,
@@ -754,6 +755,19 @@ Available Custom Fields: [{custom_fields_list}]"""
                     # a permanent document failure, and a provider that is briefly down
                     # would cost the document its run.
                     raise
+                except LLMError as provider_error:
+                    # Refused by the provider rather than caused by this document: a bad
+                    # key or an unknown model fails every document the same way, so a
+                    # batch needs to tell it apart from one broken PDF.
+                    duration_ms = int((time.time() - step_start) * 1000)
+                    add_step(
+                        step_instance.name, "failed", duration_ms, str(provider_error)
+                    )
+                    logger.warning(
+                        f"Step {step_instance.name} failed for doc {doc_id}: {provider_error}"
+                    )
+                    provider_failure = True
+                    break
                 except Exception as step_error:
                     duration_ms = int((time.time() - step_start) * 1000)
                     add_step(step_instance.name, "failed", duration_ms, str(step_error))
@@ -801,6 +815,7 @@ Available Custom Fields: [{custom_fields_list}]"""
             )
             return {
                 "success": False,
+                "provider_failure": provider_failure,
                 "document_id": doc_id,
                 "title": doc.get("title"),
                 "trigger_tags": trigger_metadata["trigger_tags"],
@@ -1072,10 +1087,33 @@ Available Custom Fields: [{custom_fields_list}]"""
 
         documents = await self.paperless.list_documents(tags=[process_tag_id])
 
+        from .scheduler import (
+            get_max_consecutive_failures,
+            is_provider_failure,
+            record_run_stop,
+        )
+
+        failure_limit = await get_max_consecutive_failures()
+        consecutive_failures = 0
+
         results = []
         for doc in documents:
             result = await self.process_document(doc["id"])
             results.append(result)
+
+            if is_provider_failure(result):
+                consecutive_failures += 1
+                if failure_limit and consecutive_failures >= failure_limit:
+                    reason = result.get("error", "provider unavailable")
+                    logger.warning(
+                        "Run stopped after %d consecutive provider failures: %s",
+                        consecutive_failures,
+                        reason,
+                    )
+                    record_run_stop(reason, consecutive_failures)
+                    break
+            elif result.get("success") and not result.get("skipped"):
+                consecutive_failures = 0
 
         skipped = sum(1 for result in results if result.get("skipped"))
         processed = sum(

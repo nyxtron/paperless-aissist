@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_CONCURRENT_PROCESSING = 3
+_DEFAULT_MAX_CONSECUTIVE_FAILURES = 3
 
 
 async def get_max_concurrent_processing() -> int:
@@ -32,6 +33,36 @@ async def get_max_concurrent_processing() -> int:
         logger.warning(f"Could not read max_concurrent_processing: {e}")
         return _DEFAULT_MAX_CONCURRENT_PROCESSING
     return max(1, value)
+
+async def get_max_consecutive_failures() -> int:
+    """Return how many provider failures in a row end a run (0 disables it)."""
+    from .config_cache import ConfigCache
+
+    try:
+        cache = await ConfigCache.get_instance()
+        value = int(await cache.get("max_consecutive_failures", ""))
+    except (ValueError, TypeError):
+        return _DEFAULT_MAX_CONSECUTIVE_FAILURES
+    except Exception as e:
+        logger.warning(f"Could not read max_consecutive_failures: {e}")
+        return _DEFAULT_MAX_CONSECUTIVE_FAILURES
+    return max(0, value)
+
+
+def is_provider_failure(result: Any) -> bool:
+    """True when the run failed on the provider rather than on the document.
+
+    A refused key or an unreachable host fails every document alike, so it is
+    worth stopping for. One unreadable PDF is not.
+    """
+    from ..exceptions import LLMError
+
+    if isinstance(result, Exception):
+        return isinstance(result, LLMError)
+    if not isinstance(result, dict):
+        return False
+    return bool(result.get("retryable") or result.get("provider_failure"))
+
 
 scheduler: Optional[AsyncIOScheduler] = None
 job_id = "auto_process_documents"
@@ -64,6 +95,7 @@ def _default_state() -> dict[str, Any]:
         "is_processing": False,
         "started_at": None,
         "active_documents": [],
+        "last_stop": None,
     }
 
 
@@ -162,7 +194,23 @@ def _set_processing(
 def _clear_processing():
     """Reset the processing state file (called after each run or on interrupt)."""
     with lock:
+        previous = _load_state()
         state = _default_state()
+        # Why the last run stopped outlives the run itself, otherwise the one place
+        # that explains the silence is wiped the moment the run ends.
+        state["last_stop"] = previous.get("last_stop")
+        _save_state(state)
+
+
+def record_run_stop(reason: str, failures: int):
+    """Note that a run gave up early, for the status endpoint to report."""
+    with lock:
+        state = _load_state()
+        state["last_stop"] = {
+            "reason": reason,
+            "failures": failures,
+            "at": _now_iso(),
+        }
         _save_state(state)
 
 
@@ -403,6 +451,7 @@ def get_scheduler_status() -> dict:
             "active_documents": processing_state["active_documents"],
             "started_at": processing_state["started_at"],
             "running_seconds": processing_state["running_seconds"],
+            "last_stop": processing_state.get("last_stop"),
         }
 
     job = scheduler.get_job(job_id)
@@ -416,6 +465,7 @@ def get_scheduler_status() -> dict:
             "active_documents": processing_state["active_documents"],
             "started_at": processing_state["started_at"],
             "running_seconds": processing_state["running_seconds"],
+            "last_stop": processing_state.get("last_stop"),
         }
 
     return {
@@ -427,6 +477,7 @@ def get_scheduler_status() -> dict:
         "active_documents": processing_state["active_documents"],
         "started_at": processing_state["started_at"],
         "running_seconds": processing_state["running_seconds"],
+        "last_stop": processing_state.get("last_stop"),
     }
 
 
@@ -557,13 +608,45 @@ async def process_modular_tagged_documents() -> dict:
     )
     sem = asyncio.Semaphore(max_parallel)
 
+    failure_limit = await get_max_consecutive_failures()
+    consecutive_failures = 0
+    stop: dict[str, Any] = {}
+
     async def _limited_process(doc_id: int):
+        nonlocal consecutive_failures
+        # gather cannot be cut short, so the queued coroutines bow out themselves.
+        # Documents already running are left to finish.
+        if stop:
+            return {"success": True, "skipped": True, "reason": "run stopped"}
         async with sem:
-            return await process_one(doc_id)
+            if stop:
+                return {"success": True, "skipped": True, "reason": "run stopped"}
+            result = await process_one(doc_id)
+
+        if is_provider_failure(result):
+            consecutive_failures += 1
+            if failure_limit and consecutive_failures >= failure_limit and not stop:
+                stop["reason"] = (
+                    result.get("error", "provider unavailable")
+                    if isinstance(result, dict)
+                    else str(result)
+                )
+                stop["failures"] = consecutive_failures
+        elif isinstance(result, dict) and result.get("success") and not result.get("skipped"):
+            consecutive_failures = 0
+        return result
 
     results = await asyncio.gather(
         *[_limited_process(d) for d in doc_ids], return_exceptions=True
     )
+
+    if stop:
+        logger.warning(
+            "Run stopped after %d consecutive provider failures: %s",
+            stop["failures"],
+            stop["reason"],
+        )
+        record_run_stop(stop["reason"], stop["failures"])
 
     # A document whose trigger tag disappeared while it queued is neither work done
     # nor a failure, so it stays out of both counts.

@@ -213,6 +213,20 @@ export function ConfigSectionAdvanced({
           />
           <p className={hintClass}>{t('config.maxConcurrentProcessingHint')}</p>
         </div>
+        <div>
+          <label htmlFor="max-consecutive-failures" className={labelClass}>
+            {t('config.maxConsecutiveFailures')}
+          </label>
+          <input
+            id="max-consecutive-failures"
+            type="number"
+            min="0"
+            value={config.max_consecutive_failures || '3'}
+            onChange={(e) => handleChange('max_consecutive_failures', e.target.value)}
+            className={fieldClass}
+          />
+          <p className={hintClass}>{t('config.maxConsecutiveFailuresHint')}</p>
+        </div>
         <div className="sm:col-span-2 lg:col-span-3 border-t pt-4 mt-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">

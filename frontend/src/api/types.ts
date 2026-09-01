@@ -94,5 +94,10 @@ export interface SchedulerStatus {
   }>
   started_at?: string | null
   running_seconds?: number | null
+  last_stop?: {
+    reason: string
+    failures: number
+    at: string
+  } | null
   paperless_url?: string | null
 }
