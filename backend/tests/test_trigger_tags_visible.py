@@ -113,6 +113,62 @@ class TestTheLogRemembersThem:
         assert stored == "ai-fields"
         assert status == "success"
 
+    @pytest.mark.asyncio
+    async def test_a_running_document_already_shows_them(
+        self, mock_paperless, mock_llm
+    ):
+        """Otherwise the dashboard says nothing until the run has finished."""
+        from unittest.mock import MagicMock as _MagicMock
+
+        from app.services.steps.base import StepResult
+
+        mock_llm.provider = "ollama"
+        mock_llm.model = "qwen"
+        mock_paperless.get_document = AsyncMock(
+            return_value={"id": 12, "title": "Invoice", "content": "x", "tags": [1]}
+        )
+
+        step = _MagicMock()
+        step.name = "title"
+        step.can_handle.return_value = True
+        step.execute = AsyncMock(return_value=StepResult(data={}))
+        step.update_metadata = AsyncMock()
+
+        processor = DocumentProcessor(paperless=mock_paperless)
+        processor._build_steps = AsyncMock(return_value=[step])
+        processor._get_config_dict = AsyncMock(
+            return_value={"modular_tag_title": "ai-title"}
+        )
+        processor._get_config = AsyncMock(side_effect=lambda k, d=None: d)
+        processor._fetch_metadata = AsyncMock(
+            return_value={
+                "tags": [{"id": 1, "name": "ai-title"}],
+                "correspondents": [],
+                "document_types": [],
+                "custom_fields": [],
+            }
+        )
+        processor._apply_metadata_update = AsyncMock()
+        processor._apply_tag_updates = AsyncMock()
+
+        opened: list = []
+        real_log = DocumentProcessor._log_processing
+
+        async def capture(self, *args, **kwargs):
+            if kwargs.get("status") == "processing":
+                opened.append(kwargs.get("trigger_tags"))
+            return await real_log(self, *args, **kwargs)
+
+        processor._log_processing = capture.__get__(processor)
+
+        with patch(
+            "app.services.processor.LLMHandlerManager.get_handler",
+            AsyncMock(return_value=mock_llm),
+        ):
+            await processor.process_document(12)
+
+        assert opened == [["ai-title"]]
+
     def test_the_dashboard_endpoint_returns_them(self, client):
         with get_session() as session:
             session.add(
@@ -130,8 +186,9 @@ class TestTheLogRemembersThem:
         assert response.json()[0]["trigger_tags"] == "ai-ocr"
 
 
-def test_the_document_list_carries_tag_names(client):
-    """Ids alone cannot tell a user which trigger a document is waiting on."""
+def test_the_document_list_names_only_the_trigger_tags(client):
+    """Ids alone cannot say which trigger a document waits on — but the rest of
+    a document's tags are its owner's business and must not travel with it."""
     paperless = AsyncMock()
     paperless.base_url = "http://paperless.test"
     paperless.get_tags = AsyncMock(
@@ -160,6 +217,7 @@ def test_the_document_list_carries_tag_names(client):
 
     assert response.status_code == 200
     doc = response.json()["documents"][0]
-    # 99 is unknown to Paperless and is dropped rather than guessed at.
-    assert doc["tag_names"] == ["ai-ocr", "inbox"]
+    # "inbox" is a tag of the user's own, and 99 is unknown to Paperless.
+    # Neither belongs in the queue listing.
+    assert doc["tag_names"] == ["ai-ocr"]
     assert doc["tags"] == [5, 6, 99]

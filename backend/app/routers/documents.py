@@ -227,9 +227,12 @@ async def get_tagged_documents():
             time.perf_counter() - started,
         )
 
-        # The frontend only ever had tag ids here, so it could not say which
-        # trigger a document is waiting on. Resolve the names alongside them.
-        tag_names_by_id = {t["id"]: t["name"] for t in tags}
+        # Only the trigger tags, never the rest. A document carries whatever tags
+        # its owner put on it, and some of those are nobody else's business —
+        # the queue only needs to say which trigger it is waiting on.
+        tag_names_by_id = {
+            t["id"]: t["name"] for t in tags if t["id"] in trigger_tag_ids
+        }
         documents = [
             {
                 "id": doc.get("id"),
