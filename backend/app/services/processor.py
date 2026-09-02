@@ -654,6 +654,13 @@ Available Custom Fields: [{custom_fields_list}]"""
                 "reason": "no trigger tag left to act on",
             }
 
+        # Worked out before the row is opened, so the dashboard can say what a
+        # document is being processed for while it is still running rather than
+        # only once it has finished.
+        trigger_metadata = self._get_processing_trigger_metadata(
+            doc_tag_names,
+            config_dict,
+        )
         log_id = await self._log_processing(
             doc_id=doc_id,
             doc_title=doc.get("title"),
@@ -663,10 +670,7 @@ Available Custom Fields: [{custom_fields_list}]"""
             llm_response=None,
             error_message=None,
             processing_time_ms=0,
-        )
-        trigger_metadata = self._get_processing_trigger_metadata(
-            doc_tag_names,
-            config_dict,
+            trigger_tags=trigger_metadata["trigger_tags"],
         )
         try:
             from .scheduler import get_processing_state, mark_document_started
