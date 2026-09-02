@@ -98,3 +98,63 @@ describe('Dashboard', () => {
     expect(screen.getByText(/confidence: high/)).toBeInTheDocument()
   })
 })
+
+describe('Dashboard trigger tags', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.mockGetConfig.mockResolvedValue({ data: { value: '' } })
+    mocks.mockGetStats.mockResolvedValue({
+      data: { total: 1, success: 1, failed: 0, skipped: 0 },
+    })
+    mocks.mockGetDaily.mockResolvedValue({ data: [] })
+  })
+
+  it('names the tags a run was triggered by', async () => {
+    mocks.mockGetRecent.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          document_id: 42,
+          document_title: 'Invoice',
+          status: 'success',
+          llm_provider: null,
+          llm_model: null,
+          llm_response: null,
+          error_message: null,
+          trigger_tags: 'ai-ocr, ai-title',
+          processing_time_ms: 100,
+          processed_at: '2026-09-01T10:00:00Z',
+        },
+      ],
+    })
+
+    render(<Dashboard />)
+
+    expect(await screen.findByText('ai-ocr')).toBeInTheDocument()
+    expect(screen.getByText('ai-title')).toBeInTheDocument()
+  })
+
+  it('stays quiet for entries written before the column existed', async () => {
+    mocks.mockGetRecent.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          document_id: 42,
+          document_title: 'Older Invoice',
+          status: 'success',
+          llm_provider: null,
+          llm_model: null,
+          llm_response: null,
+          error_message: null,
+          trigger_tags: null,
+          processing_time_ms: 100,
+          processed_at: '2026-09-01T10:00:00Z',
+        },
+      ],
+    })
+
+    render(<Dashboard />)
+
+    expect(await screen.findByText('Older Invoice')).toBeInTheDocument()
+  })
+})

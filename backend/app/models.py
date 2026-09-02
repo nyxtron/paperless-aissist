@@ -75,6 +75,7 @@ class ProcessingLog(SQLModel, table=True):
         llm_model: LLM model used.
         llm_response: Raw LLM response (JSON string).
         error_message: Error details if failed.
+        trigger_tags: Tag names that triggered the run, comma separated.
         processing_time_ms: Processing duration in milliseconds.
         processed_at: Processing timestamp.
     """
@@ -94,5 +95,6 @@ class ProcessingLog(SQLModel, table=True):
     llm_model: Optional[str] = None
     llm_response: Optional[str] = None
     error_message: Optional[str] = None
+    trigger_tags: Optional[str] = None
     processing_time_ms: Optional[int] = None
     processed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

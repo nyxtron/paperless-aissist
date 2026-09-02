@@ -293,6 +293,7 @@
     "noStepsForFilter": "Keine Schritte entsprechen diesem Filter.",
     "colDocument": "Dokument",
     "colId": "ID",
+    "colTags": "Tags",
     "colCreated": "Erstellt",
     "colAction": "Aktion",
     "docFallback": "Dokument #{{id}}",

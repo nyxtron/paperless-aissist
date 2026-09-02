@@ -227,6 +227,9 @@ async def get_tagged_documents():
             time.perf_counter() - started,
         )
 
+        # The frontend only ever had tag ids here, so it could not say which
+        # trigger a document is waiting on. Resolve the names alongside them.
+        tag_names_by_id = {t["id"]: t["name"] for t in tags}
         documents = [
             {
                 "id": doc.get("id"),
@@ -234,6 +237,11 @@ async def get_tagged_documents():
                 "created": doc.get("created"),
                 "added": doc.get("added"),
                 "tags": doc.get("tags", []),
+                "tag_names": [
+                    tag_names_by_id[tid]
+                    for tid in doc.get("tags", [])
+                    if tid in tag_names_by_id
+                ],
             }
             for doc in merged.values()
         ]

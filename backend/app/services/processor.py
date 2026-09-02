@@ -255,6 +255,7 @@ Available Custom Fields: [{custom_fields_list}]"""
         error_message: Optional[str],
         processing_time_ms: int,
         log_id: Optional[int] = None,
+        trigger_tags: Optional[list[str]] = None,
     ) -> Optional[int]:
         async with get_async_session() as session:
             if log_id:
@@ -267,6 +268,8 @@ Available Custom Fields: [{custom_fields_list}]"""
                     log.llm_model = model
                     log.llm_response = llm_response
                     log.error_message = error_message
+                    if trigger_tags is not None:
+                        log.trigger_tags = ", ".join(trigger_tags) or None
                     log.processing_time_ms = processing_time_ms
                     log.processed_at = datetime.now(timezone.utc)
                 return log_id
@@ -279,6 +282,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                     llm_model=model,
                     llm_response=llm_response,
                     error_message=error_message,
+                    trigger_tags=", ".join(trigger_tags or []) or None,
                     processing_time_ms=processing_time_ms,
                     processed_at=datetime.now(timezone.utc),
                 )
@@ -838,6 +842,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                 llm_response=json.dumps({"steps": step_records}),
                 error_message=f"AI processing failed: {error_detail}",
                 processing_time_ms=processing_time_ms,
+                trigger_tags=trigger_metadata["trigger_tags"],
                 log_id=log_id,
             )
             return {
@@ -1024,6 +1029,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                 llm_response=json.dumps({"steps": step_records}),
                 error_message=f"Paperless update failed: {error_detail}",
                 processing_time_ms=processing_time_ms,
+                trigger_tags=trigger_metadata["trigger_tags"],
                 log_id=log_id,
             )
             return {
@@ -1050,6 +1056,7 @@ Available Custom Fields: [{custom_fields_list}]"""
             llm_response=json.dumps({"steps": step_records}),
             error_message=None,
             processing_time_ms=processing_time_ms,
+            trigger_tags=trigger_metadata["trigger_tags"],
             log_id=log_id,
         )
 

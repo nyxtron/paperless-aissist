@@ -344,3 +344,87 @@ describe('ProcessingPanel stopped-run notice', () => {
     expect(screen.queryByText('processing.runStoppedTitle')).not.toBeInTheDocument()
   })
 })
+
+describe('ProcessingPanel trigger tags', () => {
+  beforeEach(() => {
+    clearProcessingDocumentCacheForTests()
+    mocks.mockGetConfig.mockResolvedValue({ data: { value: 'automatic' } })
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        interval_minutes: 5,
+        next_run: null,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+      },
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('names the tags a queued document is waiting on', async () => {
+    mocks.mockGetTagged.mockResolvedValue({
+      data: {
+        paperless_url: 'http://paperless.test/',
+        documents: [
+          {
+            id: 1,
+            title: 'Invoice',
+            created: '2024-01-15',
+            added: '2024-01-15',
+            tags: [5, 6],
+            tag_names: ['ai-ocr', 'ai-title'],
+          },
+        ],
+      },
+    })
+
+    render(<ProcessingPanel />)
+
+    await waitFor(() => {
+      expect(screen.getByText('ai-ocr')).toBeInTheDocument()
+    })
+    expect(screen.getByText('ai-title')).toBeInTheDocument()
+  })
+
+  it('copes with a document the backend sent no names for', async () => {
+    mocks.mockGetTagged.mockResolvedValue({
+      data: {
+        paperless_url: 'http://paperless.test/',
+        documents: [
+          { id: 1, title: 'Invoice', created: '2024-01-15', added: '2024-01-15', tags: [5] },
+        ],
+      },
+    })
+
+    render(<ProcessingPanel />)
+
+    await waitFor(() => expect(screen.getByText('Invoice')).toBeInTheDocument())
+  })
+
+  it('names the tags of the document being processed', async () => {
+    mocks.mockGetTagged.mockResolvedValue({
+      data: { paperless_url: 'http://paperless.test/', documents: [] },
+    })
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        interval_minutes: 5,
+        next_run: null,
+        is_processing: true,
+        current_document_ids: [42],
+        active_documents: [{ document_id: 42, trigger_tags: ['ai-fields'] }],
+      },
+    })
+
+    render(<ProcessingPanel />)
+
+    await waitFor(() => {
+      expect(screen.getByText('ai-fields')).toBeInTheDocument()
+    })
+  })
+})
