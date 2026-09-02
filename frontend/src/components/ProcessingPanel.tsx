@@ -19,6 +19,7 @@ interface TaggedDocument {
   created: string
   added: string
   tags: number[]
+  tag_names?: string[]
   paperless_url?: string | null
 }
 
@@ -275,6 +276,20 @@ export default function ProcessingPanel() {
             <span className="font-medium text-blue-700">
               {t('processing.processingInProgress')}
             </span>
+            {(schedulerStatus?.active_documents || []).map((active) =>
+              active.trigger_tags?.length ? (
+                <span key={`tags-${active.document_id}`} className="ml-2">
+                  {active.trigger_tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </span>
+              ) : null,
+            )}
             {currentDocumentIds.map((documentId) => {
               const currentDocumentUrl = buildPaperlessDocumentUrl(
                 schedulerStatus?.paperless_url || paperlessUrl,
@@ -536,6 +551,9 @@ export default function ProcessingPanel() {
                   {t('processing.colDocument')}
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                  {t('processing.colTags')}
+                </th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
                   {t('processing.colId')}
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
@@ -573,6 +591,18 @@ export default function ProcessingPanel() {
                             {doc.title || t('processing.docFallback', { id: doc.id })}
                           </span>
                         )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(doc.tag_names || []).map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                          >
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     </td>
                     <td className="py-3 px-4 text-gray-600">#{doc.id}</td>

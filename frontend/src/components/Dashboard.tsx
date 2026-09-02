@@ -43,6 +43,7 @@ interface RecentLog {
   llm_model: string | null
   llm_response?: string | null
   error_message: string | null
+  trigger_tags?: string | null
   processing_time_ms: number | null
   processed_at: string
 }
@@ -325,6 +326,18 @@ export default function Dashboard() {
                             </span>
                           )}
                         </span>
+                      )}
+                      {log.trigger_tags && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {log.trigger_tags.split(',').map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                            >
+                              {tag.trim()}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </td>
                     <td className="py-3 px-4">
