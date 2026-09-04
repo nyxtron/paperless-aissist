@@ -86,6 +86,35 @@ describe('ConfigSectionAdvanced', () => {
     expect(onSave).toHaveBeenCalledWith('correspondent_create_new', 'true')
   })
 
+  it('saves who owns a created correspondent', () => {
+    const onSave = vi.fn()
+
+    render(
+      <ConfigSectionAdvanced
+        config={{ correspondent_create_owner: 'api_user' }}
+        onSave={onSave}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('config.correspondentCreateOwner'), {
+      target: { value: 'none' },
+    })
+
+    expect(onSave).toHaveBeenCalledWith('correspondent_create_owner', 'none')
+  })
+
+  it('saves the matching algorithm for created correspondents', () => {
+    const onSave = vi.fn()
+
+    render(<ConfigSectionAdvanced config={{}} onSave={onSave} />)
+
+    fireEvent.change(screen.getByLabelText('config.correspondentCreateMatching'), {
+      target: { value: '6' },
+    })
+
+    expect(onSave).toHaveBeenCalledWith('correspondent_create_matching', '6')
+  })
+
   it('warns in amber when correspondent creation is enabled', () => {
     render(
       <ConfigSectionAdvanced

@@ -90,6 +90,23 @@ class CorrespondentStep(AbstractStep):
         """Return True if opt-in creation of new correspondents is enabled."""
         return (self.config.get("correspondent_create_new") or "false").lower() == "true"
 
+    def _create_owner_mode(self) -> str:
+        """Who a created correspondent belongs to: "api_user" (as ever) or "none"."""
+        mode = (self.config.get("correspondent_create_owner") or "api_user").lower()
+        return "none" if mode == "none" else "api_user"
+
+    def _create_matching_algorithm(self) -> Optional[int]:
+        """Paperless matching algorithm for created correspondents, or None to
+        leave it to the Paperless default."""
+        raw = (self.config.get("correspondent_create_matching") or "").strip()
+        if not raw:
+            return None
+        try:
+            value = int(raw)
+        except ValueError:
+            return None
+        return value if 0 <= value <= 6 else None
+
     @staticmethod
     def _parse_response(result: Any) -> Optional[_Proposal]:
         """Extract the proposed correspondent from the LLM response.
@@ -304,7 +321,9 @@ class CorrespondentStep(AbstractStep):
 
             try:
                 created, was_created = await ctx.paperless.get_or_create_correspondent(
-                    proposal.name
+                    proposal.name,
+                    owner_mode=self._create_owner_mode(),
+                    matching_algorithm=self._create_matching_algorithm(),
                 )
                 # Read the id inside the try: a 2xx with an unexpected body would
                 # otherwise raise KeyError here and land in the outer handler as a
