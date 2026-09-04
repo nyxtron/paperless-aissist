@@ -2,7 +2,7 @@
   "name": "Vision OCR",
   "prompt_type": "vision_ocr",
   "document_type_filter": null,
-  "system_prompt": "Extract all text from this document image exactly as it appears. Return only the raw text content — no JSON, no markdown, no explanations.",
+  "system_prompt": "Extract all text from this document image exactly as it appears. Return only the raw text content — no JSON, no markdown, no explanations. If the image contains no readable text, reply with exactly NO_TEXT and nothing else.",
   "user_template": "",
   "is_active": true
 }
