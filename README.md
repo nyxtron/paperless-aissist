@@ -212,6 +212,8 @@ Each document tagged with `ai-process` runs the standard metadata pipeline using
 3. **Custom field extraction** — extracts structured data into Paperless custom fields
 4. **Tag swap** — removes whichever trigger tag(s) were present, adds `ai-processed`
 
+Classification only picks from what already exists in Paperless. If you switch on **Settings → Advanced → Create New Correspondents**, the correspondent step creates one when nothing matches, after a duplicate check against the server. Paperless gives a created correspondent to the API user, so in a multi-user setup nobody else sees it; **Owner of New Correspondents** lets you pick "Nobody" to make it visible to all users, and **Matching for New Correspondents** sets the Paperless matching algorithm on it. All three are off by default and only apply to correspondents created from then on.
+
 ## Modular Tag Workflows
 
 Instead of running the full pipeline with `ai-process`, you can tag a document with one or more step-specific tags to run only those steps:
