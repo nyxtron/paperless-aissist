@@ -156,6 +156,19 @@ def _llm_error_for(error: httpx.HTTPError, message: str) -> LLMError:
     return LLMUnavailableError(message)
 
 
+# What a model is told to reply with for a page carrying no text. Asking it to
+# stay silent does not work — a model trained to answer will describe the empty
+# page instead — so it gets something permitted to say and we drop it here.
+NO_TEXT_MARKER = "NO_TEXT"
+
+
+def _drop_no_text_marker(content: str) -> str:
+    """Turn the marker for a blank page into no text at all."""
+    if content.strip().rstrip(".").strip().upper() == NO_TEXT_MARKER:
+        return ""
+    return content
+
+
 # A reply that ends for any of these reasons is incomplete, whatever text came with
 # it. A page that is simply blank always ends with "stop", so these never fire on the
 # back of a duplex scan — measured against Ollama and the OpenAI-compatible servers.
@@ -646,7 +659,7 @@ class LLMHandler:
                         f"({cut_short}); the page was not fully read"
                     )
                 content = data.get("message", {}).get("content", "").strip()
-                combined_text.append(content)
+                combined_text.append(_drop_no_text_marker(content))
             except LLMError:
                 raise
             except Exception as e:
@@ -728,7 +741,7 @@ class LLMHandler:
                             f"({cut_short}); the page was not fully read"
                         )
                     content_text = data["choices"][0]["message"]["content"].strip()
-                    combined_text.append(content_text)
+                    combined_text.append(_drop_no_text_marker(content_text))
 
                 full_text = "\n\n".join(combined_text)
                 if json_mode:
@@ -775,7 +788,9 @@ class LLMHandler:
                     f"OpenAI vision reply was cut short ({cut_short}); "
                     "the document was not fully read"
                 )
-            text_content = data["choices"][0]["message"]["content"].strip()
+            text_content = _drop_no_text_marker(
+                data["choices"][0]["message"]["content"].strip()
+            )
 
             if json_mode:
                 try:
