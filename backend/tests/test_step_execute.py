@@ -436,9 +436,7 @@ class TestCorrespondentStep:
 
         assert result.data == {"correspondent": 99}
         ctx.paperless.get_or_create_correspondent.assert_awaited_once_with(
-
             "Telekom", owner_mode="api_user", matching_algorithm=None
-
         )
 
     @pytest.mark.asyncio
@@ -515,11 +513,37 @@ class TestCorrespondentStep:
 
         assert result.data == {"correspondent": 99}
         ctx.paperless.get_or_create_correspondent.assert_awaited_once_with(
-
             "Telekom", owner_mode="api_user", matching_algorithm=None
-
         )
         assert result.details["created_correspondent"] == {"id": 99, "name": "Telekom"}
+
+    @pytest.mark.asyncio
+    async def test_passes_the_owner_and_matching_settings_on(
+        self, mock_get_session, ctx, mock_llm
+    ):
+        """The two opt-in settings only take effect through this call, so the
+        step has to hand them to the client, not the defaults."""
+        self._setup_db(mock_get_session)
+        mock_llm.complete = AsyncMock(
+            return_value={"name": "Telekom", "is_existing": False}
+        )
+        ctx.paperless.get_or_create_correspondent = AsyncMock(
+            return_value=({"id": 99, "name": "Telekom"}, True)
+        )
+
+        config = {
+            **ctx.config,
+            "correspondent_create_new": "true",
+            "correspondent_create_owner": "none",
+            "correspondent_create_matching": "6",
+        }
+        step = await CorrespondentStep.from_config(config)
+        result = await step.execute(ctx)
+
+        assert result.data == {"correspondent": 99}
+        ctx.paperless.get_or_create_correspondent.assert_awaited_once_with(
+            "Telekom", owner_mode="none", matching_algorithm=6
+        )
 
     @pytest.mark.asyncio
     async def test_reuses_when_get_or_create_returns_existing(
