@@ -171,6 +171,42 @@ export function ConfigSectionAdvanced({
           )}
         </div>
         <div>
+          <label htmlFor="correspondent-create-owner" className={labelClass}>
+            {t('config.correspondentCreateOwner')}
+          </label>
+          <select
+            id="correspondent-create-owner"
+            value={config.correspondent_create_owner || 'api_user'}
+            onChange={(e) => handleChange('correspondent_create_owner', e.target.value)}
+            className={fieldClass}
+          >
+            <option value="api_user">{t('config.correspondentOwnerApiUser')}</option>
+            <option value="none">{t('config.correspondentOwnerNone')}</option>
+          </select>
+          <p className={hintClass}>{t('config.correspondentCreateOwnerHint')}</p>
+        </div>
+        <div>
+          <label htmlFor="correspondent-create-matching" className={labelClass}>
+            {t('config.correspondentCreateMatching')}
+          </label>
+          <select
+            id="correspondent-create-matching"
+            value={config.correspondent_create_matching || ''}
+            onChange={(e) => handleChange('correspondent_create_matching', e.target.value)}
+            className={fieldClass}
+          >
+            <option value="">{t('config.matchingDefault')}</option>
+            <option value="0">{t('config.matchingNone')}</option>
+            <option value="1">{t('config.matchingAny')}</option>
+            <option value="2">{t('config.matchingAll')}</option>
+            <option value="3">{t('config.matchingLiteral')}</option>
+            <option value="4">{t('config.matchingRegex')}</option>
+            <option value="5">{t('config.matchingFuzzy')}</option>
+            <option value="6">{t('config.matchingAuto')}</option>
+          </select>
+          <p className={hintClass}>{t('config.correspondentCreateMatchingHint')}</p>
+        </div>
+        <div>
           <label htmlFor="document-list-refresh-mode" className={labelClass}>
             {t('config.documentListRefreshMode')}
           </label>

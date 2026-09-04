@@ -435,7 +435,11 @@ class TestCorrespondentStep:
         result = await step.execute(ctx)
 
         assert result.data == {"correspondent": 99}
-        ctx.paperless.get_or_create_correspondent.assert_awaited_once_with("Telekom")
+        ctx.paperless.get_or_create_correspondent.assert_awaited_once_with(
+
+            "Telekom", owner_mode="api_user", matching_algorithm=None
+
+        )
 
     @pytest.mark.asyncio
     async def test_completes_with_json_mode_off(
@@ -510,7 +514,11 @@ class TestCorrespondentStep:
         result = await step.execute(ctx)
 
         assert result.data == {"correspondent": 99}
-        ctx.paperless.get_or_create_correspondent.assert_awaited_once_with("Telekom")
+        ctx.paperless.get_or_create_correspondent.assert_awaited_once_with(
+
+            "Telekom", owner_mode="api_user", matching_algorithm=None
+
+        )
         assert result.details["created_correspondent"] == {"id": 99, "name": "Telekom"}
 
     @pytest.mark.asyncio

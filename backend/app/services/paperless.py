@@ -266,18 +266,36 @@ class PaperlessClient:
         response.raise_for_status()
         return response.json()
 
-    async def _create_correspondent(self, name: str) -> dict[str, Any]:
+    async def _create_correspondent(
+        self,
+        name: str,
+        *,
+        owner_mode: str = "api_user",
+        matching_algorithm: Optional[int] = None,
+    ) -> dict[str, Any]:
         """POST a new correspondent and return the created entity.
+
+        Paperless hands a new object to the token's user unless the body says
+        otherwise, so with owner_mode "none" the body carries an explicit null
+        owner and the correspondent is visible to everyone. Left at "api_user"
+        the body is exactly what it always was: just the name. The matching
+        algorithm is only sent when one is configured, so Paperless keeps
+        applying its own default otherwise.
 
         Invalidates the cached correspondents collection (and bumps the metadata
         generation) so the new entry is visible to subsequent lookups. Prefer
         get_or_create_correspondent(); this is the raw write it builds on.
         """
         url = f"{self.base_url}/api/correspondents/"
-        logger.debug(f"POST {url} name={name!r}")
+        payload: dict[str, Any] = {"name": name}
+        if owner_mode == "none":
+            payload["owner"] = None
+        if matching_algorithm is not None:
+            payload["matching_algorithm"] = matching_algorithm
+        logger.debug(f"POST {url} name={name!r} owner_mode={owner_mode}")
         self._request_count += 1
         response = await self.client.post(
-            url, headers=self._get_headers(), json={"name": name}
+            url, headers=self._get_headers(), json=payload
         )
         logger.debug(f"POST {url} → {response.status_code}")
         response.raise_for_status()
@@ -288,7 +306,11 @@ class PaperlessClient:
         return response.json()
 
     async def get_or_create_correspondent(
-        self, name: str
+        self,
+        name: str,
+        *,
+        owner_mode: str = "api_user",
+        matching_algorithm: Optional[int] = None,
     ) -> tuple[dict[str, Any], bool]:
         """Return ``(correspondent, created)`` for ``name``.
 
@@ -315,7 +337,11 @@ class PaperlessClient:
                 return match, False
 
             try:
-                created = await self._create_correspondent(name)
+                created = await self._create_correspondent(
+                    name,
+                    owner_mode=owner_mode,
+                    matching_algorithm=matching_algorithm,
+                )
                 return created, True
             except Exception:
                 correspondents = await self.get_correspondents(force_refresh=True)
