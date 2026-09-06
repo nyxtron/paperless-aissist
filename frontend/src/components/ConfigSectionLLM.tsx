@@ -6,6 +6,12 @@ import { configApi } from '../api/client'
 import { ConfigSectionProps } from './ConfigSectionProps'
 import { fieldClass, labelClass, hintClass } from './fieldStyles'
 
+// fieldStyles.ts is shared across several config sections and stays untouched here;
+// these wrap the shared constants with the dark-mode variants for this file's fields.
+const fieldClassDark = `${fieldClass} dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500`
+const labelClassDark = `${labelClass} dark:text-gray-200`
+const hintClassDark = `${hintClass} dark:text-gray-400`
+
 export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionProps) {
   const { t } = useTranslation()
   const [testing, setTesting] = useState(false)
@@ -58,16 +64,16 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 space-y-6">
-      <div className="flex items-center justify-between border-b pb-3 mb-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6 space-y-6">
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
         <div className="flex items-center gap-2">
-          <Brain size={18} className="text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-800">{t('config.llmSection')}</h2>
+          <Brain size={18} className="text-blue-600 dark:text-blue-400" />
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('config.llmSection')}</h2>
         </div>
         <button
           onClick={handleTestLlm}
           disabled={testing}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
         >
           {testing ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle size={14} />}
           {t('config.testConnection')}
@@ -76,11 +82,11 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>{t('config.provider')}</label>
+          <label className={labelClassDark}>{t('config.provider')}</label>
           <select
             value={config.llm_provider || 'ollama'}
             onChange={(e) => handleChange('llm_provider', e.target.value)}
-            className={fieldClass}
+            className={fieldClassDark}
           >
             <option value="ollama">Ollama</option>
             <option value="openai">OpenAI</option>
@@ -89,29 +95,29 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
           </select>
         </div>
         <div>
-          <label className={labelClass}>{t('config.model')}</label>
+          <label className={labelClassDark}>{t('config.model')}</label>
           <input
             type="text"
             value={config.llm_model || ''}
             onChange={(e) => handleChange('llm_model', e.target.value)}
             placeholder={getModelPlaceholder(config.llm_provider)}
-            className={fieldClass}
+            className={fieldClassDark}
           />
         </div>
         <div>
-          <label className={labelClass}>{t('config.apiBaseUrl')}</label>
+          <label className={labelClassDark}>{t('config.apiBaseUrl')}</label>
           <input
             type="text"
             value={config.llm_api_base || ''}
             onChange={(e) => handleChange('llm_api_base', e.target.value)}
             placeholder={getApiBasePlaceholder(config.llm_provider)}
-            className={fieldClass}
+            className={fieldClassDark}
           />
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClassDark}>
             {t('config.apiKey')}{' '}
-            <span className="font-normal text-gray-400">({t('common.optional')})</span>
+            <span className="font-normal text-gray-400 dark:text-gray-500">({t('common.optional')})</span>
           </label>
           <input
             type="password"
@@ -122,20 +128,20 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
                 ? t('config.alreadySetPlaceholder')
                 : getApiKeyPlaceholder(config.llm_provider)
             }
-            className={fieldClass}
+            className={fieldClassDark}
           />
-          <p className={hintClass}>{t('config.apiKeyHint')}</p>
+          <p className={hintClassDark}>{t('config.apiKeyHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.visionOcr')}</label>
-          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+          <label className={labelClassDark}>{t('config.visionOcr')}</label>
+          <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
             <button
               type="button"
               onClick={() => handleChange('enable_vision', 'false')}
               className={`px-3 py-2 text-sm ${
                 (config.enable_vision || 'false') === 'false'
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               {t('common.disabled')}
@@ -143,31 +149,31 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             <button
               type="button"
               onClick={() => handleChange('enable_vision', 'true')}
-              className={`px-3 py-2 text-sm border-l border-gray-300 ${
+              className={`px-3 py-2 text-sm border-l border-gray-300 dark:border-gray-600 ${
                 (config.enable_vision || 'false') === 'true'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               {t('common.enabled')}
             </button>
           </div>
-          <p className={hintClass}>{t('config.visionOcrHint')}</p>
+          <p className={hintClassDark}>{t('config.visionOcrHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.llmTimeout')}</label>
+          <label className={labelClassDark}>{t('config.llmTimeout')}</label>
           <input
             type="number"
             min="30"
             max="3600"
             value={config.llm_timeout || '600'}
             onChange={(e) => handleChange('llm_timeout', e.target.value)}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
           />
-          <p className={hintClass}>{t('config.llmTimeoutHint')}</p>
+          <p className={hintClassDark}>{t('config.llmTimeoutHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.llmTemperature')}</label>
+          <label className={labelClassDark}>{t('config.llmTemperature')}</label>
           <input
             type="number"
             min="0"
@@ -175,12 +181,12 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             step="0.1"
             value={config.llm_temperature || '0.3'}
             onChange={(e) => handleChange('llm_temperature', e.target.value)}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
           />
-          <p className={hintClass}>{t('config.llmTemperatureHint')}</p>
+          <p className={hintClassDark}>{t('config.llmTemperatureHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.llmMaxTokens')}</label>
+          <label className={labelClassDark}>{t('config.llmMaxTokens')}</label>
           <input
             type="number"
             min="1"
@@ -188,12 +194,12 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             value={config.llm_max_tokens || ''}
             onChange={(e) => handleChange('llm_max_tokens', e.target.value)}
             placeholder="4096"
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
-          <p className={hintClass}>{t('config.llmMaxTokensHint')}</p>
+          <p className={hintClassDark}>{t('config.llmMaxTokensHint')}</p>
         </div>
         <div>
-          <label htmlFor="llm-num-ctx" className={labelClass}>
+          <label htmlFor="llm-num-ctx" className={labelClassDark}>
             {t('config.llmContextWindow')}
           </label>
           <input
@@ -204,9 +210,9 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             value={config.llm_num_ctx || ''}
             onChange={(e) => handleChange('llm_num_ctx', e.target.value)}
             placeholder="16384"
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
-          <p className={hintClass}>{t('config.llmContextWindowHint')}</p>
+          <p className={hintClassDark}>{t('config.llmContextWindowHint')}</p>
         </div>
       </div>
     </div>

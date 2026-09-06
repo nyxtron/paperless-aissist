@@ -2,6 +2,12 @@ import { useTranslation } from 'react-i18next'
 import { ConfigSectionProps } from './ConfigSectionProps'
 import { fieldClass, labelClass, hintClass } from './fieldStyles'
 
+// fieldStyles.ts is shared across several config sections and stays untouched here;
+// these wrap the shared constants with the dark-mode variants for this file's fields.
+const fieldClassDark = `${fieldClass} dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500`
+const labelClassDark = `${labelClass} dark:text-gray-200`
+const hintClassDark = `${hintClass} dark:text-gray-400`
+
 export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectionProps) {
   const { t } = useTranslation()
   const visionEnabled = (config.enable_vision || 'false') === 'true'
@@ -30,26 +36,26 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
   }
 
   return (
-    <div className="bg-blue-50/50 border border-blue-100 rounded-lg shadow-sm p-6 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 pb-3 mb-4">
-        <h3 className="text-sm font-semibold text-gray-800">{t('config.visionModelSection')}</h3>
+    <div className="bg-blue-50/50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 rounded-lg shadow-sm dark:shadow-none p-6 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 dark:border-blue-900 pb-3 mb-4">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('config.visionModelSection')}</h3>
         <span
           className={`text-xs px-2 py-1 rounded-full ${
-            visionEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+            visionEnabled ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
           }`}
         >
           {visionEnabled ? t('common.enabled') : t('common.disabled')}
         </span>
       </div>
-      {!visionEnabled && <p className={hintClass}>{t('config.visionSectionDisabledHint')}</p>}
+      {!visionEnabled && <p className={hintClassDark}>{t('config.visionSectionDisabledHint')}</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>{t('config.provider')}</label>
+          <label className={labelClassDark}>{t('config.provider')}</label>
           <select
             value={config.llm_provider_vision || 'ollama'}
             onChange={(e) => handleChange('llm_provider_vision', e.target.value)}
-            className={fieldClass}
+            className={fieldClassDark}
           >
             <option value="ollama">Ollama</option>
             <option value="openai">OpenAI</option>
@@ -58,45 +64,45 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
           </select>
         </div>
         <div>
-          <label className={labelClass}>{t('config.visionModel')}</label>
+          <label className={labelClassDark}>{t('config.visionModel')}</label>
           <input
             type="text"
             value={config.llm_model_vision || ''}
             onChange={(e) => handleChange('llm_model_vision', e.target.value)}
             placeholder={getVisionModelPlaceholder(config.llm_provider_vision)}
-            className={fieldClass}
+            className={fieldClassDark}
           />
         </div>
         <div>
-          <label className={labelClass}>{t('config.apiBaseUrl')}</label>
+          <label className={labelClassDark}>{t('config.apiBaseUrl')}</label>
           <input
             type="text"
             value={config.llm_api_base_vision || ''}
             onChange={(e) => handleChange('llm_api_base_vision', e.target.value)}
             placeholder={getApiBasePlaceholder(config.llm_provider_vision)}
-            className={fieldClass}
+            className={fieldClassDark}
           />
         </div>
         <div>
-          <label htmlFor="vision-pdf-mode" className={labelClass}>
+          <label htmlFor="vision-pdf-mode" className={labelClassDark}>
             {t('config.visionPdfMode')}
           </label>
           <select
             id="vision-pdf-mode"
             value={config.vision_pdf_mode || 'auto'}
             onChange={(e) => handleChange('vision_pdf_mode', e.target.value)}
-            className={fieldClass}
+            className={fieldClassDark}
           >
             <option value="auto">{t('config.visionPdfModeAuto')}</option>
             <option value="native_pdf">{t('config.visionPdfModeNative')}</option>
             <option value="page_images">{t('config.visionPdfModeImages')}</option>
           </select>
-          <p className={hintClass}>{t('config.visionPdfModeHelp')}</p>
+          <p className={hintClassDark}>{t('config.visionPdfModeHelp')}</p>
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClassDark}>
             {t('config.apiKey')}{' '}
-            <span className="font-normal text-gray-400">({t('common.optional')})</span>
+            <span className="font-normal text-gray-400 dark:text-gray-500">({t('common.optional')})</span>
           </label>
           <input
             type="password"
@@ -107,24 +113,24 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
                 ? t('config.alreadySetPlaceholder')
                 : getApiKeyPlaceholder(config.llm_provider_vision)
             }
-            className={fieldClass}
+            className={fieldClassDark}
           />
-          <p className={hintClass}>{t('config.apiKeyHint')}</p>
+          <p className={hintClassDark}>{t('config.apiKeyHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.llmTimeoutVision')}</label>
+          <label className={labelClassDark}>{t('config.llmTimeoutVision')}</label>
           <input
             type="number"
             min="30"
             max="3600"
             value={config.llm_timeout_vision || '600'}
             onChange={(e) => handleChange('llm_timeout_vision', e.target.value)}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
           />
-          <p className={hintClass}>{t('config.llmTimeoutVisionHint')}</p>
+          <p className={hintClassDark}>{t('config.llmTimeoutVisionHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.llmTemperatureVision')}</label>
+          <label className={labelClassDark}>{t('config.llmTemperatureVision')}</label>
           <input
             type="number"
             min="0"
@@ -132,12 +138,12 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             step="0.1"
             value={config.llm_temperature_vision || '0.3'}
             onChange={(e) => handleChange('llm_temperature_vision', e.target.value)}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
           />
-          <p className={hintClass}>{t('config.llmTemperatureVisionHint')}</p>
+          <p className={hintClassDark}>{t('config.llmTemperatureVisionHint')}</p>
         </div>
         <div>
-          <label className={labelClass}>{t('config.llmMaxTokensVision')}</label>
+          <label className={labelClassDark}>{t('config.llmMaxTokensVision')}</label>
           <input
             type="number"
             min="1"
@@ -145,12 +151,12 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             value={config.llm_max_tokens_vision || ''}
             onChange={(e) => handleChange('llm_max_tokens_vision', e.target.value)}
             placeholder="8192"
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
-          <p className={hintClass}>{t('config.llmMaxTokensVisionHint')}</p>
+          <p className={hintClassDark}>{t('config.llmMaxTokensVisionHint')}</p>
         </div>
         <div>
-          <label htmlFor="llm-num-ctx-vision" className={labelClass}>
+          <label htmlFor="llm-num-ctx-vision" className={labelClassDark}>
             {t('config.llmContextWindowVision')}
           </label>
           <input
@@ -161,9 +167,9 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             value={config.llm_num_ctx_vision || ''}
             onChange={(e) => handleChange('llm_num_ctx_vision', e.target.value)}
             placeholder="32768"
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
-          <p className={hintClass}>{t('config.llmContextWindowVisionHint')}</p>
+          <p className={hintClassDark}>{t('config.llmContextWindowVisionHint')}</p>
         </div>
       </div>
     </div>

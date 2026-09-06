@@ -20,7 +20,7 @@ export function ConfigSectionScheduler({
   const [schedulerInterval, setSchedulerInterval] = useState(5)
   const [schedulerLoading, setSchedulerLoading] = useState(false)
 
-  const label = 'block text-sm font-medium text-gray-700 mb-1'
+  const label = 'block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1'
   const currentDocumentIds = schedulerStatus?.current_document_ids || []
 
   const loadSchedulerStatus = useCallback(async () => {
@@ -78,22 +78,22 @@ export function ConfigSectionScheduler({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 space-y-6">
-      <div className="flex items-center justify-between border-b pb-3 mb-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6 space-y-6">
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
         <div className="flex items-center gap-2">
-          <Clock size={18} className="text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-800">{t('config.schedulerSection')}</h2>
+          <Clock size={18} className="text-blue-600 dark:text-blue-400" />
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('config.schedulerSection')}</h2>
           {schedulerStatus?.running ? (
-            <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+            <span className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs rounded-full">
               <CheckCircle size={11} /> {t('config.schedulerRunning')}
             </span>
           ) : (
-            <span className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">
+            <span className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs rounded-full">
               <XCircle size={11} /> {t('config.schedulerStopped')}
             </span>
           )}
           {schedulerStatus?.is_processing && (
-            <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+            <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs rounded-full">
               <RefreshCw size={11} className="animate-spin" /> {t('config.schedulerProcessing')}
             </span>
           )}
@@ -110,7 +110,7 @@ export function ConfigSectionScheduler({
             value={schedulerInterval}
             onChange={(e) => setSchedulerInterval(parseInt(e.target.value) || 5)}
             disabled={schedulerStatus?.running}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-800"
           />
         </div>
         <div className="flex gap-2">
@@ -135,7 +135,7 @@ export function ConfigSectionScheduler({
           )}
         </div>
         {schedulerStatus?.running && schedulerStatus.next_run && (
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             {t('config.schedulerNextRun', {
               time: new Date(schedulerStatus.next_run).toLocaleString(),
             })}
@@ -144,7 +144,7 @@ export function ConfigSectionScheduler({
       </div>
 
       {schedulerStatus?.is_processing && currentDocumentIds.length > 0 && (
-        <div className="text-sm text-blue-600">
+        <div className="text-sm text-blue-600 dark:text-blue-400">
           {currentDocumentIds.map((documentId, index) => {
             const currentDocumentUrl = buildPaperlessDocumentUrl(
               config.paperless_url || schedulerStatus?.paperless_url,
@@ -172,10 +172,10 @@ export function ConfigSectionScheduler({
         </div>
       )}
 
-      <div className="border-t pt-4">
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
         <button
           onClick={handleClearState}
-          className="text-sm text-gray-500 hover:text-gray-700 underline"
+          className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
         >
           {t('config.clearStuckState')}
         </button>
