@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { render, screen, waitFor } from '@testing-library/react'
+import type { CSSProperties, ReactNode } from 'react'
 
 import Dashboard from '../components/Dashboard'
+import { ThemeProvider } from '../contexts/ThemeContext'
 
 const mocks = vi.hoisted(() => ({
   mockGetStats: vi.fn(),
@@ -32,15 +33,19 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ResponsiveContainer: ({ children }: { children: ReactNode }) => (
+    <div className="recharts-wrapper">{children}</div>
+  ),
   PieChart: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Pie: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Cell: () => <div />,
   BarChart: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Bar: () => <div />,
-  XAxis: () => <div />,
-  YAxis: () => <div />,
-  Tooltip: () => <div />,
+  XAxis: ({ tick }: { tick?: { fill?: string } }) => <div data-fill={tick?.fill} />,
+  YAxis: ({ tick }: { tick?: { fill?: string } }) => <div data-fill={tick?.fill} />,
+  Tooltip: ({ contentStyle }: { contentStyle?: CSSProperties }) => (
+    <div style={contentStyle} />
+  ),
 }))
 
 describe('Dashboard', () => {
@@ -96,6 +101,15 @@ describe('Dashboard', () => {
     expect(screen.getByText('#42')).toBeInTheDocument()
     expect(await screen.findByText(/created_date: 2026-04-28/)).toBeInTheDocument()
     expect(screen.getByText(/confidence: high/)).toBeInTheDocument()
+  })
+
+  it('draws chart text in a light colour on the dark theme', async () => {
+    vi.mocked(localStorage.getItem).mockReturnValue('dark')
+    const { container } = render(<ThemeProvider><Dashboard /></ThemeProvider>)
+
+    await waitFor(() => expect(container.querySelector('.recharts-wrapper')).toBeTruthy())
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(container.innerHTML).toContain('#9ca3af')
   })
 })
 

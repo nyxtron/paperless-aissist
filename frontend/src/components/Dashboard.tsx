@@ -15,6 +15,7 @@ import {
 import { configApi, statsApi } from '../api/client'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { buildPaperlessDocumentUrl } from '../utils/paperlessLinks'
+import { useTheme } from '../contexts/ThemeContext'
 
 const COLORS = ['#22c55e', '#ef4444', '#f59e0b']
 
@@ -50,6 +51,7 @@ interface RecentLog {
 
 export default function Dashboard() {
   const { t } = useTranslation()
+  const { resolved } = useTheme()
   const [stats, setStats] = useState<Stats | null>(null)
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([])
   const [recentLogs, setRecentLogs] = useState<RecentLog[]>([])
@@ -104,7 +106,7 @@ export default function Dashboard() {
   }
 
   if (loading) {
-    return <div className="py-8 text-gray-500">{t('common.loading')}</div>
+    return <div className="py-8 text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
   }
 
   const pieData = stats
@@ -148,15 +150,20 @@ export default function Dashboard() {
     }
   }
 
+  const chart = resolved === 'dark'
+    ? { text: '#9ca3af', panel: '#1f2937', border: '#374151' }
+    : { text: '#6b7280', panel: '#ffffff', border: '#e5e7eb' }
+  const tooltipStyle = { backgroundColor: chart.panel, borderColor: chart.border, color: chart.text }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('dashboard.title')}</h1>
         <div className="flex gap-2">
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             {t('common.refresh')}
@@ -164,7 +171,7 @@ export default function Dashboard() {
           <button
             onClick={handleReset}
             disabled={resetting}
-            className="flex items-center gap-2 px-3 py-2 bg-white border border-red-200 text-red-700 rounded-lg hover:bg-red-50 disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/40 disabled:opacity-50"
           >
             <Trash2 size={18} />
             {resetting ? t('dashboard.resetting') : t('dashboard.resetStats')}
@@ -173,45 +180,45 @@ export default function Dashboard() {
       </div>
 
       {loadError && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="p-4 bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
           {t('dashboard.loadFailed')}: {loadError}
         </div>
       )}
 
       {!loadError && !stats && (
-        <div className="p-8 bg-white rounded-lg border border-gray-200 text-center text-gray-500">
+        <div className="p-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-center text-gray-500 dark:text-gray-400">
           {t('dashboard.emptyState')}
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">{t('dashboard.totalProcessed')}</p>
-          <p className="text-3xl font-bold text-gray-900">{stats?.total_processed || 0}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboard.totalProcessed')}</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stats?.total_processed || 0}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">{t('dashboard.successRate')}</p>
-          <p className="text-3xl font-bold text-green-600">{stats?.success_rate || 0}%</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboard.successRate')}</p>
+          <p className="text-3xl font-bold text-green-600 dark:text-green-400">{stats?.success_rate || 0}%</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">{t('dashboard.avgProcessingTime')}</p>
-          <p className="text-3xl font-bold text-gray-900">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboard.avgProcessingTime')}</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
             {((stats?.avg_processing_time_ms || 0) / 1000).toFixed(1)}s
           </p>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">{t('dashboard.failed')}</p>
-          <p className="text-3xl font-bold text-red-600">{stats?.failed || 0}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboard.failed')}</p>
+          <p className="text-3xl font-bold text-red-600 dark:text-red-400">{stats?.failed || 0}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-500">{t('dashboard.skipped')}</p>
-          <p className="text-3xl font-bold text-amber-600">{stats?.skipped || 0}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboard.skipped')}</p>
+          <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{stats?.skipped || 0}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">{t('dashboard.processingStatus')}</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{t('dashboard.processingStatus')}</h2>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
@@ -227,14 +234,14 @@ export default function Dashboard() {
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip contentStyle={tooltipStyle} />
             </PieChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-4 mt-4">
             {pieData.map((entry, index) => (
               <div key={entry.name} className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }} />
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-600 dark:text-gray-300">
                   {entry.name}: {entry.value}
                 </span>
               </div>
@@ -242,13 +249,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">{t('dashboard.dailyProcessing')}</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{t('dashboard.dailyProcessing')}</h2>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyStats}>
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis />
-              <Tooltip />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: chart.text }} />
+              <YAxis tick={{ fill: chart.text }} />
+              <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="success" fill="#22c55e" name={t('dashboard.success')} />
               <Bar dataKey="failed" fill="#ef4444" name={t('dashboard.failed')} />
             </BarChart>
@@ -256,9 +263,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-          <h2 className="text-lg font-semibold">{t('dashboard.recentLogs')}</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('dashboard.recentLogs')}</h2>
           <div className="flex flex-wrap gap-2">
             {(['all', 'success', 'failed', 'skipped'] as const).map((status) => (
               <button
@@ -266,8 +273,8 @@ export default function Dashboard() {
                 onClick={() => setLogFilter(status)}
                 className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                   logFilter === status
-                    ? 'bg-blue-50 border-blue-300 text-blue-700'
-                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                    ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
                 {status === 'all' ? t('dashboard.all') : t(`dashboard.${status}`)}
@@ -279,19 +286,19 @@ export default function Dashboard() {
           <table className="w-full min-w-[700px]">
             <thead>
               <tr className="border-b">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('dashboard.colDocument')}
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('dashboard.colStatus')}
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('dashboard.colModel')}
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('dashboard.colTime')}
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('dashboard.colDate')}
                 </th>
               </tr>
@@ -301,18 +308,18 @@ export default function Dashboard() {
                 const documentUrl = buildPaperlessDocumentUrl(paperlessUrl, log.document_id)
 
                 return (
-                  <tr key={log.id} className="border-b hover:bg-gray-50">
+                  <tr key={log.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="py-3 px-4">
                       {documentUrl ? (
                         <a
                           href={documentUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="font-medium text-blue-700 hover:underline"
+                          className="font-medium text-blue-700 dark:text-blue-300 hover:underline"
                         >
                           {log.document_title
                             || t('dashboard.docFallback', { id: log.document_id })}
-                          <span className="ml-2 text-xs text-gray-500">
+                          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                             #{log.document_id}
                           </span>
                         </a>
@@ -321,7 +328,7 @@ export default function Dashboard() {
                           {log.document_title
                             || t('dashboard.docFallback', { id: log.document_id })}
                           {log.document_id && (
-                            <span className="ml-2 text-xs text-gray-500">
+                            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                               #{log.document_id}
                             </span>
                           )}
@@ -332,7 +339,7 @@ export default function Dashboard() {
                           {log.trigger_tags.split(',').map((tag) => (
                             <span
                               key={tag}
-                              className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                              className="rounded bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 text-xs text-gray-600 dark:text-gray-300"
                             >
                               {tag.trim()}
                             </span>
@@ -344,17 +351,17 @@ export default function Dashboard() {
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${
                           log.status === 'success'
-                            ? 'bg-green-100 text-green-800'
+                            ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300'
                             : log.status === 'failed'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
+                              ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300'
+                              : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300'
                         }`}
                       >
                         {log.status}
                       </span>
                       {log.status === 'failed' && log.error_message && (
                         <p
-                          className="mt-1 text-xs text-red-600 max-w-xs truncate"
+                          className="mt-1 text-xs text-red-600 dark:text-red-400 max-w-xs truncate"
                           title={log.error_message}
                         >
                           {log.error_message}
@@ -362,20 +369,20 @@ export default function Dashboard() {
                       )}
                       {getDateStepDetails(log.llm_response) && (
                         <p
-                          className="mt-1 text-xs text-gray-600 max-w-sm truncate"
+                          className="mt-1 text-xs text-gray-600 dark:text-gray-300 max-w-sm truncate"
                           title={getDateStepDetails(log.llm_response) || undefined}
                         >
                           {getDateStepDetails(log.llm_response)}
                         </p>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{log.llm_model || '-'}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
+                    <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-300">{log.llm_model || '-'}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-300">
                       {log.processing_time_ms
                         ? `${(log.processing_time_ms / 1000).toFixed(1)}s`
                         : '-'}
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
+                    <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-300">
                       {new Date(log.processed_at).toLocaleString()}
                     </td>
                   </tr>
@@ -385,7 +392,7 @@ export default function Dashboard() {
           </table>
         </div>
         {filteredLogs.length === 0 && (
-          <p className="text-sm text-gray-500 py-4">{t('dashboard.noLogsForFilter')}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 py-4">{t('dashboard.noLogsForFilter')}</p>
         )}
       </div>
     </div>
