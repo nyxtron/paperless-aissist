@@ -43,6 +43,9 @@ class StepContext:
         trigger_tags: Tags currently on the document.
         ocr_text: Extracted or provided text content.
         detected_type: Set by DocumentTypeStep; read by FieldsStep for type-specific prompts.
+        models_used: Provider and model of every handler a step called, noted
+            through note_model() right before the request. The processing log
+            is filed under these, in order.
     """
 
     doc_id: int
@@ -55,6 +58,21 @@ class StepContext:
     # type_specific prompts. DocumentTypeStep MUST run before FieldsStep in
     # the step list — this ordering is enforced by _build_steps() in processor.py.
     detected_type: str | None = None
+    models_used: list[dict[str, str]] = field(default_factory=list)
+
+    def note_model(self, handler: Any) -> None:
+        """Record that ``handler`` is about to be asked.
+
+        Call it right before the request, so a call the provider refused is on
+        record too, and a step that returned before asking leaves no trace.
+        """
+        entry: dict[str, str] = {}
+        for key in ("provider", "model"):
+            value = getattr(handler, key, None)
+            if isinstance(value, str) and value:
+                entry[key] = value
+        if entry:
+            self.models_used.append(entry)
 
     async def get_document(self):
         return await self.paperless.get_document(self.doc_id)

@@ -244,6 +244,29 @@ Available Custom Fields: [{custom_fields_list}]"""
         )
         return result
 
+    @staticmethod
+    def _llm_used(ctx: Any) -> dict[str, Optional[str]]:
+        """Provider and model a run actually called, in the order they were used.
+
+        Every step notes the handler it is about to ask on the context, so the
+        vision model of an ai-ocr run is on record even when the provider
+        refused, and a step that returned before asking leaves no trace. A run
+        that asked nothing is filed under the text handler as before. Filing
+        every run under the text model named the wrong one for a document that
+        only carried ai-ocr (#51).
+        """
+        noted = ctx.models_used or [
+            {"provider": ctx.llm.provider, "model": ctx.llm.model}
+        ]
+
+        def joined(key: str) -> Optional[str]:
+            parts = (entry.get(key) for entry in noted)
+            return ", ".join(
+                dict.fromkeys(p for p in parts if isinstance(p, str) and p)
+            ) or None
+
+        return {"provider": joined("provider"), "model": joined("model")}
+
     async def _log_processing(
         self,
         doc_id: int,
@@ -841,8 +864,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                 doc_id=doc_id,
                 doc_title=doc.get("title"),
                 status="failed",
-                provider=llm.provider,
-                model=llm.model,
+                **self._llm_used(ctx),
                 llm_response=json.dumps({"steps": step_records}),
                 error_message=f"AI processing failed: {error_detail}",
                 processing_time_ms=processing_time_ms,
@@ -896,6 +918,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                     user_msg = classify_prompt_data["user_template"].replace(
                         "{content}", text[:10000]
                     )
+                    ctx.note_model(llm)
                     classify_result = await llm.complete(
                         system_prompt=classify_prompt_data["system_prompt"],
                         user_prompt=user_msg,
@@ -1028,8 +1051,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                 doc_id=doc_id,
                 doc_title=doc.get("title"),
                 status="failed",
-                provider=llm.provider,
-                model=llm.model,
+                **self._llm_used(ctx),
                 llm_response=json.dumps({"steps": step_records}),
                 error_message=f"Paperless update failed: {error_detail}",
                 processing_time_ms=processing_time_ms,
@@ -1055,8 +1077,7 @@ Available Custom Fields: [{custom_fields_list}]"""
             doc_id=doc_id,
             doc_title=doc.get("title"),
             status="success",
-            provider=llm.provider,
-            model=llm.model,
+            **self._llm_used(ctx),
             llm_response=json.dumps({"steps": step_records}),
             error_message=None,
             processing_time_ms=processing_time_ms,

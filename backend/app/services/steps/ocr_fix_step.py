@@ -108,6 +108,7 @@ class OCRFixStep(AbstractStep):
             return StepResult(data={}, error=None)
 
         try:
+            ctx.note_model(ctx.llm)
             fix_result = await ctx.llm.complete(
                 system_prompt=ocr_fix_prompt.system_prompt,
                 user_prompt=ocr_fix_prompt.user_template.replace(
