@@ -100,10 +100,10 @@ export function ConfigSectionAdvanced({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center gap-2 border-b pb-3 mb-4">
-        <Settings size={18} className="text-blue-600" />
-        <h2 className="text-lg font-semibold text-gray-800">{t('config.applicationSection')}</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
+        <Settings size={18} className="text-blue-600 dark:text-blue-400" />
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('config.applicationSection')}</h2>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">
@@ -133,7 +133,7 @@ export function ConfigSectionAdvanced({
           </select>
           <p className={hintClass}>{t('config.authEnabledHint')}</p>
           {config.auth_enabled === 'true' && (
-            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
               {t('config.authEnabledWarning')}
             </p>
           )}
@@ -165,7 +165,7 @@ export function ConfigSectionAdvanced({
           </select>
           <p className={hintClass}>{t('config.correspondentCreateNewHint')}</p>
           {config.correspondent_create_new === 'true' && (
-            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
               {t('config.correspondentCreateNewWarning')}
             </p>
           )}
@@ -263,19 +263,19 @@ export function ConfigSectionAdvanced({
           />
           <p className={hintClass}>{t('config.maxConsecutiveFailuresHint')}</p>
         </div>
-        <div className="sm:col-span-2 lg:col-span-3 border-t pt-4 mt-2">
+        <div className="sm:col-span-2 lg:col-span-3 border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <KeyRound size={16} className="text-blue-600" />
-                <h3 className="text-sm font-semibold text-gray-800">
+                <KeyRound size={16} className="text-blue-600 dark:text-blue-400" />
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                   {t('config.automationApi')}
                 </h3>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                     hasAutomationToken || automationToken
-                      ? 'bg-green-50 text-green-700 border border-green-200'
-                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                      ? 'bg-green-50 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
                   }`}
                 >
                   {hasAutomationToken || automationToken
@@ -302,7 +302,7 @@ export function ConfigSectionAdvanced({
                   type="button"
                   onClick={handleRevokeAutomationToken}
                   disabled={automationBusy}
-                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
                 >
                   <Trash2 size={16} />
                   {t('config.revokeAutomationToken')}
@@ -321,7 +321,7 @@ export function ConfigSectionAdvanced({
               <button
                 type="button"
                 onClick={handleCopyAutomationToken}
-                className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 {copied ? <Check size={16} /> : <Copy size={16} />}
                 {copied ? t('config.copiedAutomationToken') : t('config.copyAutomationToken')}
@@ -329,7 +329,7 @@ export function ConfigSectionAdvanced({
             </div>
           )}
           {automationToken && (
-            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
               {t('config.automationTokenShownOnce')}
             </p>
           )}

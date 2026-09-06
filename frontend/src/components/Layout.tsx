@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { appInfoApi } from '../api/client'
+import { ThemeSwitch } from './ThemeSwitch'
 
 export default function Layout() {
   const { t, i18n } = useTranslation()
@@ -44,7 +45,9 @@ export default function Layout() {
   const githubRepoUrl = 'https://github.com/nyxtron/paperless-aissist'
 
   const accountControls = (
-    <div className="flex gap-2">
+    <div className="flex items-center flex-wrap gap-2">
+      <ThemeSwitch />
+      <span className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
       {(['en', 'de'] as const).map((lng) => (
         <button
           key={lng}
@@ -52,7 +55,7 @@ export default function Layout() {
           className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
             i18n.resolvedLanguage === lng
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
           }`}
         >
           {t(`language.${lng}`)}
@@ -61,7 +64,7 @@ export default function Layout() {
       {isAuthEnabled && (
         <button
           onClick={logout}
-          className="ml-1 px-3 py-1 rounded-full text-sm font-medium text-gray-600 hover:bg-gray-100 flex items-center gap-1 transition-colors"
+          className="ml-1 px-3 py-1 rounded-full text-sm font-medium text-gray-600 hover:bg-gray-100 flex items-center gap-1 transition-colors dark:text-gray-300 dark:hover:bg-gray-700"
         >
           <LogOut size={14} />
           {t('login.logout')}
@@ -75,9 +78,9 @@ export default function Layout() {
       <div className="p-6">
         <div className="flex items-center gap-3 mb-1">
           <img src="/icon.png" alt="Paperless-AIssist" className="w-12 h-12 rounded" />
-          <h1 className="text-xl font-bold text-gray-900">Paperless-AIssist</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Paperless-AIssist</h1>
         </div>
-        <p className="text-sm text-gray-500">{t('nav.subtitle')}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{t('nav.subtitle')}</p>
       </div>
       <nav className="px-4">
         {navItems.map((item) => (
@@ -87,7 +90,9 @@ export default function Layout() {
             onClick={() => setMobileNavOpen(false)}
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${
-                isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+                isActive
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                  : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'
               }`
             }
           >
@@ -96,20 +101,20 @@ export default function Layout() {
           </NavLink>
         ))}
       </nav>
-      <div className="mt-auto px-4 py-4 border-t border-gray-200">
+      <div className="mt-auto px-4 py-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between gap-3 px-3 py-2">
           <a
             href={githubRepoUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex min-w-0 items-center gap-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900"
+            className="inline-flex min-w-0 items-center gap-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
             aria-label="Paperless-AIssist on GitHub"
           >
             <Github size={16} className="shrink-0" />
             <span className="truncate">GitHub</span>
           </a>
           <span
-            className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+            className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300"
             title={appVersion}
           >
             {appVersion}
@@ -120,35 +125,35 @@ export default function Layout() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 md:flex">
-      <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-screen md:overflow-y-auto w-72 bg-white border-r border-gray-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 md:flex">
+      <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-screen md:overflow-y-auto w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
         {navContent}
       </aside>
 
-      <div className="md:hidden sticky top-0 z-30 bg-white border-b border-gray-200">
+      <div className="md:hidden sticky top-0 z-30 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="p-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <img src="/icon.png" alt="Paperless-AIssist" className="w-10 h-10 rounded" />
               <div className="min-w-0">
-                <h1 className="text-base font-bold text-gray-900 truncate">Paperless-AIssist</h1>
-                <p className="text-xs text-gray-500 truncate">{t('nav.subtitle')}</p>
+                <h1 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">Paperless-AIssist</h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{t('nav.subtitle')}</p>
               </div>
             </div>
             <button
               onClick={() => setMobileNavOpen((prev) => !prev)}
-              className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+              className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"
               aria-label={mobileNavOpen ? t('common.close') : t('nav.openMenu')}
             >
               {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
           </div>
         </div>
-        {mobileNavOpen && <div className="border-t border-gray-200 bg-white">{navContent}</div>}
+        {mobileNavOpen && <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">{navContent}</div>}
       </div>
 
       <div className="flex-1 flex flex-col">
-        <header className="h-14 bg-white border-b border-gray-200 px-4 md:px-6 flex items-center justify-end">
+        <header className="min-h-14 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 flex items-center justify-end flex-wrap gap-y-2">
           {accountControls}
         </header>
         <main className="flex-1 p-4 md:p-8">

@@ -197,44 +197,44 @@ export default function ChatPage() {
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">{t('chat.title')}</h1>
-        <p className="text-sm text-gray-500">{t('chat.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('chat.title')}</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{t('chat.subtitle')}</p>
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
-        <div className="w-64 bg-white rounded-lg shadow overflow-hidden flex flex-col">
-          <div className="p-3 border-b bg-gray-50">
+        <div className="w-64 bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none overflow-hidden flex flex-col">
+          <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('chat.searchPlaceholder')}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500"
             />
           </div>
 
           <div className="flex-1 overflow-y-auto">
             {searching ? (
-              <div className="p-4 text-sm text-gray-500 text-center">{t('chat.searching')}</div>
+              <div className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">{t('chat.searching')}</div>
             ) : searchQuery.trim() ? (
               searchResults.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500 text-center">{t('chat.noResults')}</div>
+                <div className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">{t('chat.noResults')}</div>
               ) : (
                 searchResults.map((doc) => (
                   <button
                     key={doc.id}
                     onClick={() => selectDocument(doc.id)}
-                    className={`w-full text-left p-3 border-b hover:bg-gray-50 ${
-                      selectedDoc === doc.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                    className={`w-full text-left p-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                      selectedDoc === doc.id ? 'bg-blue-50 dark:bg-blue-900/40 border-l-4 border-l-blue-500' : ''
                     }`}
                   >
                     <div className="flex items-start gap-2">
-                      <FileText size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                      <FileText size={16} className="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                           {doc.title || `Document #${doc.id}`}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {new Date(doc.created).toLocaleDateString()}
                         </p>
                       </div>
@@ -243,28 +243,28 @@ export default function ChatPage() {
                 ))
               )
             ) : refreshMode === 'manual' && !hasLoadedDocuments ? (
-              <div className="p-4 text-sm text-gray-500 text-center">
-                <p className="font-medium text-gray-700 mb-1">{t('chat.manualRefreshTitle')}</p>
+              <div className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                <p className="font-medium text-gray-700 dark:text-gray-200 mb-1">{t('chat.manualRefreshTitle')}</p>
                 <p>{t('chat.manualRefreshHint')}</p>
               </div>
             ) : documents.length === 0 ? (
-              <div className="p-4 text-sm text-gray-500 text-center">{t('chat.noDocuments')}</div>
+              <div className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">{t('chat.noDocuments')}</div>
             ) : (
               documents.map((doc) => (
                 <button
                   key={doc.id}
                   onClick={() => selectDocument(doc.id)}
-                  className={`w-full text-left p-3 border-b hover:bg-gray-50 transition-colors ${
-                    selectedDoc === doc.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                  className={`w-full text-left p-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                    selectedDoc === doc.id ? 'bg-blue-50 dark:bg-blue-900/40 border-l-4 border-l-blue-500' : ''
                   }`}
                 >
                   <div className="flex items-start gap-2">
-                    <FileText size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                    <FileText size={16} className="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                         {doc.title || t('chat.docFallback', { id: doc.id })}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         {new Date(doc.created).toLocaleDateString()}
                       </p>
                     </div>
@@ -274,7 +274,7 @@ export default function ChatPage() {
             )}
           </div>
 
-          <div className="p-3 border-t bg-gray-50">
+          <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <button
               onClick={() => loadDocuments({ force: true })}
               disabled={loadingDocs}
@@ -286,11 +286,11 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <div className="flex-1 bg-white rounded-lg shadow flex flex-col overflow-hidden">
+        <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none flex flex-col overflow-hidden">
           {!selectedDoc ? (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
               <div className="text-center">
-                <FileText size={48} className="mx-auto mb-4 text-gray-300" />
+                <FileText size={48} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                 <p>{t('chat.emptyState')}</p>
               </div>
             </div>
@@ -304,7 +304,7 @@ export default function ChatPage() {
                   >
                     <div
                       className={`max-w-[80%] rounded-lg p-3 ${
-                        msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+                        msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
                       }`}
                     >
                       <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
@@ -313,8 +313,8 @@ export default function ChatPage() {
                 ))}
                 {loadingDoc && (
                   <div className="flex justify-start">
-                    <div className="bg-gray-100 rounded-lg p-3">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                         <Loader2 size={16} className="animate-spin" />
                         {t('chat.loadingDocument')}
                       </div>
@@ -323,8 +323,8 @@ export default function ChatPage() {
                 )}
                 {loading && (
                   <div className="flex justify-start">
-                    <div className="bg-gray-100 rounded-lg p-3">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                         <Loader2 size={16} className="animate-spin" />
                         {t('chat.thinking')}
                       </div>
@@ -334,9 +334,9 @@ export default function ChatPage() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {error && <div className="px-4 py-2 bg-red-50 text-red-700 text-sm">{error}</div>}
+              {error && <div className="px-4 py-2 bg-red-50 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-sm">{error}</div>}
 
-              <div className="p-4 border-t">
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -345,7 +345,7 @@ export default function ChatPage() {
                     onKeyDown={handleKeyDown}
                     placeholder={t('chat.inputPlaceholder')}
                     disabled={!selectedDoc || loading}
-                    className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                    className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500"
                   />
                   <button
                     onClick={sendMessage}
@@ -361,13 +361,13 @@ export default function ChatPage() {
         </div>
 
         {(selectedDoc || previewResult) && (
-          <div className="w-96 bg-white rounded-lg shadow overflow-hidden flex flex-col">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-              <h3 className="font-semibold">{t('chat.previewTitle')}</h3>
+          <div className="w-96 bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-between items-center">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('chat.previewTitle')}</h3>
               {previewResult ? (
                 <button
                   onClick={() => setPreviewResult(null)}
-                  className="text-sm text-gray-500 hover:text-gray-700"
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 >
                   {t('common.close')}
                 </button>
@@ -383,41 +383,45 @@ export default function ChatPage() {
             </div>
             <div className="p-4 overflow-y-auto flex-1">
               {!previewResult ? (
-                <p className="text-sm text-gray-500">{t('chat.previewHint')}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{t('chat.previewHint')}</p>
               ) : previewResult.success ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-green-700">{t('chat.previewSuccess')}</p>
+                  <p className="text-sm text-green-700 dark:text-green-300">{t('chat.previewSuccess')}</p>
                   {previewResult.steps?.map((step, idx) => (
                     <div key={idx} className="flex justify-between text-sm">
-                      <span>{step.name}</span>
-                      <span className="text-gray-500">{step.status}</span>
+                      <span className="dark:text-gray-200">{step.name}</span>
+                      <span className="text-gray-500 dark:text-gray-400">{step.status}</span>
                     </div>
                   ))}
                   {previewResult.proposed_changes &&
                     Object.keys(previewResult.proposed_changes).length > 0 && (
-                      <div className="mt-4 pt-4 border-t">
-                        <h4 className="text-sm font-medium mb-2">{t('chat.proposedChanges')}</h4>
+                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <h4 className="text-sm font-medium dark:text-gray-200 mb-2">
+                          {t('chat.proposedChanges')}
+                        </h4>
                         {previewResult.proposed_changes.title && (
-                          <p className="text-sm">Title: {previewResult.proposed_changes.title}</p>
+                          <p className="text-sm dark:text-gray-300">
+                            Title: {previewResult.proposed_changes.title}
+                          </p>
                         )}
                         {previewResult.proposed_changes.correspondent && (
-                          <p className="text-sm">
+                          <p className="text-sm dark:text-gray-300">
                             Correspondent: {previewResult.proposed_changes.correspondent.name}
                           </p>
                         )}
                         {previewResult.proposed_changes.document_type && (
-                          <p className="text-sm">
+                          <p className="text-sm dark:text-gray-300">
                             Type: {previewResult.proposed_changes.document_type.name}
                           </p>
                         )}
                         {previewResult.proposed_changes.tags && (
-                          <p className="text-sm">
+                          <p className="text-sm dark:text-gray-300">
                             Tags:{' '}
                             {previewResult.proposed_changes.tags.map((tag) => tag.name).join(', ')}
                           </p>
                         )}
                         {previewResult.proposed_changes.custom_fields && (
-                          <p className="text-sm">
+                          <p className="text-sm dark:text-gray-300">
                             Fields:{' '}
                             {previewResult.proposed_changes.custom_fields
                               .map((f) => `${f.field}: ${f.value}`)
@@ -428,7 +432,7 @@ export default function ChatPage() {
                     )}
                 </div>
               ) : (
-                <p className="text-sm text-red-700">{previewResult.error}</p>
+                <p className="text-sm text-red-700 dark:text-red-300">{previewResult.error}</p>
               )}
             </div>
           </div>
