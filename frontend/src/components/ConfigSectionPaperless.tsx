@@ -5,12 +5,6 @@ import { Server, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { ConfigSectionProps } from './ConfigSectionProps'
 import { fieldClass, labelClass, hintClass } from './fieldStyles'
 
-// fieldStyles.ts is shared across several config sections and stays untouched here;
-// these wrap the shared constants with the dark-mode variants for this file's fields.
-const fieldClassDark = `${fieldClass} dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500`
-const labelClassDark = `${labelClass} dark:text-gray-200`
-const hintClassDark = `${hintClass} dark:text-gray-400`
-
 interface PaperlessTag {
   id: number
   name: string
@@ -96,17 +90,17 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClassDark}>{t('config.paperlessUrl')}</label>
+          <label className={labelClass}>{t('config.paperlessUrl')}</label>
           <input
             type="text"
             value={config.paperless_url || ''}
             onChange={(e) => handleChange('paperless_url', e.target.value)}
             placeholder="http://localhost:8000"
-            className={fieldClassDark}
+            className={fieldClass}
           />
         </div>
         <div>
-          <label className={labelClassDark}>{t('config.apiToken')}</label>
+          <label className={labelClass}>{t('config.apiToken')}</label>
           <input
             type="password"
             value={config.paperless_token || ''}
@@ -116,7 +110,7 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
                 ? t('config.alreadySetPlaceholder')
                 : t('config.apiTokenPlaceholder')
             }
-            className={fieldClassDark}
+            className={fieldClass}
           />
         </div>
       </div>
@@ -165,11 +159,11 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className={labelClassDark}>{t('config.processTag')}</label>
+            <label className={labelClass}>{t('config.processTag')}</label>
             <select
               value={config.process_tag || ''}
               onChange={(e) => handleChange('process_tag', e.target.value)}
-              className={fieldClassDark}
+              className={fieldClass}
             >
               <option value="">{t('common.selectTag')}</option>
               {getTagOptions(config.process_tag).map((tag) => (
@@ -178,14 +172,14 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
                 </option>
               ))}
             </select>
-            <p className={hintClassDark}>{t('config.processTagHint')}</p>
+            <p className={hintClass}>{t('config.processTagHint')}</p>
           </div>
           <div>
-            <label className={labelClassDark}>{t('config.processedTag')}</label>
+            <label className={labelClass}>{t('config.processedTag')}</label>
             <select
               value={config.processed_tag || ''}
               onChange={(e) => handleChange('processed_tag', e.target.value)}
-              className={fieldClassDark}
+              className={fieldClass}
             >
               <option value="">{t('common.selectTag')}</option>
               {getTagOptions(config.processed_tag).map((tag) => (
@@ -194,29 +188,29 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
                 </option>
               ))}
             </select>
-            <p className={hintClassDark}>{t('config.processedTagHint')}</p>
+            <p className={hintClass}>{t('config.processedTagHint')}</p>
           </div>
         </div>
 
         <div>
-          <label className={labelClassDark}>{t('config.tagBlacklist')}</label>
+          <label className={labelClass}>{t('config.tagBlacklist')}</label>
           <input
             type="text"
             value={config.tag_blacklist || ''}
             onChange={(e) => handleChange('tag_blacklist', e.target.value)}
             placeholder={t('config.tagBlacklistPlaceholder')}
-            className={fieldClassDark}
+            className={fieldClass}
           />
-          <p className={hintClassDark}>{t('config.tagBlacklistHint')}</p>
+          <p className={hintClass}>{t('config.tagBlacklistHint')}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className={labelClassDark}>{t('config.forceOcrTag')}</label>
+            <label className={labelClass}>{t('config.forceOcrTag')}</label>
             <select
               value={config.force_ocr_tag || ''}
               onChange={(e) => handleChange('force_ocr_tag', e.target.value)}
-              className={fieldClassDark}
+              className={fieldClass}
             >
               <option value="">{t('common.none')}</option>
               {getTagOptions(config.force_ocr_tag).map((tag) => (
@@ -225,14 +219,14 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
                 </option>
               ))}
             </select>
-            <p className={hintClassDark}>{t('config.forceOcrTagHint')}</p>
+            <p className={hintClass}>{t('config.forceOcrTagHint')}</p>
           </div>
           <div>
-            <label className={labelClassDark}>{t('config.forceOcrFixTag')}</label>
+            <label className={labelClass}>{t('config.forceOcrFixTag')}</label>
             <select
               value={config.force_ocr_fix_tag || ''}
               onChange={(e) => handleChange('force_ocr_fix_tag', e.target.value)}
-              className={fieldClassDark}
+              className={fieldClass}
             >
               <option value="">{t('common.none')}</option>
               {getTagOptions(config.force_ocr_fix_tag).map((tag) => (
@@ -241,7 +235,7 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
                 </option>
               ))}
             </select>
-            <p className={hintClassDark}>{t('config.forceOcrFixTagHint')}</p>
+            <p className={hintClass}>{t('config.forceOcrFixTagHint')}</p>
           </div>
         </div>
       </div>
