@@ -177,15 +177,15 @@ export default function PromptManager() {
   const getSampleStatusClass = (status?: SampleStatus) => {
     switch (status) {
       case 'sample_current':
-        return 'bg-green-100 text-green-800'
+        return 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300'
       case 'sample_update_available':
-        return 'bg-amber-100 text-amber-800'
+        return 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
       case 'modified':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
       case 'legacy_sample':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300'
       default:
-        return 'bg-gray-100 text-gray-700'
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
     }
   }
 
@@ -198,22 +198,22 @@ export default function PromptManager() {
   }
 
   if (loading) {
-    return <div className="text-gray-500">{t('common.loading')}</div>
+    return <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">{t('prompts.title')}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('prompts.title')}</h1>
         <div className="flex items-center gap-2">
           {samplesMessage && (
-            <span className="text-sm text-green-700 bg-green-50 px-3 py-1 rounded-lg">
+            <span className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/40 px-3 py-1 rounded-lg">
               {samplesMessage}
             </span>
           )}
           <button
             onClick={handleLoadSamples}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             <RefreshCw size={18} />
             {t('prompts.loadSamples')}
@@ -232,55 +232,55 @@ export default function PromptManager() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('prompts.colName')}
               </th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('prompts.colType')}
               </th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('prompts.colTypeFilter')}
               </th>
               <th
-                className="text-left py-3 px-4 text-sm font-medium text-gray-500"
+                className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400"
                 title="Paperless tag that triggers this prompt"
               >
                 Trigger Tag
               </th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('prompts.colSample')}
               </th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('prompts.colStatus')}
               </th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">
+              <th className="text-right py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('prompts.colActions')}
               </th>
             </tr>
           </thead>
           <tbody>
             {prompts.map((prompt) => (
-              <tr key={prompt.id} className="border-t hover:bg-gray-50">
-                <td className="py-3 px-4 font-medium">{prompt.name}</td>
+              <tr key={prompt.id} className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td className="py-3 px-4 font-medium text-gray-900 dark:text-gray-100">{prompt.name}</td>
                 <td className="py-3 px-4">
-                  <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+                  <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded text-xs">
                     {prompt.prompt_type}
                   </span>
                 </td>
-                <td className="py-3 px-4 text-gray-600">{prompt.document_type_filter || '-'}</td>
+                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{prompt.document_type_filter || '-'}</td>
                 <td className="py-3 px-4">
                   {(() => {
                     const tag = getTriggerTag(prompt.prompt_type, config)
                     return tag ? (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 font-mono text-xs rounded">
+                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-mono text-xs rounded">
                         {tag}
                       </span>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
                     )
                   })()}
                 </td>
@@ -297,7 +297,7 @@ export default function PromptManager() {
                 </td>
                 <td className="py-3 px-4">
                   <span
-                    className={`px-2 py-1 rounded text-xs ${prompt.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+                    className={`px-2 py-1 rounded text-xs ${prompt.is_active ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100'}`}
                   >
                     {prompt.is_active ? t('prompts.active') : t('prompts.inactive')}
                   </span>
@@ -305,13 +305,13 @@ export default function PromptManager() {
                 <td className="py-3 px-4 text-right">
                   <button
                     onClick={() => handleEdit(prompt)}
-                    className="p-1 text-gray-600 hover:text-blue-600"
+                    className="p-1 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                   >
                     <Pencil size={18} />
                   </button>
                   <button
                     onClick={() => handleDelete(prompt.id)}
-                    className="p-1 text-gray-600 hover:text-red-600 ml-2"
+                    className="p-1 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 ml-2"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -324,14 +324,14 @@ export default function PromptManager() {
 
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h2 className="text-lg font-semibold">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {editingPrompt ? t('prompts.editPrompt') : t('prompts.createPrompt')}
               </h2>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               >
                 <X size={24} />
               </button>
@@ -339,7 +339,7 @@ export default function PromptManager() {
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     {t('prompts.labelName')}
                   </label>
                   <input
@@ -347,17 +347,17 @@ export default function PromptManager() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     {t('prompts.labelType')}
                   </label>
                   <select
                     value={formData.prompt_type}
                     onChange={(e) => setFormData({ ...formData, prompt_type: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100"
                   >
                     {templates?.types.map((type) => (
                       <option key={type.value} value={type.value}>
@@ -370,7 +370,7 @@ export default function PromptManager() {
 
               {formData.prompt_type === 'type_specific' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     {t('prompts.labelDocTypeFilter')}
                   </label>
                   <input
@@ -380,13 +380,13 @@ export default function PromptManager() {
                       setFormData({ ...formData, document_type_filter: e.target.value })
                     }
                     placeholder={t('prompts.docTypeFilterPlaceholder')}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   {t('prompts.labelSystemPrompt')}
                 </label>
                 {templates && (
@@ -396,7 +396,7 @@ export default function PromptManager() {
                         key={v.name}
                         type="button"
                         onClick={() => insertVariable(v.name, 'system')}
-                        className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+                        className="text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60"
                       >
                         {v.name}
                       </button>
@@ -408,12 +408,12 @@ export default function PromptManager() {
                   onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
                   required
                   rows={4}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   {t('prompts.labelUserTemplate')}
                 </label>
                 {templates && (
@@ -423,7 +423,7 @@ export default function PromptManager() {
                         key={v.name}
                         type="button"
                         onClick={() => insertVariable(v.name, 'user')}
-                        className="text-xs px-2 py-1 bg-green-50 text-green-600 rounded hover:bg-green-100"
+                        className="text-xs px-2 py-1 bg-green-50 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded hover:bg-green-100 dark:hover:bg-green-900/60"
                       >
                         {v.name}
                       </button>
@@ -436,7 +436,7 @@ export default function PromptManager() {
                   required={userTemplateRequired}
                   rows={4}
                   placeholder={t('prompts.userTemplatePlaceholder')}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500"
                 />
               </div>
 
@@ -448,18 +448,18 @@ export default function PromptManager() {
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   className="rounded"
                 />
-                <label htmlFor="is_active" className="text-sm text-gray-700">
+                <label htmlFor="is_active" className="text-sm text-gray-700 dark:text-gray-200">
                   {t('prompts.labelActive')}
                 </label>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t">
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                 {editingPromptWithStatus?.sample_status
                   && editingPromptWithStatus.sample_status !== 'custom' && (
                   <button
                     type="button"
                     onClick={handleLoadPromptSample}
-                    className="px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     {t('prompts.loadPromptSample')}
                   </button>
@@ -467,7 +467,7 @@ export default function PromptManager() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50"
+                  className="px-4 py-2 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   {t('common.cancel')}
                 </button>
