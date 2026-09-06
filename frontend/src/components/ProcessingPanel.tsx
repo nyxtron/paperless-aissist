@@ -270,10 +270,10 @@ export default function ProcessingPanel() {
   return (
     <div className="space-y-6">
       {isCurrentlyProcessing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-          <RefreshCw size={20} className="animate-spin text-blue-600" />
+        <div className="bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center gap-3">
+          <RefreshCw size={20} className="animate-spin text-blue-600 dark:text-blue-400" />
           <div>
-            <span className="font-medium text-blue-700">
+            <span className="font-medium text-blue-700 dark:text-blue-300">
               {t('processing.processingInProgress')}
             </span>
             {(schedulerStatus?.active_documents || []).map((active) =>
@@ -282,7 +282,7 @@ export default function ProcessingPanel() {
                   {active.trigger_tags.map((tag) => (
                     <span
                       key={tag}
-                      className="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700"
+                      className="ml-1 rounded bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 text-xs text-blue-700 dark:text-blue-300"
                     >
                       {tag}
                     </span>
@@ -302,12 +302,12 @@ export default function ProcessingPanel() {
                   href={currentDocumentUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-blue-600 text-sm ml-2 underline"
+                  className="text-blue-600 dark:text-blue-400 text-sm ml-2 underline"
                 >
                   {label}
                 </a>
               ) : (
-                <span key={documentId} className="text-blue-600 text-sm ml-2">
+                <span key={documentId} className="text-blue-600 dark:text-blue-400 text-sm ml-2">
                   {label}
                 </span>
               )
@@ -317,13 +317,13 @@ export default function ProcessingPanel() {
       )}
 
       {schedulerStatus?.running && !schedulerStatus.is_processing && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2 text-sm text-green-700">
+        <div className="bg-green-50 dark:bg-green-900/40 border border-green-200 dark:border-green-800 rounded-lg p-3 flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
           <Clock size={16} />
           <span>
             {t('processing.schedulerRunning', { minutes: schedulerStatus.interval_minutes })}
           </span>
           {schedulerStatus.next_run && (
-            <span className="text-green-600 ml-2">
+            <span className="text-green-600 dark:text-green-400 ml-2">
               {t('processing.schedulerNext', {
                 time: new Date(schedulerStatus.next_run).toLocaleTimeString(),
               })}
@@ -333,11 +333,11 @@ export default function ProcessingPanel() {
       )}
 
       {schedulerStatus?.last_stop && !schedulerStatus.is_processing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+        <div className="bg-amber-50 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-300">
           <div className="flex items-center gap-2 font-medium">
             <AlertTriangle size={16} />
             <span>{t('processing.runStoppedTitle')}</span>
-            <span className="font-normal text-amber-700">
+            <span className="font-normal text-amber-700 dark:text-amber-300">
               {new Date(schedulerStatus.last_stop.at).toLocaleString()}
             </span>
           </div>
@@ -352,14 +352,14 @@ export default function ProcessingPanel() {
 
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-semibold">{t('processing.sectionTitle')}</h2>
-          <p className="text-sm text-gray-500">{t('processing.sectionSubtitle')}</p>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('processing.sectionTitle')}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('processing.sectionSubtitle')}</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => loadDocuments({ force: true })}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             {t('common.refresh')}
@@ -375,22 +375,22 @@ export default function ProcessingPanel() {
         </div>
       </div>
 
-      {error && <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg">{error}</div>}
+      {error && <div className="p-4 bg-yellow-50 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 rounded-lg">{error}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">{t('processing.queueCount')}</p>
-          <p className="text-2xl font-semibold text-gray-900">{documents.length}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('processing.queueCount')}</p>
+          <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{documents.length}</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">{t('processing.schedulerState')}</p>
-          <p className="text-sm font-medium text-gray-800">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('processing.schedulerState')}</p>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-100">
             {schedulerStatus?.running ? t('config.schedulerRunning') : t('config.schedulerStopped')}
           </p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">{t('processing.schedulerNextLabel')}</p>
-          <p className="text-sm font-medium text-gray-800">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('processing.schedulerNextLabel')}</p>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-100">
             {schedulerStatus?.next_run
               ? new Date(schedulerStatus.next_run).toLocaleTimeString()
               : t('processing.notScheduled')}
@@ -399,14 +399,14 @@ export default function ProcessingPanel() {
       </div>
 
       {showResult && result && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
-            <h3 className="font-semibold text-gray-900">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none overflow-hidden">
+          <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">
               {t('processing.resultTitle', { id: result.document_id })}
             </h3>
             <button
               onClick={() => setShowResult(false)}
-              className="text-sm text-gray-500 hover:text-gray-700"
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
               {t('processing.hide')}
             </button>
@@ -418,10 +418,10 @@ export default function ProcessingPanel() {
               ) : (
                 <XCircle size={20} className="text-red-500" />
               )}
-              <span className={result.success ? 'text-green-700' : 'text-red-700'}>
+              <span className={result.success ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>
                 {result.success ? t('processing.successMsg') : t('processing.failedMsg')}
               </span>
-              <span className="text-gray-500 text-sm ml-2">
+              <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">
                 ({formatDuration(result.processing_time_ms)})
               </span>
             </div>
@@ -433,8 +433,8 @@ export default function ProcessingPanel() {
                   onClick={() => setResultStepFilter(status)}
                   className={`text-xs px-2.5 py-1 rounded-full border ${
                     resultStepFilter === status
-                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   {status === 'all' ? t('dashboard.all') : t(`dashboard.${status}`)}
@@ -448,42 +448,42 @@ export default function ProcessingPanel() {
                   key={index}
                   className={`flex items-start justify-between gap-3 px-3 py-2 rounded ${
                     step.status === 'completed'
-                      ? 'bg-green-50'
+                      ? 'bg-green-50 dark:bg-green-900/40'
                       : step.status === 'failed'
-                        ? 'bg-red-50'
-                        : 'bg-yellow-50'
+                        ? 'bg-red-50 dark:bg-red-900/40'
+                        : 'bg-yellow-50 dark:bg-yellow-900/40'
                   }`}
                 >
                   <div className="flex items-start gap-2 min-w-0">
                     <div className="mt-0.5">{getStatusIcon(step.status)}</div>
                     <div className="min-w-0">
                       <div>
-                        <span className="text-sm text-gray-700">{step.name}</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-200">{step.name}</span>
                         {step.error && (
-                          <span className="text-xs text-red-600 ml-2">- {step.error}</span>
+                          <span className="text-xs text-red-600 dark:text-red-400 ml-2">- {step.error}</span>
                         )}
                       </div>
                       {formatStepDetails(step) && (
-                        <p className="mt-1 text-xs text-gray-600 break-words">
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-300 break-words">
                           {formatStepDetails(step)}
                         </p>
                       )}
                     </div>
                   </div>
-                  <span className="text-xs text-gray-500">{formatDuration(step.duration_ms)}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{formatDuration(step.duration_ms)}</span>
                 </div>
               ))}
             </div>
             {filteredSteps.length === 0 && (
-              <p className="text-sm text-gray-500">{t('processing.noStepsForFilter')}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('processing.noStepsForFilter')}</p>
             )}
 
             {result.proposed_changes && Object.keys(result.proposed_changes).length > 0 && (
-              <div className="mt-4 pt-4 border-t">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                   {t('processing.updatesApplied')}
                 </h4>
-                <div className="text-sm text-gray-600 space-y-1">
+                <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                   {result.proposed_changes.title && (
                     <div>
                       {t('processing.updateTitle')} {result.proposed_changes.title as string}
@@ -531,35 +531,35 @@ export default function ProcessingPanel() {
       )}
 
       {loading ? (
-        <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
       ) : refreshMode === 'manual' && !hasLoadedDocuments ? (
-        <div className="bg-white rounded-lg border border-gray-200 text-center py-10 px-4 text-gray-500">
-          <p className="font-medium text-gray-700 mb-1">{t('processing.manualRefreshTitle')}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-center py-10 px-4 text-gray-500 dark:text-gray-400">
+          <p className="font-medium text-gray-700 dark:text-gray-200 mb-1">{t('processing.manualRefreshTitle')}</p>
           <p className="text-sm">{t('processing.manualRefreshHint')}</p>
         </div>
       ) : documents.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 text-center py-10 px-4 text-gray-500">
-          <p className="font-medium text-gray-700 mb-1">{t('processing.noDocuments')}</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-center py-10 px-4 text-gray-500 dark:text-gray-400">
+          <p className="font-medium text-gray-700 dark:text-gray-200 mb-1">{t('processing.noDocuments')}</p>
           <p className="text-sm">{t('processing.noDocumentsHint')}</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none overflow-hidden">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('processing.colDocument')}
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('processing.colTags')}
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('processing.colId')}
                 </th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('processing.colCreated')}
                 </th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">
+                <th className="text-right py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('processing.colAction')}
                 </th>
               </tr>
@@ -572,22 +572,22 @@ export default function ProcessingPanel() {
                 )
 
                 return (
-                  <tr key={doc.id} className="border-t hover:bg-gray-50">
+                  <tr key={doc.id} className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <FileText size={18} className="text-gray-400" />
+                        <FileText size={18} className="text-gray-400 dark:text-gray-500" />
                         {documentUrl ? (
                           <a
                             href={documentUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium text-blue-700 hover:underline"
+                            className="font-medium text-blue-700 dark:text-blue-300 hover:underline"
                           >
                             {doc.title || t('processing.docFallback', { id: doc.id })}
-                            <span className="ml-2 text-xs text-gray-500">#{doc.id}</span>
+                            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">#{doc.id}</span>
                           </a>
                         ) : (
-                          <span className="font-medium">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
                             {doc.title || t('processing.docFallback', { id: doc.id })}
                           </span>
                         )}
@@ -598,15 +598,15 @@ export default function ProcessingPanel() {
                         {(doc.tag_names || []).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
+                            className="rounded bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 text-xs text-gray-600 dark:text-gray-300"
                           >
                             {tag}
                           </span>
                         ))}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-gray-600">#{doc.id}</td>
-                    <td className="py-3 px-4 text-gray-600">
+                    <td className="py-3 px-4 text-gray-600 dark:text-gray-300">#{doc.id}</td>
+                    <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
                       {new Date(doc.created).toLocaleDateString()}
                     </td>
                     <td className="py-3 px-4 text-right">
