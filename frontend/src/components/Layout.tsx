@@ -78,9 +78,9 @@ export default function Layout() {
       <div className="p-6">
         <div className="flex items-center gap-3 mb-1">
           <img src="/icon.png" alt="Paperless-AIssist" className="w-12 h-12 rounded" />
-          <h1 className="text-xl font-bold text-gray-900">Paperless-AIssist</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Paperless-AIssist</h1>
         </div>
-        <p className="text-sm text-gray-500">{t('nav.subtitle')}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{t('nav.subtitle')}</p>
       </div>
       <nav className="px-4">
         {navItems.map((item) => (
@@ -101,7 +101,7 @@ export default function Layout() {
           </NavLink>
         ))}
       </nav>
-      <div className="mt-auto px-4 py-4 border-t border-gray-200">
+      <div className="mt-auto px-4 py-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between gap-3 px-3 py-2">
           <a
             href={githubRepoUrl}
