@@ -77,6 +77,7 @@ class TagsStep(AbstractStep):
                 .replace("{content}", text[:10000])
                 .replace("{tags_list}", tags_list)
             )
+            ctx.note_model(ctx.llm)
             result = await ctx.llm.complete(
                 system_prompt=prompt_data["system_prompt"],
                 user_prompt=user_msg,

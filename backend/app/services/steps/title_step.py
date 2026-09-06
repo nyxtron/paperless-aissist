@@ -80,6 +80,7 @@ class TitleStep(AbstractStep):
                 .replace("{title}", original_title)
                 .replace("{correspondents_list}", corr_list)
             )
+            ctx.note_model(ctx.llm)
             result = await ctx.llm.complete(
                 system_prompt=title_prompt_data["system_prompt"],
                 user_prompt=user_msg,

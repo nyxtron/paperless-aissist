@@ -71,6 +71,9 @@ class OCRStep(AbstractStep):
                 if vp:
                     vision_prompt_text = vp.system_prompt
 
+            # The log is filed under the models noted here, and the text model
+            # is never asked on an ai-ocr-only run (issue #51).
+            ctx.note_model(vision_pipeline.llm_handler)
             vision_result = await vision_pipeline.extract_text_from_pdf(
                 pdf_bytes, prompt=vision_prompt_text
             )

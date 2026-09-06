@@ -104,6 +104,7 @@ class FieldsStep(AbstractStep):
                     .replace("{custom_fields_list}", cf_list)
                     .replace("{document_custom_fields_list}", doc_cf_list)
                 )
+                ctx.note_model(ctx.llm)
                 extract_result = await ctx.llm.complete(
                     system_prompt=extract_prompt_data["system_prompt"],
                     user_prompt=user_msg,
@@ -159,6 +160,7 @@ class FieldsStep(AbstractStep):
                     .replace("{custom_fields_list}", cf_list)
                     .replace("{document_custom_fields_list}", doc_cf_list)
                 )
+                ctx.note_model(ctx.llm)
                 type_result = await ctx.llm.complete(
                     system_prompt=type_specific_prompt_data["system_prompt"],
                     user_prompt=user_msg,

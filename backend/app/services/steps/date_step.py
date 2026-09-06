@@ -108,6 +108,7 @@ class DateStep(AbstractStep):
 
         # Deliberately not wrapped in try/except: an unreachable provider has to reach the
         # processor's retry handler instead of being filed as a bad date reply.
+        ctx.note_model(ctx.llm)
         response = await ctx.llm.complete(
             system_prompt=prompt.system_prompt,
             user_prompt=user_msg,

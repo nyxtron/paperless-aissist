@@ -261,6 +261,7 @@ class CorrespondentStep(AbstractStep):
             # would break installs whose (legacy or edited) prompt never gets the
             # new instructions — OpenAI rejects the request and Ollama silently
             # stops matching.
+            ctx.note_model(ctx.llm)
             result = await ctx.llm.complete(
                 system_prompt=prompt_data["system_prompt"],
                 user_prompt=user_msg,

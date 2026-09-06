@@ -79,6 +79,7 @@ class DocumentTypeStep(AbstractStep):
                 .replace("{content}", text[:10000])
                 .replace("{document_types_list}", dt_list)
             )
+            ctx.note_model(ctx.llm)
             result = await ctx.llm.complete(
                 system_prompt=prompt_data["system_prompt"],
                 user_prompt=user_msg,
