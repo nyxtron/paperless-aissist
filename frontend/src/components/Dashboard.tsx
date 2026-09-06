@@ -285,7 +285,7 @@ export default function Dashboard() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[700px]">
             <thead>
-              <tr className="border-b">
+              <tr className="border-b border-gray-200 dark:border-gray-700">
                 <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('dashboard.colDocument')}
                 </th>
@@ -308,7 +308,7 @@ export default function Dashboard() {
                 const documentUrl = buildPaperlessDocumentUrl(paperlessUrl, log.document_id)
 
                 return (
-                  <tr key={log.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <tr key={log.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="py-3 px-4">
                       {documentUrl ? (
                         <a
