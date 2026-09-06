@@ -21,7 +21,7 @@ Run metadata cheaply on local [Ollama](https://ollama.ai) and reserve a paid vis
 - **Document search & preview** — search Paperless documents from the Chat page; preview what AI processing would do without modifying Paperless
 - **Automation API** — trigger, stop, and check processing from cron, Home Assistant, or custom scripts
 - **Auto-scheduler** — polls for new `ai-process` tagged documents on a configurable interval
-- **Multilingual UI** — web interface available in English and German
+- **Multilingual UI with dark mode** — web interface in English and German; follows your system theme, with a light/dark switch in the header
 - **Optional authentication** — protect the web UI with your Paperless-ngx credentials; disabled by default
 
 ## Screenshots

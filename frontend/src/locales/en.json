@@ -24,6 +24,12 @@
     "en": "EN",
     "de": "DE"
   },
+  "theme": {
+    "label": "Appearance",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
   "dashboard": {
     "title": "Dashboard",
     "resetting": "Resetting...",

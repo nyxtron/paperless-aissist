@@ -30,12 +30,12 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
   }
 
   return (
-    <div className="bg-blue-50/50 border border-blue-100 rounded-lg shadow-sm p-6 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 pb-3 mb-4">
-        <h3 className="text-sm font-semibold text-gray-800">{t('config.visionModelSection')}</h3>
+    <div className="bg-blue-50/50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 rounded-lg shadow-sm dark:shadow-none p-6 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 dark:border-blue-900 pb-3 mb-4">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('config.visionModelSection')}</h3>
         <span
           className={`text-xs px-2 py-1 rounded-full ${
-            visionEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+            visionEnabled ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
           }`}
         >
           {visionEnabled ? t('common.enabled') : t('common.disabled')}
@@ -96,7 +96,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
         <div>
           <label className={labelClass}>
             {t('config.apiKey')}{' '}
-            <span className="font-normal text-gray-400">({t('common.optional')})</span>
+            <span className="font-normal text-gray-400 dark:text-gray-500">({t('common.optional')})</span>
           </label>
           <input
             type="password"
@@ -119,7 +119,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             max="3600"
             value={config.llm_timeout_vision || '600'}
             onChange={(e) => handleChange('llm_timeout_vision', e.target.value)}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
           />
           <p className={hintClass}>{t('config.llmTimeoutVisionHint')}</p>
         </div>
@@ -132,7 +132,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             step="0.1"
             value={config.llm_temperature_vision || '0.3'}
             onChange={(e) => handleChange('llm_temperature_vision', e.target.value)}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
           />
           <p className={hintClass}>{t('config.llmTemperatureVisionHint')}</p>
         </div>
@@ -145,7 +145,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             value={config.llm_max_tokens_vision || ''}
             onChange={(e) => handleChange('llm_max_tokens_vision', e.target.value)}
             placeholder="8192"
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
           <p className={hintClass}>{t('config.llmMaxTokensVisionHint')}</p>
         </div>
@@ -161,7 +161,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             value={config.llm_num_ctx_vision || ''}
             onChange={(e) => handleChange('llm_num_ctx_vision', e.target.value)}
             placeholder="32768"
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
           <p className={hintClass}>{t('config.llmContextWindowVisionHint')}</p>
         </div>

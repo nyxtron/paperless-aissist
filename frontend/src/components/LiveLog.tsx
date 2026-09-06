@@ -147,12 +147,12 @@ export default function LiveLog() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold text-gray-900">{t('logs.title')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('logs.title')}</h1>
           <span
             className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}
             title={connected ? t('logs.connected') : t('logs.disconnected')}
           />
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             {connected ? t('logs.live') : t('logs.disconnected')}
           </span>
         </div>
@@ -163,8 +163,8 @@ export default function LiveLog() {
               onClick={() => setLevelFilter(level)}
               className={`px-3 py-2 text-xs rounded-lg border ${
                 levelFilter === level
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               {t(`logs.filter.${level}`)}
@@ -172,14 +172,14 @@ export default function LiveLog() {
           ))}
           <button
             onClick={() => setPaused((p) => !p)}
-            className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            className="flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
           >
             {paused ? <PlayCircle size={16} /> : <PauseCircle size={16} />}
             {paused ? t('logs.resume') : t('logs.pause')}
           </button>
           <button
             onClick={() => setLines([])}
-            className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            className="flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
           >
             <X size={16} />
             {t('logs.clear')}
@@ -197,9 +197,9 @@ export default function LiveLog() {
           </div>
         )}
         {lines.length === 0 ? (
-          <p className="text-gray-500 p-4">{t('logs.emptyState')}</p>
+          <p className="text-gray-500 dark:text-gray-400 p-4">{t('logs.emptyState')}</p>
         ) : visibleLines.length === 0 ? (
-          <p className="text-gray-500 p-4">{t('logs.noEntriesForFilter')}</p>
+          <p className="text-gray-500 dark:text-gray-400 p-4">{t('logs.noEntriesForFilter')}</p>
         ) : (
           <div className="p-4 space-y-0.5">
             {visibleLines.map((line, i) => (

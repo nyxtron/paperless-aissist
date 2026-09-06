@@ -24,6 +24,12 @@
     "en": "EN",
     "de": "DE"
   },
+  "theme": {
+    "label": "Darstellung",
+    "system": "System",
+    "light": "Hell",
+    "dark": "Dunkel"
+  },
   "dashboard": {
     "title": "Dashboard",
     "resetting": "Wird zurückgesetzt...",

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { Suspense, lazy } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import Layout from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import LoginPage from './pages/LoginPage'
@@ -18,7 +19,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-500">Loading...</div>
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     )
   }
@@ -28,10 +29,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function ThemedToaster() {
+  const { resolved } = useTheme()
+  return <Toaster theme={resolved} />
+}
+
 function LoadingFallback() {
   return (
     <div className="flex items-center justify-center min-h-screen">
-      <div className="text-gray-500">Loading...</div>
+      <div className="text-gray-500 dark:text-gray-400">Loading...</div>
     </div>
   )
 }
@@ -65,12 +71,14 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <Toaster />
-      <AuthProvider>
-        <ErrorBoundary>
-          <AppRoutes />
-        </ErrorBoundary>
-      </AuthProvider>
+      <ThemeProvider>
+        <ThemedToaster />
+        <AuthProvider>
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

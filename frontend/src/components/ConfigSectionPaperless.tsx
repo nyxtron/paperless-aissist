@@ -82,10 +82,10 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 space-y-4">
-      <div className="flex items-center gap-2 border-b pb-3 mb-4">
-        <Server size={18} className="text-blue-600" />
-        <h2 className="text-lg font-semibold text-gray-800">{t('config.paperlessSection')}</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6 space-y-4">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
+        <Server size={18} className="text-blue-600 dark:text-blue-400" />
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('config.paperlessSection')}</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -127,7 +127,7 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
       </div>
 
       {status.connected && (
-        <div className="space-y-1 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+        <div className="space-y-1 rounded-lg bg-green-50 dark:bg-green-900/40 px-3 py-2 text-sm text-green-700 dark:text-green-300">
           <div className="flex items-center gap-2">
             <CheckCircle size={16} />
             {t('config.connectedBadge', {
@@ -136,7 +136,7 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
             })}
           </div>
           {lastLoadedAt && (
-            <div className="pl-6 text-xs text-green-800">
+            <div className="pl-6 text-xs text-green-800 dark:text-green-300">
               {t('config.lastLoaded', { time: lastLoadedAt })}
             </div>
           )}
@@ -144,15 +144,15 @@ export function ConfigSectionPaperless({ config, onSave, secretsSet }: ConfigSec
       )}
 
       {status.error && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-lg text-sm">
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-lg text-sm">
           <XCircle size={16} />
           {status.error}
         </div>
       )}
 
-      <div className="border-t pt-4 space-y-4">
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
         {!lastLoadedAt && status.tags.length === 0 && (
-          <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          <p className="rounded-lg bg-blue-50 dark:bg-blue-900/40 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">
             {t('config.notConnectedHint')}
           </p>
         )}

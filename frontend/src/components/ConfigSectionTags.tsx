@@ -12,12 +12,12 @@ export function ConfigSectionTags({ config, onSave }: ConfigSectionProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 space-y-4">
-      <div className="flex items-center gap-2 border-b pb-3 mb-4">
-        <Tag size={18} className="text-blue-600" />
-        <h2 className="text-lg font-semibold text-gray-800">{t('config.modularSection')}</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-none p-6 space-y-4">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
+        <Tag size={18} className="text-blue-600 dark:text-blue-400" />
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('config.modularSection')}</h2>
       </div>
-      <p className="text-sm text-gray-500 -mt-2">{t('config.modularSectionHint')}</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">{t('config.modularSectionHint')}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
