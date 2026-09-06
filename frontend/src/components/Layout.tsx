@@ -45,7 +45,7 @@ export default function Layout() {
   const githubRepoUrl = 'https://github.com/nyxtron/paperless-aissist'
 
   const accountControls = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center flex-wrap gap-2">
       <ThemeSwitch />
       <span className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
       {(['en', 'de'] as const).map((lng) => (
@@ -153,7 +153,7 @@ export default function Layout() {
       </div>
 
       <div className="flex-1 flex flex-col">
-        <header className="h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 flex items-center justify-end">
+        <header className="min-h-14 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 flex items-center justify-end flex-wrap gap-y-2">
           {accountControls}
         </header>
         <main className="flex-1 p-4 md:p-8">

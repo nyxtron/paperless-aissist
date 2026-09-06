@@ -111,6 +111,16 @@ describe('Dashboard', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(container.innerHTML).toContain('#9ca3af')
   })
+
+  it('leaves chart colours untouched in light mode', async () => {
+    vi.mocked(localStorage.getItem).mockReturnValue(null)
+    const { container } = render(<ThemeProvider><Dashboard /></ThemeProvider>)
+
+    await waitFor(() => expect(container.querySelector('.recharts-wrapper')).toBeTruthy())
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(container.innerHTML).not.toContain('#9ca3af')
+    expect(container.innerHTML).not.toContain('#6b7280')
+  })
 })
 
 describe('Dashboard trigger tags', () => {

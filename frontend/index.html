@@ -10,8 +10,11 @@
     <div id="root"></div>
     <script>
       (function () {
+        var stored = null
         try {
-          var stored = localStorage.getItem('theme')
+          stored = localStorage.getItem('theme')
+        } catch (e) {}
+        try {
           var dark =
             stored === 'dark' ||
             (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)

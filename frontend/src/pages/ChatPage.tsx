@@ -389,39 +389,39 @@ export default function ChatPage() {
                   <p className="text-sm text-green-700 dark:text-green-300">{t('chat.previewSuccess')}</p>
                   {previewResult.steps?.map((step, idx) => (
                     <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-gray-700 dark:text-gray-200">{step.name}</span>
+                      <span className="dark:text-gray-200">{step.name}</span>
                       <span className="text-gray-500 dark:text-gray-400">{step.status}</span>
                     </div>
                   ))}
                   {previewResult.proposed_changes &&
                     Object.keys(previewResult.proposed_changes).length > 0 && (
                       <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                        <h4 className="text-sm font-medium dark:text-gray-200 mb-2">
                           {t('chat.proposedChanges')}
                         </h4>
                         {previewResult.proposed_changes.title && (
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                          <p className="text-sm dark:text-gray-300">
                             Title: {previewResult.proposed_changes.title}
                           </p>
                         )}
                         {previewResult.proposed_changes.correspondent && (
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                          <p className="text-sm dark:text-gray-300">
                             Correspondent: {previewResult.proposed_changes.correspondent.name}
                           </p>
                         )}
                         {previewResult.proposed_changes.document_type && (
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                          <p className="text-sm dark:text-gray-300">
                             Type: {previewResult.proposed_changes.document_type.name}
                           </p>
                         )}
                         {previewResult.proposed_changes.tags && (
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                          <p className="text-sm dark:text-gray-300">
                             Tags:{' '}
                             {previewResult.proposed_changes.tags.map((tag) => tag.name).join(', ')}
                           </p>
                         )}
                         {previewResult.proposed_changes.custom_fields && (
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                          <p className="text-sm dark:text-gray-300">
                             Fields:{' '}
                             {previewResult.proposed_changes.custom_fields
                               .map((f) => `${f.field}: ${f.value}`)

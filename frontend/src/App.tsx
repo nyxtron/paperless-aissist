@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { Suspense, lazy } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { ThemeProvider } from './contexts/ThemeContext'
+import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import Layout from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import LoginPage from './pages/LoginPage'
@@ -27,6 +27,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />
   }
   return <>{children}</>
+}
+
+function ThemedToaster() {
+  const { resolved } = useTheme()
+  return <Toaster theme={resolved} />
 }
 
 function LoadingFallback() {
@@ -67,7 +72,7 @@ function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <Toaster />
+        <ThemedToaster />
         <AuthProvider>
           <ErrorBoundary>
             <AppRoutes />

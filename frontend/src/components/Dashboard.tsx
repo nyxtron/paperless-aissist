@@ -150,10 +150,11 @@ export default function Dashboard() {
     }
   }
 
-  const chart = resolved === 'dark'
-    ? { text: '#9ca3af', panel: '#1f2937', border: '#374151' }
-    : { text: '#6b7280', panel: '#ffffff', border: '#e5e7eb' }
-  const tooltipStyle = { backgroundColor: chart.panel, borderColor: chart.border, color: chart.text }
+  const dark = resolved === 'dark'
+  const tick = dark ? { fontSize: 12, fill: '#9ca3af' } : { fontSize: 12 }
+  const tooltipContentStyle = dark
+    ? { backgroundColor: '#1f2937', borderColor: '#374151', color: '#9ca3af' }
+    : undefined
 
   return (
     <div className="space-y-6">
@@ -234,7 +235,7 @@ export default function Dashboard() {
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip contentStyle={tooltipContentStyle} />
             </PieChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-4 mt-4">
@@ -253,9 +254,9 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{t('dashboard.dailyProcessing')}</h2>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyStats}>
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: chart.text }} />
-              <YAxis tick={{ fill: chart.text }} />
-              <Tooltip contentStyle={tooltipStyle} />
+              <XAxis dataKey="date" tick={tick} />
+              <YAxis tick={dark ? { fill: '#9ca3af' } : undefined} />
+              <Tooltip contentStyle={tooltipContentStyle} cursor={dark ? { fill: '#374151' } : undefined} />
               <Bar dataKey="success" fill="#22c55e" name={t('dashboard.success')} />
               <Bar dataKey="failed" fill="#ef4444" name={t('dashboard.failed')} />
             </BarChart>
