@@ -155,6 +155,10 @@ export default function Dashboard() {
   const tooltipContentStyle = dark
     ? { backgroundColor: '#1f2937', borderColor: '#374151', color: '#9ca3af' }
     : undefined
+  // The pie hands the tooltip no colour per slice, so recharts falls back to
+  // black for the entry — unreadable on the dark panel. The bar chart passes
+  // its series colours and keeps them.
+  const pieTooltipItemStyle = dark ? { color: '#e5e7eb' } : undefined
 
   return (
     <div className="space-y-6">
@@ -235,7 +239,7 @@ export default function Dashboard() {
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipContentStyle} />
+              <Tooltip contentStyle={tooltipContentStyle} itemStyle={pieTooltipItemStyle} />
             </PieChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-4 mt-4">

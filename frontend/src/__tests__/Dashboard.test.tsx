@@ -43,9 +43,13 @@ vi.mock('recharts', () => ({
   Bar: () => <div />,
   XAxis: ({ tick }: { tick?: { fill?: string } }) => <div data-fill={tick?.fill} />,
   YAxis: ({ tick }: { tick?: { fill?: string } }) => <div data-fill={tick?.fill} />,
-  Tooltip: ({ contentStyle }: { contentStyle?: CSSProperties }) => (
-    <div style={contentStyle} />
-  ),
+  Tooltip: ({
+    contentStyle,
+    itemStyle,
+  }: {
+    contentStyle?: CSSProperties
+    itemStyle?: CSSProperties
+  }) => <div style={contentStyle} data-item-color={itemStyle?.color} />,
 }))
 
 describe('Dashboard', () => {
@@ -112,6 +116,16 @@ describe('Dashboard', () => {
     expect(container.innerHTML).toContain('#9ca3af')
   })
 
+  // A slice carries no colour into the tooltip, so recharts writes black there.
+  it('gives the pie tooltip a readable text colour on the dark theme', async () => {
+    vi.mocked(localStorage.getItem).mockReturnValue('dark')
+    const { container } = render(<ThemeProvider><Dashboard /></ThemeProvider>)
+
+    await waitFor(() => expect(container.querySelector('.recharts-wrapper')).toBeTruthy())
+    // Only the pie tooltip: the bar chart keeps the green and red of its series.
+    expect(container.querySelectorAll('[data-item-color="#e5e7eb"]')).toHaveLength(1)
+  })
+
   it('leaves chart colours untouched in light mode', async () => {
     vi.mocked(localStorage.getItem).mockReturnValue(null)
     const { container } = render(<ThemeProvider><Dashboard /></ThemeProvider>)
@@ -120,6 +134,7 @@ describe('Dashboard', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(container.innerHTML).not.toContain('#9ca3af')
     expect(container.innerHTML).not.toContain('#6b7280')
+    expect(container.innerHTML).not.toContain('#e5e7eb')
   })
 })
 
