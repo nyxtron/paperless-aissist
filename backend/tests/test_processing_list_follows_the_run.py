@@ -11,10 +11,6 @@ from datetime import datetime, timezone
 from app.services import scheduler as scheduler_service
 
 
-def _setup_function():
-    scheduler_service._clear_processing()
-
-
 def _fresh_state():
     scheduler_service._clear_processing()
     scheduler_service._save_state(scheduler_service._default_state())

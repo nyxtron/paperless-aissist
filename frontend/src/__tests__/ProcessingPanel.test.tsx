@@ -301,6 +301,39 @@ describe('ProcessingPanel', () => {
     expect(mocks.mockGetTagged).toHaveBeenCalledTimes(asked)
   })
 
+  it('reloads while the page stays open and a document finishes', async () => {
+    // The reported case: nobody navigates, the scheduler works in the background.
+    render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+
+    mocks.mockGetTagged.mockResolvedValue({
+      data: { paperless_url: 'http://paperless.test/', documents: [] },
+    })
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-13T10:00:00+00:00',
+      },
+    })
+
+    // The next poll of the running interval brings the new stamp.
+    await waitFor(
+      () => {
+        expect(mocks.mockGetTagged).toHaveBeenCalledTimes(2)
+      },
+      { timeout: 4000 },
+    )
+    await waitFor(() => {
+      expect(screen.queryByText('Invoice 2024')).not.toBeInTheDocument()
+    })
+  })
+
   it('keeps the list on screen when a poll-driven reload fails', async () => {
     const firstRender = render(<ProcessingPanel />)
     await waitFor(() => {
