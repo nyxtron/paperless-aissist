@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react'
+import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock, AlertTriangle, StopCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { configApi, documentsApi, schedulerApi } from '../api/client'
@@ -92,6 +92,9 @@ export default function ProcessingPanel() {
   const [paperlessUrl, setPaperlessUrl] = useState<string | null>(null)
   const [resultStepFilter, setResultStepFilter] = useState<'all' | 'failed' | 'completed'>('all')
   const [refreshMode, setRefreshMode] = useState<DocumentListRefreshMode>('automatic')
+  // Only guards the click; whether a stop was asked for is the run's own state,
+  // so the button cannot stay disabled into the next run.
+  const [stopInFlight, setStopInFlight] = useState(false)
   // Read by the status poll, which was set up once and would otherwise see the initial value.
   const refreshModeRef = useRef<DocumentListRefreshMode | null>(null)
   const latestStatusRef = useRef<SchedulerStatus | null>(null)
@@ -274,6 +277,22 @@ export default function ProcessingPanel() {
     }
   }
 
+  const handleStopRun = async () => {
+    setStopInFlight(true)
+    try {
+      await schedulerApi.stopRun()
+      await loadSchedulerStatus()
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } } }
+      toast.error(
+        axiosErr.response?.data?.detail ||
+          (err instanceof Error ? err.message : t('processing.stopFailed')),
+      )
+    } finally {
+      setStopInFlight(false)
+    }
+  }
+
   const handleRefresh = async () => {
     await loadSchedulerStatus()
     await loadDocuments({ force: true })
@@ -311,6 +330,7 @@ export default function ProcessingPanel() {
 
   const isCurrentlyProcessing = schedulerStatus?.is_processing || processing
   const currentDocumentIds = schedulerStatus?.current_document_ids || []
+  const stopRequested = Boolean(schedulerStatus?.stop_requested)
   const filteredSteps =
     resultStepFilter === 'all'
       ? result?.steps || []
@@ -321,7 +341,7 @@ export default function ProcessingPanel() {
       {isCurrentlyProcessing && (
         <div className="bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center gap-3">
           <RefreshCw size={20} className="animate-spin text-blue-600 dark:text-blue-400" />
-          <div>
+          <div className="flex-1">
             <span className="font-medium text-blue-700 dark:text-blue-300">
               {t('processing.processingInProgress')}
             </span>
@@ -345,23 +365,50 @@ export default function ProcessingPanel() {
                 documentId,
               )
               const label = t('processing.currentDoc', { id: documentId })
-              return currentDocumentUrl ? (
-                <a
-                  key={documentId}
-                  href={currentDocumentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-600 dark:text-blue-400 text-sm ml-2 underline"
-                >
-                  {label}
-                </a>
-              ) : (
-                <span key={documentId} className="text-blue-600 dark:text-blue-400 text-sm ml-2">
-                  {label}
+              // Several documents run at once, so the page has to sit with the
+              // one it belongs to rather than at the end of the line.
+              const active = (schedulerStatus?.active_documents || []).find(
+                (doc) => doc.document_id === documentId,
+              )
+              return (
+                <span key={documentId} className="text-sm">
+                  {currentDocumentUrl ? (
+                    <a
+                      href={currentDocumentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 dark:text-blue-400 ml-2 underline"
+                    >
+                      {label}
+                    </a>
+                  ) : (
+                    <span className="text-blue-600 dark:text-blue-400 ml-2">{label}</span>
+                  )}
+                  {active?.page && active?.pages ? (
+                    <span className="ml-1 text-blue-600 dark:text-blue-400">
+                      {t('processing.pageOfPages', {
+                        page: active.page,
+                        pages: active.pages,
+                      })}
+                    </span>
+                  ) : null}
                 </span>
               )
             })}
+            {stopRequested && (
+              <p className="mt-1 text-sm text-blue-600 dark:text-blue-400">
+                {t('processing.stopRequested')}
+              </p>
+            )}
           </div>
+          <button
+            onClick={handleStopRun}
+            disabled={stopRequested || stopInFlight}
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50"
+          >
+            <StopCircle size={16} />
+            {stopRequested ? t('processing.stopping') : t('processing.stopRun')}
+          </button>
         </div>
       )}
 
@@ -391,10 +438,12 @@ export default function ProcessingPanel() {
             </span>
           </div>
           <p className="mt-1">
-            {t('processing.runStoppedBody', {
-              failures: schedulerStatus.last_stop.failures,
-              reason: schedulerStatus.last_stop.reason,
-            })}
+            {schedulerStatus.last_stop.failures === 0
+              ? t('processing.runStoppedByHand')
+              : t('processing.runStoppedBody', {
+                  failures: schedulerStatus.last_stop.failures,
+                  reason: schedulerStatus.last_stop.reason,
+                })}
           </p>
         </div>
       )}

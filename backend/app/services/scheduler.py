@@ -85,6 +85,9 @@ DATA_DIR = os.environ.get(
 os.makedirs(DATA_DIR, exist_ok=True)
 STATE_FILE = os.path.join(DATA_DIR, "scheduler_state.json")
 
+# Marks a run that a person ended, as opposed to one the failure limit cut off.
+HAND_STOP_REASON = "stopped on request"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -97,6 +100,7 @@ def _default_state() -> dict[str, Any]:
         "active_documents": [],
         "last_stop": None,
         "last_finished_at": None,
+        "stop_requested": False,
     }
 
 
@@ -144,6 +148,9 @@ def _active_document_payload(
         or (clean_trigger_tags[0] if clean_trigger_tags else None),
         "active_step": active_step,
         "started_at": started_at or _now_iso(),
+        # Set while a vision model reads the pages of this document.
+        "page": None,
+        "pages": None,
     }
 
 
@@ -192,6 +199,9 @@ def _set_processing(
             # to know when a document last finished, or an empty tick between a
             # finish and its return would make a stale list look current.
             "last_finished_at": _load_state().get("last_finished_at"),
+            # Deliberately not carried over: a stop asked for during the last run
+            # is spent, and a new run must not be born stopped.
+            "stop_requested": False,
         }
         _save_state(state)
 
@@ -208,6 +218,27 @@ def _clear_processing():
         # list it holds, and a run ending must not make that look current.
         state["last_finished_at"] = previous.get("last_finished_at")
         _save_state(state)
+
+
+def request_run_stop() -> bool:
+    """Ask the running batch to stop once the documents in flight are done.
+
+    Only the current run is meant: the scheduler keeps its interval and picks
+    the rest up at the next tick.
+    """
+    with lock:
+        state = _load_state()
+        if not state.get("is_processing"):
+            return False
+        state["stop_requested"] = True
+        _save_state(state)
+        return True
+
+
+def is_run_stop_requested() -> bool:
+    """True while a batch has been asked to stop; read between documents."""
+    with lock:
+        return bool(_load_state().get("stop_requested"))
 
 
 def record_run_stop(reason: str, failures: int):
@@ -257,6 +288,8 @@ def update_active_document(
     trigger_tags: Optional[list[str]] = None,
     trigger_mode: Optional[str] = None,
     active_step: Optional[str] = None,
+    page: Optional[int] = None,
+    pages: Optional[int] = None,
 ):
     """Update metadata for an active document without resetting its timer."""
     with lock:
@@ -271,6 +304,14 @@ def update_active_document(
                 doc["trigger_mode"] = trigger_mode
             if active_step is not None:
                 doc["active_step"] = active_step
+                # A new step is not reading pages until it says so.
+                if page is None:
+                    doc["page"] = None
+                    doc["pages"] = None
+            if page is not None:
+                doc["page"] = page
+            if pages is not None:
+                doc["pages"] = pages
             break
         state["active_documents"] = active_documents
         _save_state(state)
@@ -464,6 +505,7 @@ def get_scheduler_status() -> dict:
             "running_seconds": processing_state["running_seconds"],
             "last_stop": processing_state.get("last_stop"),
             "last_finished_at": processing_state.get("last_finished_at"),
+            "stop_requested": bool(processing_state.get("stop_requested")),
         }
 
     job = scheduler.get_job(job_id)
@@ -479,6 +521,7 @@ def get_scheduler_status() -> dict:
             "running_seconds": processing_state["running_seconds"],
             "last_stop": processing_state.get("last_stop"),
             "last_finished_at": processing_state.get("last_finished_at"),
+            "stop_requested": bool(processing_state.get("stop_requested")),
         }
 
     return {
@@ -492,6 +535,7 @@ def get_scheduler_status() -> dict:
         "running_seconds": processing_state["running_seconds"],
         "last_stop": processing_state.get("last_stop"),
         "last_finished_at": processing_state.get("last_finished_at"),
+        "stop_requested": bool(processing_state.get("stop_requested")),
     }
 
 
@@ -626,6 +670,15 @@ async def process_modular_tagged_documents() -> dict:
     consecutive_failures = 0
     stop: dict[str, Any] = {}
 
+    def _note_hand_stop(stop: dict[str, Any]) -> bool:
+        """Carry a stop asked for from the outside into this run's own flag."""
+        if not is_run_stop_requested():
+            return False
+        if not stop:
+            stop["reason"] = HAND_STOP_REASON
+            stop["failures"] = 0
+        return True
+
     async def _limited_process(doc_id: int):
         nonlocal consecutive_failures
         # gather cannot be cut short, so the queued coroutines bow out themselves.
@@ -633,7 +686,9 @@ async def process_modular_tagged_documents() -> dict:
         if stop:
             return {"success": True, "skipped": True, "reason": "run stopped"}
         async with sem:
-            if stop:
+            # The one place that reads a stop asked for from the outside: right
+            # before the work, so a document never starts after the request.
+            if stop or _note_hand_stop(stop):
                 return {"success": True, "skipped": True, "reason": "run stopped"}
             result = await process_one(doc_id)
 
@@ -655,11 +710,14 @@ async def process_modular_tagged_documents() -> dict:
     )
 
     if stop:
-        logger.warning(
-            "Run stopped after %d consecutive provider failures: %s",
-            stop["failures"],
-            stop["reason"],
-        )
+        if stop["reason"] == HAND_STOP_REASON:
+            logger.info("Run stopped on request; documents in flight were finished")
+        else:
+            logger.warning(
+                "Run stopped after %d consecutive provider failures: %s",
+                stop["failures"],
+                stop["reason"],
+            )
         record_run_stop(stop["reason"], stop["failures"])
 
     # A document whose trigger tag disappeared while it queued is neither work done

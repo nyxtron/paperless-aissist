@@ -81,9 +81,11 @@ class TestOCRStep:
             result = await step.execute(ctx)
 
         mock_paperless.get_document_file.assert_awaited_once_with(1, original=True)
-        vision_pipeline.extract_text_from_pdf.assert_awaited_once_with(
-            b"fake pdf bytes", prompt=None
-        )
+        vision_pipeline.extract_text_from_pdf.assert_awaited_once()
+        call = vision_pipeline.extract_text_from_pdf.await_args
+        assert call.args == (b"fake pdf bytes",)
+        assert call.kwargs["prompt"] == None
+        assert callable(call.kwargs["on_page"])
         assert result.data == {"text": "Vision OCR text"}
         assert result.error is None
         assert ctx.ocr_text == "Vision OCR text"
@@ -114,9 +116,11 @@ class TestOCRStep:
             step = await OCRStep.from_config(ctx.config)
             await step.execute(ctx)
 
-        vision_pipeline.extract_text_from_pdf.assert_awaited_once_with(
-            b"fake pdf bytes", prompt="Read every page carefully."
-        )
+        vision_pipeline.extract_text_from_pdf.assert_awaited_once()
+        call = vision_pipeline.extract_text_from_pdf.await_args
+        assert call.args == (b"fake pdf bytes",)
+        assert call.kwargs["prompt"] == "Read every page carefully."
+        assert callable(call.kwargs["on_page"])
 
     def test_modular_ocr_fix_tag_does_not_trigger_vision_ocr(self, ctx):
         """ai-ocr-fix is handled by OCRFixStep, not by OCRStep."""

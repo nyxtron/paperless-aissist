@@ -9,7 +9,7 @@ import logging
 import json
 import re
 import httpx
-from typing import Iterator, Optional, Any
+from typing import Any, Callable, Iterator, Optional
 from ..exceptions import LLMError, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -222,6 +222,18 @@ PROMPT_CONTROL_CHARS_TO_REMOVE = dict.fromkeys(
 def sanitize_prompt_text(text: str) -> str:
     """Strip control characters that can break LLM chat endpoints."""
     return text.translate(PROMPT_CONTROL_CHARS_TO_REMOVE)
+
+
+def _report_page(
+    on_page: Optional[Callable[[int, int], None]], page: int, pages: int
+) -> None:
+    """Tell the caller which page is going out, without ever failing the read."""
+    if on_page is None:
+        return
+    try:
+        on_page(page, pages)
+    except Exception as e:
+        logger.debug("Page progress callback failed: %s", e)
 
 
 class LLMHandler:
@@ -554,6 +566,7 @@ class LLMHandler:
         json_mode: bool = True,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        on_page: Optional[Callable[[int, int], None]] = None,
     ) -> dict[str, Any]:
         """Send a vision/multimodal completion request.
 
@@ -587,6 +600,7 @@ class LLMHandler:
                 effective_temperature,
                 effective_max_tokens,
                 self.num_ctx,
+                on_page=on_page,
             )
         elif self.provider in OPENAI_COMPATIBLE_PROVIDERS:
             return await self._openai_vision_complete(
@@ -597,6 +611,7 @@ class LLMHandler:
                 effective_temperature,
                 effective_max_tokens,
                 pdf_bytes=pdf_bytes if self.provider == "openai" else None,
+                on_page=on_page,
             )
         else:
             raise Exception(f"Provider {self.provider} not supported for vision")
@@ -610,6 +625,7 @@ class LLMHandler:
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: Optional[int] = None,
         num_ctx: Optional[int] = None,
+        on_page: Optional[Callable[[int, int], None]] = None,
     ) -> dict[str, Any]:
         """Ollama vision implementation — processes images page-by-page."""
         if images is None:
@@ -621,6 +637,7 @@ class LLMHandler:
         combined_text = []
 
         for i, img in enumerate(images):
+            _report_page(on_page, i + 1, len(images))
             img_b64 = base64.b64encode(img).decode("utf-8")
             logger.info(
                 f"Ollama Vision page {i + 1}/{len(images)}: {url}, model: {self.model}"
@@ -692,6 +709,7 @@ class LLMHandler:
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: Optional[int] = None,
         pdf_bytes: Optional[bytes] = None,
+        on_page: Optional[Callable[[int, int], None]] = None,
     ) -> dict[str, Any]:
         """OpenAI-compatible vision implementation — handles PDF and image inputs."""
         if images is None:
@@ -709,6 +727,7 @@ class LLMHandler:
                 )
                 combined_text = []
                 for page_no, img in enumerate(images, start=1):
+                    _report_page(on_page, page_no, len(images))
                     img_b64 = base64.b64encode(img).decode("utf-8")
                     content = []
                     if user_prompt:

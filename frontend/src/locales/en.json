@@ -322,7 +322,13 @@
     "processedCount": "Processed {{count}} documents",
     "alreadyProcessing": "Already processing",
     "runStoppedTitle": "Last run stopped early",
-    "runStoppedBody": "{{failures}} provider failures in a row: {{reason}}"
+    "runStoppedBody": "{{failures}} provider failures in a row: {{reason}}",
+    "stopRun": "Stop after this document",
+    "stopping": "Stopping…",
+    "stopRequested": "Stopping once the documents in flight are done. The scheduler keeps its interval.",
+    "stopFailed": "Could not ask the run to stop",
+    "runStoppedByHand": "Stopped on request; the documents in flight were finished.",
+    "pageOfPages": "page {{page}} of {{pages}}"
   },
   "logs": {
     "title": "System Logs",

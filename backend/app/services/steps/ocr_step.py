@@ -75,7 +75,9 @@ class OCRStep(AbstractStep):
             # is never asked on an ai-ocr-only run (issue #51).
             ctx.note_model(vision_pipeline.llm_handler)
             vision_result = await vision_pipeline.extract_text_from_pdf(
-                pdf_bytes, prompt=vision_prompt_text
+                pdf_bytes,
+                prompt=vision_prompt_text,
+                on_page=self._page_reporter(ctx),
             )
             text = vision_result.get("text", "") or vision_result.get("raw", "")
 
@@ -109,6 +111,21 @@ class OCRStep(AbstractStep):
     async def update_metadata(self, ctx: StepContext, result: StepResult) -> None:
         if result.data.get("text"):
             await ctx.paperless.update_document(ctx.doc_id, content=result.data["text"])
+
+    @staticmethod
+    def _page_reporter(ctx: StepContext):
+        """Put the page a long document is on into the processing state.
+
+        Reading a big PDF takes minutes while the queue showed nothing but the
+        step name, so a slow read was indistinguishable from a stuck one.
+        """
+
+        def report(page: int, pages: int) -> None:
+            from ..scheduler import update_active_document
+
+            update_active_document(ctx.doc_id, page=page, pages=pages)
+
+        return report
 
     @staticmethod
     async def _get_config(config: dict, key: str, default: str = None) -> str:
