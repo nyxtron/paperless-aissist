@@ -96,6 +96,7 @@ def _default_state() -> dict[str, Any]:
         "started_at": None,
         "active_documents": [],
         "last_stop": None,
+        "last_finished_at": None,
     }
 
 
@@ -187,6 +188,10 @@ def _set_processing(
             "is_processing": True,
             "started_at": started_at,
             "active_documents": active_documents,
+            # A run starting says nothing about the queue; the page still needs
+            # to know when a document last finished, or an empty tick between a
+            # finish and its return would make a stale list look current.
+            "last_finished_at": _load_state().get("last_finished_at"),
         }
         _save_state(state)
 
@@ -199,6 +204,9 @@ def _clear_processing():
         # Why the last run stopped outlives the run itself, otherwise the one place
         # that explains the silence is wiped the moment the run ends.
         state["last_stop"] = previous.get("last_stop")
+        # Same for the last finished document: the page compares it with the
+        # list it holds, and a run ending must not make that look current.
+        state["last_finished_at"] = previous.get("last_finished_at")
         _save_state(state)
 
 
@@ -278,6 +286,9 @@ def mark_document_finished(doc_id: int):
             if doc.get("document_id") != doc_id
         ]
         state["active_documents"] = active_documents
+        # A finished document changes the queue in Paperless. The status carries
+        # the moment so the page knows when the list it caches has fallen behind.
+        state["last_finished_at"] = _now_iso()
         _save_state(state)
 
 
@@ -452,6 +463,7 @@ def get_scheduler_status() -> dict:
             "started_at": processing_state["started_at"],
             "running_seconds": processing_state["running_seconds"],
             "last_stop": processing_state.get("last_stop"),
+            "last_finished_at": processing_state.get("last_finished_at"),
         }
 
     job = scheduler.get_job(job_id)
@@ -466,6 +478,7 @@ def get_scheduler_status() -> dict:
             "started_at": processing_state["started_at"],
             "running_seconds": processing_state["running_seconds"],
             "last_stop": processing_state.get("last_stop"),
+            "last_finished_at": processing_state.get("last_finished_at"),
         }
 
     return {
@@ -478,6 +491,7 @@ def get_scheduler_status() -> dict:
         "started_at": processing_state["started_at"],
         "running_seconds": processing_state["running_seconds"],
         "last_stop": processing_state.get("last_stop"),
+        "last_finished_at": processing_state.get("last_finished_at"),
     }
 
 

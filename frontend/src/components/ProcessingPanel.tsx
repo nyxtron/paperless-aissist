@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -7,7 +7,9 @@ import { configApi, documentsApi, schedulerApi } from '../api/client'
 import { SchedulerStatus } from '../api/types'
 import {
   getCachedDocumentList,
+  getDocumentListStamp,
   invalidateDocumentListCache,
+  listIsBehindTheRun,
   loadCachedDocumentList,
   setCachedDocumentList,
 } from '../utils/documentListCache'
@@ -90,12 +92,18 @@ export default function ProcessingPanel() {
   const [paperlessUrl, setPaperlessUrl] = useState<string | null>(null)
   const [resultStepFilter, setResultStepFilter] = useState<'all' | 'failed' | 'completed'>('all')
   const [refreshMode, setRefreshMode] = useState<DocumentListRefreshMode>('automatic')
+  // Read by the status poll, which was set up once and would otherwise see the initial value.
+  const refreshModeRef = useRef<DocumentListRefreshMode | null>(null)
+  const latestStatusRef = useRef<SchedulerStatus | null>(null)
+  const statusSeenRef = useRef(false)
   const [hasLoadedDocuments, setHasLoadedDocuments] = useState(
     getCachedDocumentList<TaggedDocument>('processing') !== null,
   )
 
-  const loadDocuments = useCallback(async (options: { force?: boolean } = {}) => {
-    setLoading(true)
+  const loadDocuments = useCallback(
+    async (options: { force?: boolean; stamp?: string | null; quiet?: boolean } = {}) => {
+    // A reload the poll asks for keeps the list on screen until the new one is in.
+    if (!options.quiet) setLoading(true)
     setError(null)
     try {
       const loadedDocuments = await loadCachedDocumentList<TaggedDocument>(
@@ -112,7 +120,13 @@ export default function ProcessingPanel() {
             paperless_url: responsePaperlessUrl,
           }))
         },
-        options,
+        {
+          force: options.force,
+          stamp:
+            options.stamp !== undefined
+              ? options.stamp
+              : (latestStatusRef.current?.last_finished_at ?? null),
+        },
       )
       const cachedPaperlessUrl = loadedDocuments.find((doc) => doc.paperless_url)?.paperless_url
       if (cachedPaperlessUrl) {
@@ -124,21 +138,50 @@ export default function ProcessingPanel() {
       const message = err instanceof Error && 'response' in err
         ? (err as { response?: { data?: { detail?: string; status?: number } } }).response?.data?.detail || (err instanceof Error ? err.message : 'Unknown error')
         : err instanceof Error ? err.message : String(err)
-      setError(message)
-      setDocuments([])
+      // A reload the poll asked for must not replace what the user is looking
+      // at: the copy it holds is still the best the page has, and the next
+      // poll that gets through asks again.
+      if (options.quiet) {
+        console.error('Failed to refresh the document list:', message)
+      } else {
+        setError(message)
+        setDocuments([])
+      }
     } finally {
-      setLoading(false)
+      if (!options.quiet) setLoading(false)
     }
-  }, [])
+    },
+    [],
+  )
 
-  const loadSchedulerStatus = async () => {
+  // Decides whether the list needs a request, from the refresh mode and the
+  // last status seen. Without a status only a missing copy is worth a request.
+  const reconcileList = useCallback(() => {
+    if (refreshModeRef.current !== 'automatic' || !statusSeenRef.current) return
+    const hasCopy = getCachedDocumentList<TaggedDocument>('processing') !== null
+    const status = latestStatusRef.current
+    if (status === null) {
+      if (!hasCopy) loadDocuments({ force: true, stamp: null })
+      return
+    }
+    const serverStamp = status.last_finished_at ?? null
+    if (listIsBehindTheRun(hasCopy, getDocumentListStamp('processing'), serverStamp)) {
+      loadDocuments({ force: true, stamp: serverStamp, quiet: hasCopy })
+    }
+  }, [loadDocuments])
+
+  const loadSchedulerStatus = useCallback(async () => {
     try {
       const res = await schedulerApi.getStatus()
+      latestStatusRef.current = res.data
       setSchedulerStatus(res.data)
     } catch (error) {
+      latestStatusRef.current = null
       console.error('Failed to load scheduler status:', error)
     }
-  }
+    statusSeenRef.current = true
+    reconcileList()
+  }, [reconcileList])
 
   useEffect(() => {
     let mounted = true
@@ -155,6 +198,7 @@ export default function ProcessingPanel() {
       if (!mounted) return
 
       setRefreshMode(mode)
+      refreshModeRef.current = mode
       const cached = getCachedDocumentList<TaggedDocument>('processing')
       if (cached !== null) {
         setDocuments(cached)
@@ -164,9 +208,7 @@ export default function ProcessingPanel() {
         }
         setHasLoadedDocuments(true)
       }
-      if (mode === 'automatic') {
-        loadDocuments()
-      }
+      reconcileList()
     }
 
     loadRefreshMode()
@@ -177,7 +219,7 @@ export default function ProcessingPanel() {
       mounted = false
       clearInterval(interval)
     }
-  }, [loadDocuments])
+  }, [loadSchedulerStatus, reconcileList])
 
   const handleProcessAll = async () => {
     setProcessing(true)
@@ -220,14 +262,21 @@ export default function ProcessingPanel() {
       const res = await documentsApi.process(docId)
       setResult(res.data)
       setShowResult(true)
-      loadDocuments({ force: true })
-      loadSchedulerStatus()
+      // The status first: it carries the stamp of the document just finished,
+      // so the list is stored under it and no second request follows.
+      await loadSchedulerStatus()
+      await loadDocuments({ force: true })
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } }
       toast.error(`Error: ${axiosErr.response?.data?.detail || (err instanceof Error ? err.message : String(err))}`)
     } finally {
       setProcessingId(null)
     }
+  }
+
+  const handleRefresh = async () => {
+    await loadSchedulerStatus()
+    await loadDocuments({ force: true })
   }
 
   const formatDuration = (ms: number): string => {
@@ -357,7 +406,7 @@ export default function ProcessingPanel() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => loadDocuments({ force: true })}
+            onClick={handleRefresh}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
           >

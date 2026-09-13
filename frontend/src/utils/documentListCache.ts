@@ -3,14 +3,16 @@ export type DocumentListCacheKey = 'chat' | 'processing'
 interface CacheEntry<T> {
   data: T[] | null
   loadedAt: number | null
+  // The server's last_finished_at the copy was taken under, see listIsBehindTheRun.
+  stamp: string | null
   inFlight: Promise<T[]> | null
 }
 
 const DOCUMENT_LIST_CACHE_TTL_MS = 60 * 60 * 1000
 
 const cache: Record<DocumentListCacheKey, CacheEntry<unknown>> = {
-  chat: { data: null, loadedAt: null, inFlight: null },
-  processing: { data: null, loadedAt: null, inFlight: null },
+  chat: { data: null, loadedAt: null, stamp: null, inFlight: null },
+  processing: { data: null, loadedAt: null, stamp: null, inFlight: null },
 }
 
 function isFresh(entry: CacheEntry<unknown>, now = Date.now()): boolean {
@@ -29,7 +31,7 @@ export function getCachedDocumentList<T>(key: DocumentListCacheKey): T[] | null 
 export async function loadCachedDocumentList<T>(
   key: DocumentListCacheKey,
   fetcher: () => Promise<T[]>,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; stamp?: string | null } = {},
 ): Promise<T[]> {
   const entry = cache[key] as CacheEntry<T>
 
@@ -45,6 +47,7 @@ export async function loadCachedDocumentList<T>(
     .then((data) => {
       entry.data = data
       entry.loadedAt = Date.now()
+      entry.stamp = options.stamp ?? null
       return data
     })
     .finally(() => {
@@ -54,9 +57,14 @@ export async function loadCachedDocumentList<T>(
   return entry.inFlight
 }
 
+export function getDocumentListStamp(key: DocumentListCacheKey): string | null {
+  return cache[key].stamp
+}
+
 export function invalidateDocumentListCache(key: DocumentListCacheKey): void {
   cache[key].data = null
   cache[key].loadedAt = null
+  cache[key].stamp = null
 }
 
 export function setCachedDocumentList<T>(key: DocumentListCacheKey, data: T[]): void {
@@ -69,6 +77,23 @@ export function clearDocumentListCache(): void {
   for (const key of Object.keys(cache) as DocumentListCacheKey[]) {
     cache[key].data = null
     cache[key].loadedAt = null
+    cache[key].stamp = null
     cache[key].inFlight = null
   }
+}
+
+// A finished document changes the queue in Paperless. The list is cached so the
+// page does not ask on every visit, which left it stale while the scheduler
+// worked in the background (issue #53). The status carries the moment a
+// document last finished; the copy remembers the value it was taken under.
+// Comparing those two strings needs no clock, so a skewed server clock can
+// neither loop reloads nor hide a finish, and a finish that lands while a
+// request is on its way still shows up as a new value on the next poll.
+export function listIsBehindTheRun(
+  hasCopy: boolean,
+  copyStamp: string | null,
+  serverStamp: string | null | undefined,
+): boolean {
+  if (!hasCopy) return true
+  return (serverStamp ?? null) !== copyStamp
 }
