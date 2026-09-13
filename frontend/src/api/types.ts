@@ -94,6 +94,7 @@ export interface SchedulerStatus {
   }>
   started_at?: string | null
   running_seconds?: number | null
+  last_finished_at?: string | null
   last_stop?: {
     reason: string
     failures: number

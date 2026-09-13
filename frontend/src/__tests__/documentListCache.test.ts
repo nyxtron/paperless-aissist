@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   clearDocumentListCache,
   getCachedDocumentList,
+  getDocumentListStamp,
   invalidateDocumentListCache,
   loadCachedDocumentList,
   setCachedDocumentList,
@@ -115,5 +116,27 @@ describe('documentListCache', () => {
     setCachedDocumentList('processing', [{ id: 2 }])
 
     expect(getCachedDocumentList('processing')).toEqual([{ id: 2 }])
+  })
+
+  it('remembers the stamp the copy was taken under', async () => {
+    expect(getDocumentListStamp('processing')).toBeNull()
+
+    await loadCachedDocumentList('processing', async () => [{ id: 1 }], {
+      stamp: '2026-09-12T10:00:00+00:00',
+    })
+    expect(getDocumentListStamp('processing')).toBe('2026-09-12T10:00:00+00:00')
+
+    // Pruning the list in place keeps the stamp; a reload without one clears it.
+    setCachedDocumentList('processing', [])
+    expect(getDocumentListStamp('processing')).toBe('2026-09-12T10:00:00+00:00')
+    await loadCachedDocumentList('processing', async () => [{ id: 2 }], { force: true })
+    expect(getDocumentListStamp('processing')).toBeNull()
+
+    await loadCachedDocumentList('processing', async () => [{ id: 3 }], {
+      force: true,
+      stamp: 'later',
+    })
+    invalidateDocumentListCache('processing')
+    expect(getDocumentListStamp('processing')).toBeNull()
   })
 })

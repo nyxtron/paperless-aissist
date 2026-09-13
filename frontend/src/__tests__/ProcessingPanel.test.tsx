@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
 import ProcessingPanel, { clearProcessingDocumentCacheForTests } from '../components/ProcessingPanel'
+import { getDocumentListStamp, listIsBehindTheRun } from '../utils/documentListCache'
 
 const mocks = vi.hoisted(() => ({
   mockGetConfig: vi.fn(),
@@ -176,6 +177,237 @@ describe('ProcessingPanel', () => {
       expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
     })
     expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+  })
+
+  it('reloads the list when a document finished after the copy was taken', async () => {
+    const firstRender = render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+    })
+    firstRender.unmount()
+
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-12T10:00:00.422867+00:00',
+      },
+    })
+    render(<ProcessingPanel />)
+
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('keeps the list on screen while the poll reloads it', async () => {
+    const firstRender = render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+    firstRender.unmount()
+
+    let resolveReload: (value: { data: { documents: unknown[] } }) => void = () => {}
+    mocks.mockGetTagged.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveReload = resolve
+      }),
+    )
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-12T10:00:00+00:00',
+      },
+    })
+    render(<ProcessingPanel />)
+
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    expect(screen.queryByText('common.loading')).not.toBeInTheDocument()
+
+    resolveReload({ data: { documents: [] } })
+    await waitFor(() => {
+      expect(screen.queryByText('Invoice 2024')).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps the cached list while the last finish is the one the copy was taken under', async () => {
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-12T10:00:00+00:00',
+      },
+    })
+    const firstRender = render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+    firstRender.unmount()
+
+    render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+    expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads the list once when the status cannot be read', async () => {
+    mocks.mockGetStatus.mockRejectedValue(new Error('down'))
+    const firstRender = render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+    firstRender.unmount()
+
+    render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+    expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+  })
+
+  it('records the manual refresh under the stamp the server reports', async () => {
+    render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+    })
+
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-12T11:00:00+00:00',
+      },
+    })
+    fireEvent.click(screen.getByText('common.refresh'))
+
+    await waitFor(() => {
+      expect(getDocumentListStamp('processing')).toBe('2026-09-12T11:00:00+00:00')
+    })
+    const asked = mocks.mockGetTagged.mock.calls.length
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(mocks.mockGetTagged).toHaveBeenCalledTimes(asked)
+  })
+
+  it('reloads while the page stays open and a document finishes', async () => {
+    // The reported case: nobody navigates, the scheduler works in the background.
+    render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+
+    mocks.mockGetTagged.mockResolvedValue({
+      data: { paperless_url: 'http://paperless.test/', documents: [] },
+    })
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-13T10:00:00+00:00',
+      },
+    })
+
+    // The next poll of the running interval brings the new stamp.
+    await waitFor(
+      () => {
+        expect(mocks.mockGetTagged).toHaveBeenCalledTimes(2)
+      },
+      { timeout: 4000 },
+    )
+    await waitFor(() => {
+      expect(screen.queryByText('Invoice 2024')).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps the list on screen when a poll-driven reload fails', async () => {
+    const firstRender = render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+    firstRender.unmount()
+
+    mocks.mockGetTagged.mockRejectedValueOnce(new Error('backend gone'))
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-12T10:00:00+00:00',
+      },
+    })
+    render(<ProcessingPanel />)
+
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(2)
+    })
+    expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    expect(screen.queryByText('backend gone')).not.toBeInTheDocument()
+  })
+
+  it('asks for the list once when a single document was processed', async () => {
+    render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(1)
+    })
+
+    // The document finishes, so the status that follows carries a new stamp.
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: '2026-09-12T10:00:00+00:00',
+      },
+    })
+    fireEvent.click(screen.getAllByText('processing.processBtn')[0])
+
+    await waitFor(() => {
+      expect(mocks.mockGetTagged).toHaveBeenCalledTimes(2)
+    })
+    // Stored under the stamp that already covers this document, so the next
+    // poll finds nothing to do instead of asking for the same list again.
+    await waitFor(() => {
+      expect(getDocumentListStamp('processing')).toBe('2026-09-12T10:00:00+00:00')
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(mocks.mockGetTagged).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the list alone in manual mode even when a document finished', async () => {
+    mocks.mockGetConfig.mockResolvedValue({ data: { value: 'manual' } })
+    mocks.mockGetStatus.mockResolvedValue({
+      data: {
+        running: true,
+        is_processing: false,
+        current_document_ids: [],
+        active_documents: [],
+        last_finished_at: new Date(Date.now() + 60_000).toISOString(),
+      },
+    })
+
+    render(<ProcessingPanel />)
+
+    await waitFor(() => {
+      expect(screen.getByText('processing.manualRefreshTitle')).toBeInTheDocument()
+    })
+    expect(mocks.mockGetTagged).not.toHaveBeenCalled()
   })
 
   it('reuses an in-flight automatic document list request', async () => {
@@ -426,5 +658,26 @@ describe('ProcessingPanel trigger tags', () => {
     await waitFor(() => {
       expect(screen.getByText('ai-fields')).toBeInTheDocument()
     })
+  })
+})
+
+describe('listIsBehindTheRun', () => {
+  it('wants a request when there is no copy', () => {
+    expect(listIsBehindTheRun(false, null, null)).toBe(true)
+    expect(listIsBehindTheRun(false, null, '2026-09-12T10:00:00+00:00')).toBe(true)
+  })
+
+  it('is content while the copy was taken under the current stamp', () => {
+    expect(listIsBehindTheRun(true, null, null)).toBe(false)
+    expect(listIsBehindTheRun(true, null, undefined)).toBe(false)
+    expect(listIsBehindTheRun(true, 'a', 'a')).toBe(false)
+  })
+
+  it('is behind once the server reports a finish the copy was not taken under', () => {
+    expect(listIsBehindTheRun(true, null, 'a')).toBe(true)
+    expect(listIsBehindTheRun(true, 'a', 'b')).toBe(true)
+    // Any change counts, whichever way the server clock moved.
+    expect(listIsBehindTheRun(true, 'b', 'a')).toBe(true)
+    expect(listIsBehindTheRun(true, 'a', null)).toBe(true)
   })
 })
