@@ -1147,8 +1147,10 @@ Available Custom Fields: [{custom_fields_list}]"""
         documents = await self.paperless.list_documents(tags=[process_tag_id])
 
         from .scheduler import (
+            HAND_STOP_REASON,
             get_max_consecutive_failures,
             is_provider_failure,
+            is_run_stop_requested,
             record_run_stop,
         )
 
@@ -1157,6 +1159,11 @@ Available Custom Fields: [{custom_fields_list}]"""
 
         results = []
         for doc in documents:
+            # Asked between documents, so the one in flight is always finished.
+            if is_run_stop_requested():
+                logger.info("Run stopped on request after %d document(s)", len(results))
+                record_run_stop(HAND_STOP_REASON, 0)
+                break
             result = await self.process_document(doc["id"])
             results.append(result)
 

@@ -10,6 +10,7 @@ from ..services.scheduler import (
     update_scheduler_interval,
     try_trigger_processing,
     clear_processing_state,
+    request_run_stop,
     process_tagged_documents,
     _clear_processing,
 )
@@ -69,6 +70,21 @@ async def trigger_now():
         return {"success": False, "error": str(e)}
     finally:
         _clear_processing()
+
+
+@router.post("/stop-run")
+async def stop_run():
+    """Ask the batch that is running to stop once the current documents are done."""
+    requested = request_run_stop()
+    return {
+        "success": True,
+        "stopping": requested,
+        "message": (
+            "Stopping after the documents in flight"
+            if requested
+            else "No processing run is active"
+        ),
+    }
 
 
 @router.post("/clear-state")
