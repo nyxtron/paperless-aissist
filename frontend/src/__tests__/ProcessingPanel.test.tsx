@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   mockTrigger: vi.fn(),
   mockProcess: vi.fn(),
   mockGetStatus: vi.fn(),
+  mockStopRun: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({
@@ -22,6 +23,7 @@ vi.mock('../api/client', () => ({
   },
   schedulerApi: {
     getStatus: mocks.mockGetStatus,
+    stopRun: mocks.mockStopRun,
     start: vi.fn(),
     stop: vi.fn(),
     update: vi.fn(),
@@ -81,6 +83,7 @@ describe('ProcessingPanel', () => {
         proposed_changes: {},
       },
     })
+    mocks.mockStopRun.mockResolvedValue({ data: { success: true, stopping: true } })
     mocks.mockGetStatus.mockResolvedValue({
       data: {
         running: true,
@@ -681,3 +684,134 @@ describe('listIsBehindTheRun', () => {
     expect(listIsBehindTheRun(true, 'a', null)).toBe(true)
   })
 })
+
+describe('ProcessingPanel while a run is going', () => {
+  const running = (extra: Record<string, unknown> = {}) => ({
+    data: {
+      running: true,
+      interval_minutes: 5,
+      next_run: null,
+      is_processing: true,
+      current_document_ids: [1014],
+      active_documents: [
+        { document_id: 1014, trigger_tags: ['ai-ocr'], active_step: 'ocr' },
+      ],
+      ...extra,
+    },
+  })
+
+  const idle = (extra: Record<string, unknown> = {}) => ({
+    data: {
+      running: true,
+      interval_minutes: 5,
+      next_run: null,
+      is_processing: false,
+      current_document_ids: [],
+      active_documents: [],
+      ...extra,
+    },
+  })
+
+  beforeEach(() => {
+    clearProcessingDocumentCacheForTests()
+    mocks.mockGetConfig.mockResolvedValue({ data: { value: 'automatic' } })
+    mocks.mockGetTagged.mockResolvedValue({
+      data: { paperless_url: 'http://paperless.test/', documents: [] },
+    })
+    mocks.mockStopRun.mockResolvedValue({ data: { success: true, stopping: true } })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('offers to stop the run and asks the backend once', async () => {
+    mocks.mockGetStatus.mockResolvedValue(running())
+    render(<ProcessingPanel />)
+
+    fireEvent.click(await screen.findByText('processing.stopRun'))
+
+    await waitFor(() => {
+      expect(mocks.mockStopRun).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText('processing.stopping')).toBeInTheDocument()
+  })
+
+  it('keeps saying stopping while the run winds down', async () => {
+    mocks.mockGetStatus.mockResolvedValue(running({ stop_requested: true }))
+    render(<ProcessingPanel />)
+
+    expect(await screen.findByText('processing.stopping')).toBeInTheDocument()
+    expect(screen.getByText('processing.stopRequested')).toBeInTheDocument()
+    expect(screen.queryByText('processing.stopRun')).not.toBeInTheDocument()
+  })
+
+  it('has nothing to stop when no run is going', async () => {
+    mocks.mockGetStatus.mockResolvedValue(idle())
+    render(<ProcessingPanel />)
+
+    await screen.findByText('processing.schedulerRunning')
+    expect(screen.queryByText('processing.stopRun')).not.toBeInTheDocument()
+  })
+
+  it('names the page a long document is on', async () => {
+    mocks.mockGetStatus.mockResolvedValue(
+      running({
+        active_documents: [
+          {
+            document_id: 1014,
+            trigger_tags: ['ai-ocr'],
+            active_step: 'ocr',
+            page: 3,
+            pages: 12,
+          },
+        ],
+      }),
+    )
+    render(<ProcessingPanel />)
+
+    expect(await screen.findByText('processing.pageOfPages')).toBeInTheDocument()
+  })
+
+  it('says nothing about pages for a document that is not being read', async () => {
+    mocks.mockGetStatus.mockResolvedValue(running())
+    render(<ProcessingPanel />)
+
+    await screen.findByText('processing.stopRun')
+    expect(screen.queryByText('processing.pageOfPages')).not.toBeInTheDocument()
+  })
+
+  it('tells a run stopped on request from one the failures ended', async () => {
+    mocks.mockGetStatus.mockResolvedValue(
+      idle({
+        last_stop: {
+          reason: 'stopped on request',
+          failures: 0,
+          at: '2026-09-13T10:00:00+00:00',
+        },
+      }),
+    )
+    render(<ProcessingPanel />)
+
+    expect(await screen.findByText('processing.runStoppedByHand')).toBeInTheDocument()
+    expect(screen.queryByText('processing.runStoppedBody')).not.toBeInTheDocument()
+  })
+
+  it('still explains a run the failure limit cut off', async () => {
+    mocks.mockGetStatus.mockResolvedValue(
+      idle({
+        last_stop: {
+          reason: 'provider unavailable',
+          failures: 3,
+          at: '2026-09-13T10:00:00+00:00',
+        },
+      }),
+    )
+    render(<ProcessingPanel />)
+
+    expect(await screen.findByText('processing.runStoppedBody')).toBeInTheDocument()
+    expect(screen.queryByText('processing.runStoppedByHand')).not.toBeInTheDocument()
+  })
+})
+

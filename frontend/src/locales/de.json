@@ -322,7 +322,13 @@
     "processedCount": "{{count}} Dokumente verarbeitet",
     "alreadyProcessing": "Verarbeitung läuft bereits",
     "runStoppedTitle": "Letzter Lauf vorzeitig beendet",
-    "runStoppedBody": "{{failures}} Provider-Fehler in Folge: {{reason}}"
+    "runStoppedBody": "{{failures}} Provider-Fehler in Folge: {{reason}}",
+    "stopRun": "Nach diesem Dokument anhalten",
+    "stopping": "Wird angehalten …",
+    "stopRequested": "Wird angehalten, sobald die laufenden Dokumente fertig sind. Der Scheduler behält sein Intervall.",
+    "stopFailed": "Der Lauf konnte nicht zum Anhalten aufgefordert werden",
+    "runStoppedByHand": "Auf Wunsch angehalten; die laufenden Dokumente wurden fertig gemacht.",
+    "pageOfPages": "Seite {{page}} von {{pages}}"
   },
   "logs": {
     "title": "System-Protokolle",

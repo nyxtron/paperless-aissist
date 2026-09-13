@@ -91,10 +91,13 @@ export interface SchedulerStatus {
     active_step?: string | null
     started_at?: string | null
     running_seconds?: number | null
+    page?: number | null
+    pages?: number | null
   }>
   started_at?: string | null
   running_seconds?: number | null
   last_finished_at?: string | null
+  stop_requested?: boolean
   last_stop?: {
     reason: string
     failures: number

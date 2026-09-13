@@ -104,6 +104,7 @@ export const schedulerApi = {
   update: (intervalMinutes: number) =>
     api.put('/scheduler', { enabled: true, interval: intervalMinutes }),
   triggerNow: () => api.post('/scheduler/trigger-now'),
+  stopRun: () => api.post('/scheduler/stop-run'),
   clearState: () => api.post('/scheduler/clear-state'),
 }
 
