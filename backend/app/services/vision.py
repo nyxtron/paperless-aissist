@@ -6,7 +6,7 @@ Supports Ollama (page-by-page JPEG) and OpenAI (native PDF) providers.
 import asyncio
 import io
 import logging
-from typing import Optional, Any
+from typing import Callable, Optional, Any
 from urllib.parse import urlparse
 
 import fitz
@@ -100,6 +100,7 @@ class VisionPipeline:
         self,
         pdf_bytes: bytes,
         prompt: Optional[str] = None,
+        on_page: Optional[Callable[[int, int], None]] = None,
     ) -> dict[str, Any]:
         if not self.llm_handler:
             raise ValueError("Vision LLM handler not initialized")
@@ -122,6 +123,7 @@ class VisionPipeline:
                 images=images,
                 pdf_bytes=None,
                 json_mode=False,
+                on_page=on_page,
             )
 
         text = result.get("text", "") or result.get("raw", "")
