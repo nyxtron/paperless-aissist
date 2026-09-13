@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, cleanup, within } from '@testing-library/react'
 import ProcessingPanel, { clearProcessingDocumentCacheForTests } from '../components/ProcessingPanel'
 import { getDocumentListStamp, listIsBehindTheRun } from '../utils/documentListCache'
 
@@ -728,6 +728,11 @@ describe('ProcessingPanel while a run is going', () => {
 
   it('offers to stop the run and asks the backend once', async () => {
     mocks.mockGetStatus.mockResolvedValue(running())
+    // The request is what makes the run say it is stopping.
+    mocks.mockStopRun.mockImplementation(async () => {
+      mocks.mockGetStatus.mockResolvedValue(running({ stop_requested: true }))
+      return { data: { success: true, stopping: true } }
+    })
     render(<ProcessingPanel />)
 
     fireEvent.click(await screen.findByText('processing.stopRun'))
@@ -736,6 +741,80 @@ describe('ProcessingPanel while a run is going', () => {
       expect(mocks.mockStopRun).toHaveBeenCalledTimes(1)
     })
     expect(await screen.findByText('processing.stopping')).toBeInTheDocument()
+  })
+
+  it('lets the next run be stopped as well', async () => {
+    // The run that was stopped ends, the scheduler starts the next one, and the
+    // button has to work again without reloading the page.
+    mocks.mockGetStatus.mockResolvedValue(running())
+    mocks.mockStopRun.mockImplementation(async () => {
+      mocks.mockGetStatus.mockResolvedValue(running({ stop_requested: true }))
+      return { data: { success: true, stopping: true } }
+    })
+    render(<ProcessingPanel />)
+
+    fireEvent.click(await screen.findByText('processing.stopRun'))
+    await screen.findByText('processing.stopping')
+
+    mocks.mockGetStatus.mockResolvedValue(idle())
+    await waitFor(
+      () => {
+        expect(screen.queryByText('processing.stopping')).not.toBeInTheDocument()
+      },
+      { timeout: 4000 },
+    )
+
+    mocks.mockGetStatus.mockResolvedValue(running())
+    const again = await screen.findByText('processing.stopRun', undefined, { timeout: 4000 })
+
+    expect(again).toBeEnabled()
+  })
+
+  it('asks once however often the button is pressed', async () => {
+    mocks.mockGetStatus.mockResolvedValue(running())
+    let release: (value: { data: unknown }) => void = () => {}
+    mocks.mockStopRun.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve
+      }),
+    )
+    render(<ProcessingPanel />)
+
+    const button = await screen.findByText('processing.stopRun')
+    fireEvent.click(button)
+    fireEvent.click(button)
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(mocks.mockStopRun).toHaveBeenCalledTimes(1)
+    })
+    release({ data: { success: true, stopping: true } })
+  })
+
+  it('does not latch when there was no run to stop', async () => {
+    mocks.mockGetStatus.mockResolvedValue(running())
+    mocks.mockStopRun.mockResolvedValue({ data: { success: true, stopping: false } })
+    render(<ProcessingPanel />)
+
+    fireEvent.click(await screen.findByText('processing.stopRun'))
+
+    await waitFor(() => {
+      expect(mocks.mockStopRun).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText('processing.stopRun')).toBeEnabled()
+  })
+
+  it('keeps the button usable when the request fails', async () => {
+    mocks.mockGetStatus.mockResolvedValue(running())
+    mocks.mockStopRun.mockRejectedValue(new Error('backend gone'))
+    render(<ProcessingPanel />)
+
+    fireEvent.click(await screen.findByText('processing.stopRun'))
+
+    await waitFor(() => {
+      expect(mocks.mockStopRun).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText('processing.stopRun')).toBeEnabled()
   })
 
   it('keeps saying stopping while the run winds down', async () => {
@@ -772,6 +851,35 @@ describe('ProcessingPanel while a run is going', () => {
     render(<ProcessingPanel />)
 
     expect(await screen.findByText('processing.pageOfPages')).toBeInTheDocument()
+  })
+
+  it('keeps the page with the document it belongs to', async () => {
+    // Three documents run at once by default, so a page label at the end of the
+    // line would read as belonging to whichever document came last.
+    mocks.mockGetStatus.mockResolvedValue(
+      running({
+        paperless_url: 'http://paperless.test/',
+        current_document_ids: [1014, 1015],
+        active_documents: [
+          {
+            document_id: 1014,
+            trigger_tags: ['ai-ocr'],
+            active_step: 'ocr',
+            page: 7,
+            pages: 9,
+          },
+          { document_id: 1015, trigger_tags: ['ai-title'], active_step: 'title' },
+        ],
+      }),
+    )
+    const { container } = render(<ProcessingPanel />)
+
+    await screen.findByText('processing.pageOfPages')
+    const reading = container.querySelector('a[href$="/documents/1014"]')!.closest('span')!
+    const done = container.querySelector('a[href$="/documents/1015"]')!.closest('span')!
+
+    expect(within(reading).getByText('processing.pageOfPages')).toBeInTheDocument()
+    expect(within(done).queryByText('processing.pageOfPages')).not.toBeInTheDocument()
   })
 
   it('says nothing about pages for a document that is not being read', async () => {
