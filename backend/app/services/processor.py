@@ -24,7 +24,7 @@ from ..models import (
     ProcessingLog,
 )
 from .paperless import PaperlessClient
-from .control_tags import MODULAR_TAG_DEFAULTS
+from .control_tags import MODULAR_TAG_DEFAULTS, assignable_tags
 from .llm_handler import PROMPT_CUTS, LLMHandlerManager
 from ..exceptions import LLMError, LLMUnavailableError
 from ..constants import CONTENT_TRUNCATION_LIMIT, TITLE_MAX_LENGTH
@@ -743,6 +743,21 @@ Available Custom Fields: [{custom_fields_list}]"""
                 record["details"] = details
             step_records.append(record)
 
+        async def retry_later(error: Exception) -> dict[str, Any]:
+            # The provider is down, not the document: drop the log row, write
+            # nothing and let the scheduler pick the document up again.
+            await self._delete_log(log_id)
+            logger.warning(f"LLM unavailable for doc {doc_id}, will retry: {error}")
+            return {
+                "success": False,
+                "document_id": doc_id,
+                "title": doc.get("title"),
+                "trigger_tags": trigger_metadata["trigger_tags"],
+                "trigger_mode": trigger_metadata["trigger_mode"],
+                "error": str(error),
+                "retryable": True,
+            }
+
         try:
             for step_instance in step_instances:
                 if not step_instance.can_handle(doc_tag_names):
@@ -838,17 +853,114 @@ Available Custom Fields: [{custom_fields_list}]"""
                     PROMPT_CUTS.reset(cut_token)
 
         except LLMUnavailableError as e:
-            await self._delete_log(log_id)
-            logger.warning(f"LLM unavailable for doc {doc_id}, will retry: {e}")
-            return {
-                "success": False,
-                "document_id": doc_id,
-                "title": doc.get("title"),
-                "trigger_tags": trigger_metadata["trigger_tags"],
-                "trigger_mode": trigger_metadata["trigger_mode"],
-                "error": str(e),
-                "retryable": True,
-            }
+            return await retry_later(e)
+
+        # A failure below falls through to the same handling as a failed step.
+        if not any(step["status"] == "failed" for step in step_records):
+            has_classification = any(
+                k in accumulated_update
+                for k in ("title", "correspondent", "document_type", "tags")
+            )
+            process_trigger_name = config_dict.get("modular_tag_process") or "ai-process"
+            if process_trigger_name in doc_tag_names and not has_classification:
+                async with get_async_session() as session:
+                    stmt = select(Prompt).where(
+                        Prompt.prompt_type == "classify", Prompt.is_active.is_(True)
+                    )
+                    classify_prompt = await session.exec(stmt)
+                    classify_prompt = classify_prompt.first()
+                    classify_prompt_data = (
+                        {
+                            "system_prompt": classify_prompt.system_prompt,
+                            "user_template": classify_prompt.user_template,
+                        }
+                        if classify_prompt
+                        else None
+                    )
+                if classify_prompt_data:
+                    cut_token = PROMPT_CUTS.set([])
+                    try:
+                        text = ctx.ocr_text or ""
+                        if not text:
+                            doc_content = await self.paperless.get_document(doc_id)
+                            text = (
+                                doc_content.get("content", "").strip()
+                                if doc_content.get("content")
+                                else ""
+                            )
+                        # The combined prompt asks for names from the lists, so it
+                        # needs the lists; control and blacklisted tags stay out.
+                        user_msg = self._substitute_variables(
+                            classify_prompt_data["user_template"],
+                            text,
+                            {
+                                **metadata,
+                                "tags": assignable_tags(metadata["tags"], config_dict),
+                                "title": doc.get("title") or "",
+                            },
+                        )
+                        ctx.note_model(llm)
+                        classify_result = await llm.complete(
+                            system_prompt=classify_prompt_data["system_prompt"],
+                            user_prompt=user_msg,
+                            json_mode=False,
+                        )
+                        raw = classify_result.get("text", "") or classify_result.get(
+                            "raw", ""
+                        )
+                        if raw:
+                            parsed = self._parse_classify_response(raw)
+                            if parsed.get("correspondent"):
+                                corr_id = next(
+                                    (
+                                        c["id"]
+                                        for c in metadata["correspondents"]
+                                        if c["name"].lower()
+                                        == parsed["correspondent"].lower()
+                                    ),
+                                    None,
+                                )
+                                if corr_id:
+                                    accumulated_update["correspondent"] = corr_id
+                            if parsed.get("document_type"):
+                                dt_id = next(
+                                    (
+                                        dt["id"]
+                                        for dt in metadata["document_types"]
+                                        if dt["name"].lower()
+                                        == parsed["document_type"].lower()
+                                    ),
+                                    None,
+                                )
+                                if dt_id:
+                                    accumulated_update["document_type"] = dt_id
+                            if parsed.get("tags"):
+                                wanted = [n.lower() for n in parsed["tags"]]
+                                tag_ids = [
+                                    t["id"]
+                                    for t in assignable_tags(metadata["tags"], config_dict)
+                                    if t["name"].lower() in wanted
+                                ]
+                                if tag_ids:
+                                    accumulated_update["tags"] = tag_ids
+                            add_step("classify", "completed", 0)
+                    except LLMUnavailableError as e:
+                        return await retry_later(e)
+                    except LLMError as provider_error:
+                        # Same as a step: the run fails and the document keeps its
+                        # trigger tag, instead of being marked done with nothing written.
+                        logger.warning(
+                            f"Classify fallback failed for doc {doc_id}: {provider_error}"
+                        )
+                        add_step("classify", "failed", 0, str(provider_error))
+                        provider_failure = True
+                    except Exception as classify_err:
+                        logger.warning(
+                            f"Classify fallback failed for doc {doc_id}: {classify_err}"
+                        )
+                        add_step("classify", "failed", 0, str(classify_err))
+                    finally:
+                        PROMPT_CUTS.reset(cut_token)
 
         failed_steps = [step for step in step_records if step["status"] == "failed"]
         if failed_steps:
@@ -887,97 +999,6 @@ Available Custom Fields: [{custom_fields_list}]"""
                 "proposed_changes": {},
                 "error": f"AI processing failed: {error_detail}",
             }
-
-        has_classification = any(
-            k in accumulated_update
-            for k in ("title", "correspondent", "document_type", "tags")
-        )
-        process_trigger_name = config_dict.get("modular_tag_process") or "ai-process"
-        if process_trigger_name in doc_tag_names and not has_classification:
-            async with get_async_session() as session:
-                stmt = select(Prompt).where(
-                    Prompt.prompt_type == "classify", Prompt.is_active.is_(True)
-                )
-                classify_prompt = await session.exec(stmt)
-                classify_prompt = classify_prompt.first()
-                classify_prompt_data = (
-                    {
-                        "system_prompt": classify_prompt.system_prompt,
-                        "user_template": classify_prompt.user_template,
-                    }
-                    if classify_prompt
-                    else None
-                )
-            if classify_prompt_data:
-                try:
-                    text = ctx.ocr_text or ""
-                    if not text:
-                        doc_content = await self.paperless.get_document(doc_id)
-                        text = (
-                            doc_content.get("content", "").strip()
-                            if doc_content.get("content")
-                            else ""
-                        )
-                    user_msg = classify_prompt_data["user_template"].replace(
-                        "{content}", text[:10000]
-                    )
-                    ctx.note_model(llm)
-                    classify_result = await llm.complete(
-                        system_prompt=classify_prompt_data["system_prompt"],
-                        user_prompt=user_msg,
-                        json_mode=False,
-                    )
-                    raw = classify_result.get("text", "") or classify_result.get(
-                        "raw", ""
-                    )
-                    if raw:
-                        parsed = self._parse_classify_response(raw)
-                        if parsed.get("correspondent"):
-                            corr_id = next(
-                                (
-                                    c["id"]
-                                    for c in metadata["correspondents"]
-                                    if c["name"].lower()
-                                    == parsed["correspondent"].lower()
-                                ),
-                                None,
-                            )
-                            if corr_id:
-                                accumulated_update["correspondent"] = corr_id
-                        if parsed.get("document_type"):
-                            dt_id = next(
-                                (
-                                    dt["id"]
-                                    for dt in metadata["document_types"]
-                                    if dt["name"].lower()
-                                    == parsed["document_type"].lower()
-                                ),
-                                None,
-                            )
-                            if dt_id:
-                                accumulated_update["document_type"] = dt_id
-                        if parsed.get("tags"):
-                            blacklist_raw = config_dict.get("tag_blacklist", "")
-                            blacklist = [
-                                t.strip().lower()
-                                for t in blacklist_raw.split(",")
-                                if t.strip()
-                            ]
-                            tag_ids = [
-                                t["id"]
-                                for t in metadata["tags"]
-                                if t["name"].lower()
-                                in [n.lower() for n in parsed["tags"]]
-                                and t["name"].lower() not in blacklist
-                            ]
-                            if tag_ids:
-                                accumulated_update["tags"] = tag_ids
-                        add_step("classify", "completed", 0)
-                except Exception as classify_err:
-                    logger.warning(
-                        f"Classify fallback failed for doc {doc_id}: {classify_err}"
-                    )
-                    add_step("classify", "failed", 0, str(classify_err))
 
         proposed = await self._resolve_proposed_changes(
             accumulated_update,
