@@ -329,6 +329,9 @@ class LLMHandler:
         self._server_window: Optional[int] = None
         self._server_window_read_at: Optional[float] = None
         self._closed = False
+        # Requests still running, so a replaced handler can finish them first.
+        self._in_flight = 0
+        self._retired = False
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -355,6 +358,21 @@ class LLMHandler:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
         self._closed = True
+
+    async def retire(self):
+        """Close once the requests still running on this handler are done."""
+        self._retired = True
+        if not self._in_flight:
+            await self.close()
+
+    async def _after_request(self):
+        self._in_flight -= 1
+        if self._retired and not self._in_flight:
+            try:
+                await self.close()
+            except Exception as e:
+                # The answer is already here and worth more than a clean close.
+                logger.debug("Could not close a replaced LLM client: %s", e)
 
     @classmethod
     async def from_config(cls, for_vision: bool = False) -> "LLMHandler":
@@ -485,7 +503,7 @@ class LLMHandler:
         effective_max_tokens = self.max_tokens if max_tokens is None else max_tokens
 
         if self.provider == "ollama":
-            return await self._ollama_complete(
+            request = self._ollama_complete(
                 system_prompt,
                 user_prompt,
                 json_mode,
@@ -494,7 +512,7 @@ class LLMHandler:
                 self.num_ctx,
             )
         elif self.provider in OPENAI_COMPATIBLE_PROVIDERS:
-            return await self._openai_complete(
+            request = self._openai_complete(
                 system_prompt,
                 user_prompt,
                 json_mode,
@@ -505,6 +523,11 @@ class LLMHandler:
             raise Exception(
                 f"Provider {self.provider} not supported in direct mode. Use litellm."
             )
+        self._in_flight += 1
+        try:
+            return await request
+        finally:
+            await self._after_request()
 
     async def _ollama_complete(
         self,
@@ -709,7 +732,7 @@ class LLMHandler:
         effective_max_tokens = self.max_tokens if max_tokens is None else max_tokens
 
         if self.provider == "ollama":
-            return await self._ollama_vision_complete(
+            request = self._ollama_vision_complete(
                 system_prompt,
                 user_prompt,
                 images,
@@ -720,7 +743,7 @@ class LLMHandler:
                 on_page=on_page,
             )
         elif self.provider in OPENAI_COMPATIBLE_PROVIDERS:
-            return await self._openai_vision_complete(
+            request = self._openai_vision_complete(
                 system_prompt,
                 user_prompt,
                 images,
@@ -732,6 +755,11 @@ class LLMHandler:
             )
         else:
             raise Exception(f"Provider {self.provider} not supported for vision")
+        self._in_flight += 1
+        try:
+            return await request
+        finally:
+            await self._after_request()
 
     async def _ollama_vision_complete(
         self,
@@ -984,5 +1012,17 @@ class LLMHandlerManager:
 
     @classmethod
     async def reset(cls):
-        """Close all handlers (alias for LLMHandlerManager.close)."""
-        await cls.close()
+        """Drop both handlers so the next caller builds them from the settings.
+
+        A document already running finishes on the old handler, which closes
+        once its last request is done.
+        """
+        async with cls._lock:
+            for attr in ("_text_handler", "_vision_handler"):
+                handler = getattr(cls, attr)
+                if handler is not None:
+                    setattr(cls, attr, None)
+                    try:
+                        await handler.retire()
+                    except Exception:
+                        pass

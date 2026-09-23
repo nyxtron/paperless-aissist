@@ -29,16 +29,40 @@ SENSITIVE_KEYS = {
 }
 
 
+# Everything LLMHandler.from_config reads, so a change reaches the next request.
 LLM_HANDLER_KEYS = {
-    "llm_provider",
-    "llm_model",
-    "llm_api_base",
-    "llm_api_key",
-    "llm_provider_vision",
-    "llm_model_vision",
-    "llm_api_base_vision",
-    "llm_api_key_vision",
+    f"llm_{name}{suffix}"
+    for name in (
+        "provider",
+        "model",
+        "api_base",
+        "api_key",
+        "timeout",
+        "temperature",
+        "max_tokens",
+        "num_ctx",
+    )
+    for suffix in ("", "_vision")
 }
+
+
+async def _config_changed(key: str) -> None:
+    """Drop cached values and clients built from the old setting."""
+    # Only after the commit: a request in between would build them again from
+    # the old value and keep it.
+    from ..services.config_cache import ConfigCache
+
+    await (await ConfigCache.get_instance()).invalidate()
+
+    if key in LLM_HANDLER_KEYS:
+        from ..services.llm_handler import LLMHandlerManager
+
+        await LLMHandlerManager.reset()
+
+    if key in ("paperless_url", "paperless_token"):
+        from ..services.paperless_manager import PaperlessClientManager
+
+        await PaperlessClientManager.reset()
 
 
 class ConfigUpdate(BaseModel):
@@ -321,21 +345,8 @@ async def set_config(data: ConfigUpdate = Body(...), description: Optional[str] 
         if data.key == "log_level":
             apply_log_level(data.value)
 
-        if data.key in LLM_HANDLER_KEYS:
-            from ..services.llm_handler import LLMHandlerManager
-
-            await LLMHandlerManager.reset()
-
-        if data.key in ("paperless_url", "paperless_token"):
-            from ..services.paperless_manager import PaperlessClientManager
-
-            await PaperlessClientManager.reset()
-
-        from ..services.config_cache import ConfigCache
-
-        await (await ConfigCache.get_instance()).invalidate()
-
-        return {"key": data.key, "value": data.value}
+    await _config_changed(data.key)
+    return {"key": data.key, "value": data.value}
 
 
 @router.delete("/{key}", response_model=ConfigDeleteResponse)
@@ -349,13 +360,5 @@ async def delete_config(key: str):
             raise HTTPException(status_code=404, detail="Config not found")
         await session.delete(config)
 
-        from ..services.config_cache import ConfigCache
-
-        await (await ConfigCache.get_instance()).invalidate()
-
-        if config.key in ("paperless_url", "paperless_token"):
-            from ..services.paperless_manager import PaperlessClientManager
-
-            await PaperlessClientManager.reset()
-
-        return {"success": True, "message": "Config deleted"}
+    await _config_changed(key)
+    return {"success": True, "message": "Config deleted"}
