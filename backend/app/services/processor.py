@@ -25,7 +25,7 @@ from ..models import (
 )
 from .paperless import PaperlessClient
 from .control_tags import MODULAR_TAG_DEFAULTS
-from .llm_handler import LLMHandlerManager
+from .llm_handler import PROMPT_CUTS, LLMHandlerManager
 from ..exceptions import LLMError, LLMUnavailableError
 from ..constants import CONTENT_TRUNCATION_LIMIT, TITLE_MAX_LENGTH
 from .vision import VisionPipeline
@@ -451,6 +451,10 @@ Available Custom Fields: [{custom_fields_list}]"""
                 "duration_ms": duration_ms,
                 "error": error,
             }
+            cuts = PROMPT_CUTS.get()
+            if cuts:
+                # Only the first: one is enough to tell the step saw half a prompt.
+                details = {**(details or {}), "prompt_cut": cuts[0]}
             if details:
                 record["details"] = details
             step_records.append(record)
@@ -461,6 +465,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                 continue
 
             step_start = time.time()
+            cut_token = PROMPT_CUTS.set([])
             try:
                 result = await step_instance.execute(ctx)
                 duration_ms = int((time.time() - step_start) * 1000)
@@ -498,6 +503,8 @@ Available Custom Fields: [{custom_fields_list}]"""
             except Exception as step_error:
                 duration_ms = int((time.time() - step_start) * 1000)
                 add_step(step_instance.name, "failed", duration_ms, str(step_error))
+            finally:
+                PROMPT_CUTS.reset(cut_token)
 
         proposed = await self._resolve_proposed_changes(
             accumulated_update,
@@ -728,6 +735,10 @@ Available Custom Fields: [{custom_fields_list}]"""
                 "duration_ms": duration_ms,
                 "error": error,
             }
+            cuts = PROMPT_CUTS.get()
+            if cuts:
+                # Only the first: one is enough to tell the step saw half a prompt.
+                details = {**(details or {}), "prompt_cut": cuts[0]}
             if details:
                 record["details"] = details
             step_records.append(record)
@@ -748,6 +759,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                         state_error,
                     )
                 step_start = time.time()
+                cut_token = PROMPT_CUTS.set([])
                 try:
                     result = await step_instance.execute(ctx)
                     duration_ms = int((time.time() - step_start) * 1000)
@@ -822,6 +834,8 @@ Available Custom Fields: [{custom_fields_list}]"""
                         f"Step {step_instance.name} failed for doc {doc_id}: {step_error}"
                     )
                     break
+                finally:
+                    PROMPT_CUTS.reset(cut_token)
 
         except LLMUnavailableError as e:
             await self._delete_log(log_id)

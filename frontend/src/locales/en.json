@@ -55,7 +55,8 @@
     "loadFailed": "Failed to load dashboard data",
     "noLogsForFilter": "No log entries for this filter.",
     "confirmReset": "Are you sure you want to delete all processing logs? This cannot be undone.",
-    "resetFailed": "Failed to reset stats"
+    "resetFailed": "Failed to reset stats",
+    "promptCut": "Prompt cut in: {{steps}}. Raise the context window."
   },
   "config": {
     "title": "Configuration",
@@ -328,7 +329,9 @@
     "stopRequested": "Stopping once the documents in flight are done. The scheduler keeps its interval.",
     "stopFailed": "Could not ask the run to stop",
     "runStoppedByHand": "Stopped on request; the documents in flight were finished.",
-    "pageOfPages": "page {{page}} of {{pages}}"
+    "pageOfPages": "page {{page}} of {{pages}}",
+    "promptCut": "Prompt cut: Ollama read only {{evaluated}} tokens of a {{window}}-token window, so the instructions and lists were dropped. Raise the context window.",
+    "promptCutNoWindow": "Prompt cut: Ollama read only {{evaluated}} tokens, so the instructions and lists were dropped. Raise the context window."
   },
   "logs": {
     "title": "System Logs",

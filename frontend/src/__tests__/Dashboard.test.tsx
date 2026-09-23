@@ -26,9 +26,10 @@ vi.mock('../api/client', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, params?: { id?: number }) => (
-      params?.id ? `${key} ${params.id}` : key
-    ),
+    t: (key: string, params?: { id?: number; steps?: string }) => {
+      if (params?.steps) return `${key} ${params.steps}`
+      return params?.id ? `${key} ${params.id}` : key
+    },
   }),
 }))
 
@@ -93,6 +94,41 @@ describe('Dashboard', () => {
       ],
     })
     mocks.mockGetConfig.mockResolvedValue({ data: { value: 'http://paperless.test/' } })
+  })
+
+  it('names the steps whose prompt Ollama had to cut', async () => {
+    mocks.mockGetRecent.mockResolvedValue({
+      data: [
+        {
+          id: 10,
+          document_id: 89,
+          document_title: 'Beitragsbescheid',
+          status: 'success',
+          llm_provider: 'ollama',
+          llm_model: 'qwen2.5:7b',
+          llm_response: JSON.stringify({
+            steps: [
+              { name: 'title', details: { prompt_cut: { evaluated: 2050, window: 4096 } } },
+              { name: 'correspondent', details: { prompt_cut: { evaluated: 2050, window: 4096 } } },
+              { name: 'tags' },
+            ],
+          }),
+          error_message: null,
+          processing_time_ms: 1200,
+          processed_at: '2026-09-23T10:00:00Z',
+        },
+      ],
+    })
+    render(<Dashboard />)
+
+    expect(await screen.findByText('dashboard.promptCut title, correspondent')).toBeInTheDocument()
+  })
+
+  it('says nothing about cut prompts when none was cut', async () => {
+    render(<Dashboard />)
+
+    await screen.findByText('Recent Invoice')
+    expect(screen.queryByText(/dashboard\.promptCut/)).not.toBeInTheDocument()
   })
 
   it('renders recent processing log document links with visible IDs', async () => {

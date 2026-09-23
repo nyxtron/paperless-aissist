@@ -120,6 +120,21 @@ export default function Dashboard() {
   const filteredLogs =
     logFilter === 'all' ? recentLogs : recentLogs.filter((log) => log.status === logFilter)
 
+  // Names of the steps whose prompt Ollama had to cut, from the stored run.
+  const getCutSteps = (llmResponse?: string | null): string[] => {
+    if (!llmResponse) return []
+    try {
+      const parsed = JSON.parse(llmResponse) as {
+        steps?: Array<{ name?: string; details?: { prompt_cut?: unknown } }>
+      }
+      return (parsed.steps || [])
+        .filter((step) => step.details?.prompt_cut && step.name)
+        .map((step) => step.name as string)
+    } catch {
+      return []
+    }
+  }
+
   const getDateStepDetails = (llmResponse?: string | null): string | null => {
     if (!llmResponse) return null
     try {
@@ -370,6 +385,13 @@ export default function Dashboard() {
                           title={log.error_message}
                         >
                           {log.error_message}
+                        </p>
+                      )}
+                      {getCutSteps(log.llm_response).length > 0 && (
+                        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300 max-w-sm">
+                          {t('dashboard.promptCut', {
+                            steps: getCutSteps(log.llm_response).join(', '),
+                          })}
                         </p>
                       )}
                       {getDateStepDetails(log.llm_response) && (

@@ -55,7 +55,8 @@
     "loadFailed": "Dashboard-Daten konnten nicht geladen werden",
     "noLogsForFilter": "Keine Protokolleinträge für diesen Filter.",
     "confirmReset": "Alle Verarbeitungsprotokolle löschen? Dies kann nicht rückgängig gemacht werden.",
-    "resetFailed": "Statistiken konnten nicht zurückgesetzt werden"
+    "resetFailed": "Statistiken konnten nicht zurückgesetzt werden",
+    "promptCut": "Prompt gekürzt bei: {{steps}}. Kontextfenster erhöhen."
   },
   "config": {
     "title": "Konfiguration",
@@ -328,7 +329,9 @@
     "stopRequested": "Wird angehalten, sobald die laufenden Dokumente fertig sind. Der Scheduler behält sein Intervall.",
     "stopFailed": "Der Lauf konnte nicht zum Anhalten aufgefordert werden",
     "runStoppedByHand": "Auf Wunsch angehalten; die laufenden Dokumente wurden fertig gemacht.",
-    "pageOfPages": "Seite {{page}} von {{pages}}"
+    "pageOfPages": "Seite {{page}} von {{pages}}",
+    "promptCut": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token eines Fensters von {{window}} gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen.",
+    "promptCutNoWindow": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen."
   },
   "logs": {
     "title": "System-Protokolle",

@@ -5,9 +5,11 @@ completion. LLMHandler instances are managed by the singleton LLMHandlerManager.
 """
 
 import asyncio
+import contextvars
 import logging
 import json
 import re
+import time
 import httpx
 from typing import Any, Callable, Iterator, Optional
 from ..exceptions import LLMError, LLMUnavailableError
@@ -16,7 +18,59 @@ logger = logging.getLogger(__name__)
 
 
 _WHITESPACE_RE = re.compile(r"\s+")
+# A run of one mark: dot leaders, form lines, separators.
+_REPEATED_MARK_RE = re.compile(r"([^\w\s]|_)\1+")
 _OPENERS = {"}": "{", "]": "["}
+
+# Filled while a step runs (see processor.py): every prompt Ollama had to cut
+# to fit its context window during that step, so the step can report it.
+PROMPT_CUTS: contextvars.ContextVar[Optional[list[dict[str, Any]]]] = (
+    contextvars.ContextVar("prompt_cuts", default=None)
+)
+
+# No text takes fewer tokens than one per five characters once runs of
+# whitespace and of one mark are folded (German prose sits near 3.8, English
+# near 4.3, a separator line up to 40 before folding), so fewer evaluated
+# tokens than that means part of the prompt was dropped.
+_MAX_CHARS_PER_TOKEN = 5.0
+# Tokens Ollama keeps from the start of a prompt it has to cut.
+_OLLAMA_NUM_KEEP = 4
+# No Ollama default window is below 2,048, so a cut prompt keeps at least ~1,026.
+_MIN_CUT_TOKENS = 1000
+_WINDOW_RECHECK_SECONDS = 600
+# A lookup that found nothing is tried again sooner: the model may just have
+# been swapped out.
+_WINDOW_RETRY_SECONDS = 60
+_WINDOW_LOOKUP_TIMEOUT = 5.0
+
+
+def _prompt_was_cut(
+    prompt_chars: int, evaluated: Optional[int], window: Optional[int]
+) -> bool:
+    """Whether Ollama evaluated only part of the prompt.
+
+    The response never says so; Ollama only logs a warning on its own side and
+    carries on. Recent versions keep the first few tokens and the tail, cut to
+    about half the window, so the system prompt and the option lists are the
+    first to go. Older versions filled the window with the tail instead.
+    """
+    if not evaluated:
+        return False
+    if window:
+        # Ollama cuts to one of these sizes, so any other count means it fit.
+        return (
+            evaluated >= window - 1
+            or evaluated == window - (window - _OLLAMA_NUM_KEEP) // 2
+        )
+    return prompt_chars > evaluated * _MAX_CHARS_PER_TOKEN
+
+
+def _prompt_chars(*parts: str) -> int:
+    """Characters the check above compares, with runs folded."""
+    return sum(
+        len(_REPEATED_MARK_RE.sub(r"\1", _WHITESPACE_RE.sub(" ", part)))
+        for part in parts
+    )
 
 
 def _iter_json_candidates(text: str) -> Iterator[str]:
@@ -270,6 +324,10 @@ class LLMHandler:
         self.max_tokens = max_tokens
         self.num_ctx = num_ctx
         self._client: Optional[httpx.AsyncClient] = None
+        # Ollama's own window for this model when num_ctx is not set, read from
+        # /api/ps and refreshed now and then.
+        self._server_window: Optional[int] = None
+        self._server_window_read_at: Optional[float] = None
         self._closed = False
 
     @property
@@ -496,6 +554,9 @@ class LLMHandler:
             logger.debug(
                 f"Ollama response[:300]={content[:300]!r} tokens(prompt,gen)={usage}"
             )
+            await self._note_if_cut(
+                system_prompt, user_prompt, data.get("prompt_eval_count"), num_ctx
+            )
 
             if json_mode:
                 return _loads_llm_json(content, f"{system_prompt}\n{user_prompt}")
@@ -505,6 +566,62 @@ class LLMHandler:
             detail = _http_error_detail(e)
             logger.error(f"Ollama error connecting to {url}: {detail}")
             raise _llm_error_for(e, f"Ollama request failed: {detail}")
+
+    async def _note_if_cut(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        evaluated: Optional[int],
+        num_ctx: Optional[int],
+    ) -> None:
+        """Warn when Ollama dropped part of the prompt, and tell the running step."""
+        if not evaluated:
+            return
+        window = num_ctx
+        if window is None and evaluated >= _MIN_CUT_TOKENS:
+            window = await self._ollama_window()
+        prompt_chars = _prompt_chars(system_prompt, user_prompt)
+        if not _prompt_was_cut(prompt_chars, evaluated, window):
+            return
+        logger.warning(
+            "Ollama cut the prompt for %s to %s tokens%s: the instructions and "
+            "option lists at its start were dropped. Raise the context window "
+            "in the settings.",
+            self.model,
+            evaluated,
+            f" of a {window}-token window" if window else "",
+        )
+        cuts = PROMPT_CUTS.get()
+        if cuts is not None:
+            cuts.append({"evaluated": evaluated, "window": window})
+
+    async def _ollama_window(self) -> Optional[int]:
+        """The context window Ollama loaded this model with, from /api/ps."""
+        now = time.monotonic()
+        if self._server_window_read_at is not None:
+            wait = (
+                _WINDOW_RECHECK_SECONDS
+                if self._server_window
+                else _WINDOW_RETRY_SECONDS
+            )
+            if now - self._server_window_read_at < wait:
+                return self._server_window
+        self._server_window_read_at = now
+        window = None
+        try:
+            response = await self.client.get(
+                "/api/ps", timeout=_WINDOW_LOOKUP_TIMEOUT
+            )
+            response.raise_for_status()
+            wanted = {self.model, f"{self.model}:latest"}
+            for loaded in response.json().get("models", []):
+                if loaded.get("name") in wanted or loaded.get("model") in wanted:
+                    window = int(loaded.get("context_length") or 0) or None
+                    break
+        except Exception as e:
+            logger.debug("Could not read Ollama's context window: %s", e)
+        self._server_window = window
+        return window
 
     async def _openai_complete(
         self,

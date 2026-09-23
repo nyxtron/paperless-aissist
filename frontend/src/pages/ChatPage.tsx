@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { configApi, documentsApi } from '../api/client'
 import { extractApiError } from '../api/errorUtils'
 import type { ChatDocument, ChatMessage, ProcessingPreview } from '../api/types'
+import { PromptCutNote } from '../components/PromptCutNote'
 import {
   getCachedDocumentList,
   invalidateDocumentListCache,
@@ -388,9 +389,12 @@ export default function ChatPage() {
                 <div className="space-y-2">
                   <p className="text-sm text-green-700 dark:text-green-300">{t('chat.previewSuccess')}</p>
                   {previewResult.steps?.map((step, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="dark:text-gray-200">{step.name}</span>
-                      <span className="text-gray-500 dark:text-gray-400">{step.status}</span>
+                    <div key={idx} className="text-sm">
+                      <div className="flex justify-between">
+                        <span className="dark:text-gray-200">{step.name}</span>
+                        <span className="text-gray-500 dark:text-gray-400">{step.status}</span>
+                      </div>
+                      {step.details?.prompt_cut && <PromptCutNote cut={step.details.prompt_cut} />}
                     </div>
                   ))}
                   {previewResult.proposed_changes &&

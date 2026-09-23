@@ -62,6 +62,11 @@ export interface ProcessingPreview {
     duration_ms: number
     /** Step error message, if any. */
     error?: string
+    /** Step diagnostics; prompt_cut is set when Ollama cut the prompt. */
+    details?: {
+      prompt_cut?: { evaluated: number; window: number | null }
+      [key: string]: unknown
+    }
   }>
   /** Proposed metadata changes from the processing pipeline. */
   proposed_changes: ProposedChanges
