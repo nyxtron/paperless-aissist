@@ -17,18 +17,6 @@ from sqlmodel import select
 
 logger = logging.getLogger(__name__)
 
-MODULAR_TAG_DEFAULTS: dict[str, str] = {
-    "modular_tag_ocr": "ai-ocr",
-    "modular_tag_ocr_fix": "ai-ocr-fix",
-    "modular_tag_date": "ai-date",
-    "modular_tag_title": "ai-title",
-    "modular_tag_correspondent": "ai-correspondent",
-    "modular_tag_document_type": "ai-document-type",
-    "modular_tag_tags": "ai-tags",
-    "modular_tag_fields": "ai-fields",
-    "modular_tag_process": "ai-process",
-}
-
 from ..database import get_async_session
 from ..models import (
     Config,
@@ -36,6 +24,7 @@ from ..models import (
     ProcessingLog,
 )
 from .paperless import PaperlessClient
+from .control_tags import MODULAR_TAG_DEFAULTS
 from .llm_handler import LLMHandlerManager
 from ..exceptions import LLMError, LLMUnavailableError
 from ..constants import CONTENT_TRUNCATION_LIMIT, TITLE_MAX_LENGTH
