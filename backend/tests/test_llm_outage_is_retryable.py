@@ -200,12 +200,13 @@ class TestStepsLetTheOutageThrough:
         prompt.system_prompt = "s"
         prompt.user_template = "{content}"
         prompt.is_active = True
+        prompt.document_type_filter = "Rechnung"
         session = AsyncMock()
         # No extract prompt, so only the type_specific one reaches the model.
         session.exec = AsyncMock(
             side_effect=[
                 MagicMock(first=MagicMock(return_value=None)),
-                MagicMock(first=MagicMock(return_value=prompt)),
+                MagicMock(all=MagicMock(return_value=[prompt])),
             ]
         )
 

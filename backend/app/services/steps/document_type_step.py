@@ -88,20 +88,18 @@ class DocumentTypeStep(AbstractStep):
             dt_text = result.get("text", "").strip() or result.get("raw", "").strip()
 
             if dt_text and dt_text.lower() != "none":
-                dt_id = next(
-                    (
-                        dt["id"]
-                        for dt in doc_types
-                        if dt["name"].lower() == dt_text.lower()
-                    ),
+                matched = next(
+                    (dt for dt in doc_types if dt["name"].lower() == dt_text.lower()),
                     None,
                 )
-                if dt_id:
+                if matched:
                     logger.debug(
-                        f"DocumentTypeStep: detected {dt_text} for doc {ctx.doc_id}"
+                        f"DocumentTypeStep: detected {matched['name']} for doc {ctx.doc_id}"
                     )
-                    ctx.detected_type = dt_text
-                    return StepResult(data={"document_type": dt_id}, error=None)
+                    # Paperless's own spelling, not the model's: the fields step
+                    # looks up type-specific prompts by this name.
+                    ctx.detected_type = matched["name"]
+                    return StepResult(data={"document_type": matched["id"]}, error=None)
 
             return StepResult(data={}, error=None)
         except LLMError:
