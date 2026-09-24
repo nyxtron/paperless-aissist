@@ -14,6 +14,7 @@ import {
   setCachedDocumentList,
 } from '../utils/documentListCache'
 import { buildPaperlessDocumentUrl } from '../utils/paperlessLinks'
+import { PromptCutNote, type PromptCut } from './PromptCutNote'
 
 interface TaggedDocument {
   id: number
@@ -41,6 +42,7 @@ interface ProcessingStep {
     confidence?: string
     evidence?: string
     reason?: string
+    prompt_cut?: PromptCut
     [key: string]: unknown
   }
 }
@@ -566,6 +568,7 @@ export default function ProcessingPanel() {
                           {formatStepDetails(step)}
                         </p>
                       )}
+                      {step.details?.prompt_cut && <PromptCutNote cut={step.details.prompt_cut} />}
                     </div>
                   </div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">{formatDuration(step.duration_ms)}</span>

@@ -141,11 +141,22 @@ class FieldsStep(AbstractStep):
             async with get_async_session() as session:
                 stmt = select(Prompt).where(
                     Prompt.prompt_type == "type_specific",
-                    Prompt.document_type_filter == detected_type,
                     Prompt.is_active.is_(True),
                 )
                 result = await session.exec(stmt)
-                type_specific_prompt = result.first()
+                # The filter is typed by hand in the prompt editor, so "rechnung"
+                # has to find the Paperless type "Rechnung" as well. Compared
+                # here: SQLite's lower() leaves Ä, Ö and Ü alone.
+                wanted = detected_type.strip().casefold()
+                type_specific_prompt = next(
+                    (
+                        prompt
+                        for prompt in result.all()
+                        if (prompt.document_type_filter or "").strip().casefold()
+                        == wanted
+                    ),
+                    None,
+                )
                 if type_specific_prompt:
                     type_specific_prompt_data = {
                         "system_prompt": type_specific_prompt.system_prompt,

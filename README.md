@@ -122,7 +122,7 @@ The main LLM and Vision OCR model each have their own generation settings:
 
 - **Temperature** controls randomness. Lower values are more deterministic; `0.0`–`0.3` is recommended for document metadata and OCR.
 - **Max Output Tokens** optionally limits response length. Leave it empty to use the provider default. For Ollama, this is sent as `num_predict`; for OpenAI-compatible providers it is sent as `max_tokens`.
-- **Context Window** is Ollama-only and maps to `num_ctx`. Increase it for large documents, many correspondents/tags, or long prompts. Leave it empty to use the model default. This is different from Max Output Tokens: `num_ctx` controls how much input context the model can see, while `num_predict` controls how long the answer may be.
+- **Context Window** is Ollama-only and maps to `num_ctx`. Increase it for large documents, many correspondents/tags, or long prompts. Left empty, Ollama uses its own default, often only 4,096 tokens and not the model's maximum, and cuts a longer prompt without an error. This is different from Max Output Tokens: `num_ctx` controls how much input context the model can see, while `num_predict` controls how long the answer may be.
 
 ## Automation API
 
@@ -199,9 +199,14 @@ ollama pull qwen3:8b
 ollama pull benhaotang/Nanonets-OCR-s:latest
 ```
 
-If Ollama returns `400 Bad Request` for large documents or Paperless instances
-with many correspondents/tags, increase the **Context Window** setting in the
-web UI. This sends Ollama `num_ctx` for text and Vision OCR requests.
+Ollama does not reject a prompt that is longer than its context window. It
+keeps the end, drops the start with the instructions and the lists of
+correspondents, types and tags, and answers anyway. Paperless-AIssist notices
+this and marks the step with a note in the processing view, the chat preview
+and the log. When you see it, or when Ollama returns `400 Bad Request` for large
+documents, increase the **Context Window** setting in the web UI. It sends
+Ollama `num_ctx` for text and Vision OCR requests and applies from the next
+document on, without a restart.
 
 ## Processing Pipeline
 

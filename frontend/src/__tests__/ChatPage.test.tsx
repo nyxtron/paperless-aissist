@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   mockGetConfig: vi.fn(),
   mockGetChatList: vi.fn(),
   mockSearchPaperless: vi.fn(),
+  mockGetChatDocument: vi.fn(),
+  mockGetPreview: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({
@@ -15,8 +17,8 @@ vi.mock('../api/client', () => ({
   documentsApi: {
     getChatList: mocks.mockGetChatList,
     searchPaperless: mocks.mockSearchPaperless,
-    getChatDocument: vi.fn(),
-    getPreview: vi.fn(),
+    getChatDocument: mocks.mockGetChatDocument,
+    getPreview: mocks.mockGetPreview,
     chat: vi.fn(),
   },
 }))
@@ -170,4 +172,33 @@ describe('ChatPage', () => {
     })
     expect(screen.getAllByText(/Invoice \d/)).toHaveLength(7)
   })
+
+  it('warns in the preview when a step saw only part of its prompt', async () => {
+    // jsdom has no layout, so the chat's scroll-to-bottom needs a stand-in.
+    Element.prototype.scrollIntoView = vi.fn()
+    mocks.mockGetChatDocument.mockResolvedValue({ data: { id: 1, title: 'Invoice 2024' } })
+    mocks.mockGetPreview.mockResolvedValue({
+      data: {
+        success: true,
+        document_id: 1,
+        steps: [
+          {
+            name: 'title',
+            status: 'completed',
+            duration_ms: 900,
+            details: { prompt_cut: { evaluated: 2050, window: 4096 } },
+          },
+          { name: 'tags', status: 'completed', duration_ms: 300 },
+        ],
+        proposed_changes: {},
+      },
+    })
+    render(<ChatPage />)
+
+    fireEvent.click(await screen.findByText('Invoice 2024'))
+    fireEvent.click(await screen.findByText('chat.preview'))
+
+    expect(await screen.findAllByText('processing.promptCut')).toHaveLength(1)
+  })
 })
+

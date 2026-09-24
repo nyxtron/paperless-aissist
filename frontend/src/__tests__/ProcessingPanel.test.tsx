@@ -507,6 +507,36 @@ describe('ProcessingPanel', () => {
     })
   })
 
+  it('warns under a step whose prompt Ollama had to cut', async () => {
+    mocks.mockProcess.mockResolvedValue({
+      data: {
+        success: true,
+        document_id: 1,
+        title: 'Invoice 2024',
+        updates: {},
+        processing_time_ms: 1200,
+        steps: [
+          {
+            name: 'title',
+            status: 'completed',
+            duration_ms: 800,
+            details: { prompt_cut: { evaluated: 2050, window: 4096 } },
+          },
+          { name: 'tags', status: 'completed', duration_ms: 300 },
+        ],
+        proposed_changes: {},
+      },
+    })
+    render(<ProcessingPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('Invoice 2024')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getAllByText(/processing.processBtn/i)[0])
+
+    expect(await screen.findAllByText('processing.promptCut')).toHaveLength(1)
+  })
+
   it('renders date step details in single document processing results', async () => {
     render(<ProcessingPanel />)
 

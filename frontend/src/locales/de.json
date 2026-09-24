@@ -55,7 +55,8 @@
     "loadFailed": "Dashboard-Daten konnten nicht geladen werden",
     "noLogsForFilter": "Keine Protokolleinträge für diesen Filter.",
     "confirmReset": "Alle Verarbeitungsprotokolle löschen? Dies kann nicht rückgängig gemacht werden.",
-    "resetFailed": "Statistiken konnten nicht zurückgesetzt werden"
+    "resetFailed": "Statistiken konnten nicht zurückgesetzt werden",
+    "promptCut": "Prompt gekürzt bei: {{steps}}. Kontextfenster erhöhen."
   },
   "config": {
     "title": "Konfiguration",
@@ -140,9 +141,9 @@
     "llmMaxTokensVision": "Vision max. Ausgabetokens",
     "llmMaxTokensVisionHint": "Optionale OCR-Begrenzung pro Anfrage/Seite. Leer lassen für den Provider-Standard.",
     "llmContextWindow": "Kontextfenster",
-    "llmContextWindowHint": "Nur Ollama. Erhöhen für große Dokumente oder viele Paperless-Korrespondenten. Leer lassen für den Modellstandard.",
+    "llmContextWindowHint": "Nur Ollama. Erhöhen für große Dokumente oder viele Paperless-Korrespondenten. Leer bedeutet Ollamas eigene Voreinstellung, oft nur 4.096 Token, nicht das Maximum des Modells; ein längerer Prompt wird ohne Fehlermeldung gekürzt.",
     "llmContextWindowVision": "Vision-Kontextfenster",
-    "llmContextWindowVisionHint": "Nur Ollama. Erhöhen für große OCR-Prompts oder mehrseitige Vision-Läufe. Leer lassen für den Modellstandard.",
+    "llmContextWindowVisionHint": "Nur Ollama. Erhöhen für große OCR-Prompts oder mehrseitige Vision-Läufe. Leer übernimmt das Kontextfenster oben, oder Ollamas eigene Voreinstellung, wenn auch das leer ist.",
     "modularSection": "Modulare Tag-Workflows",
     "modularSectionHint": "Passe die Paperless-Tag-Namen an, die die einzelnen Verarbeitungsschritte auslösen. Leer lassen für den Standardwert.",
     "modularTagProcess": "Vollständige Pipeline Tag",
@@ -328,7 +329,9 @@
     "stopRequested": "Wird angehalten, sobald die laufenden Dokumente fertig sind. Der Scheduler behält sein Intervall.",
     "stopFailed": "Der Lauf konnte nicht zum Anhalten aufgefordert werden",
     "runStoppedByHand": "Auf Wunsch angehalten; die laufenden Dokumente wurden fertig gemacht.",
-    "pageOfPages": "Seite {{page}} von {{pages}}"
+    "pageOfPages": "Seite {{page}} von {{pages}}",
+    "promptCut": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token eines Fensters von {{window}} gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen.",
+    "promptCutNoWindow": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen."
   },
   "logs": {
     "title": "System-Protokolle",

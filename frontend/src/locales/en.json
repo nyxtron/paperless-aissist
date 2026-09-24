@@ -55,7 +55,8 @@
     "loadFailed": "Failed to load dashboard data",
     "noLogsForFilter": "No log entries for this filter.",
     "confirmReset": "Are you sure you want to delete all processing logs? This cannot be undone.",
-    "resetFailed": "Failed to reset stats"
+    "resetFailed": "Failed to reset stats",
+    "promptCut": "Prompt cut in: {{steps}}. Raise the context window."
   },
   "config": {
     "title": "Configuration",
@@ -140,9 +141,9 @@
     "llmMaxTokensVision": "Vision Max Output Tokens",
     "llmMaxTokensVisionHint": "Optional OCR output limit per request/page. Leave empty to use the provider default.",
     "llmContextWindow": "Context Window",
-    "llmContextWindowHint": "Ollama only. Increase for large documents or many Paperless correspondents. Leave empty to use the model default.",
+    "llmContextWindowHint": "Ollama only. Increase for large documents or many Paperless correspondents. Empty means Ollama's own default, often only 4,096 tokens, not the most the model can take; a longer prompt is cut without an error.",
     "llmContextWindowVision": "Vision Context Window",
-    "llmContextWindowVisionHint": "Ollama only. Increase for large OCR prompts or multi-page vision runs. Leave empty to use the model default.",
+    "llmContextWindowVisionHint": "Ollama only. Increase for large OCR prompts or multi-page vision runs. Empty uses the context window above, or Ollama's own default when that is empty too.",
     "modularSection": "Modular Tag Workflows",
     "modularSectionHint": "Customize the Paperless tag names that trigger each processing step. Leave blank to use the default.",
     "modularTagProcess": "Full Pipeline Tag",
@@ -328,7 +329,9 @@
     "stopRequested": "Stopping once the documents in flight are done. The scheduler keeps its interval.",
     "stopFailed": "Could not ask the run to stop",
     "runStoppedByHand": "Stopped on request; the documents in flight were finished.",
-    "pageOfPages": "page {{page}} of {{pages}}"
+    "pageOfPages": "page {{page}} of {{pages}}",
+    "promptCut": "Prompt cut: Ollama read only {{evaluated}} tokens of a {{window}}-token window, so the instructions and lists were dropped. Raise the context window.",
+    "promptCutNoWindow": "Prompt cut: Ollama read only {{evaluated}} tokens, so the instructions and lists were dropped. Raise the context window."
   },
   "logs": {
     "title": "System Logs",

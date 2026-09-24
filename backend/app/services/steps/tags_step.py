@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from ...exceptions import LLMError
+from ..control_tags import assignable_tags
 from .base import AbstractStep, StepContext, StepResult
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,9 @@ class TagsStep(AbstractStep):
             return StepResult(data={}, error=None)
 
         try:
-            all_tags = await ctx.paperless.get_tags()
+            # Only tags that describe a document are on offer: the ones that
+            # steer processing, and the blacklist, would otherwise be picked.
+            all_tags = assignable_tags(await ctx.paperless.get_tags(), self.config)
             tags_list = ", ".join(f'"{t["name"]}"' for t in all_tags)
             user_msg = (
                 prompt_data["user_template"]
@@ -86,17 +89,12 @@ class TagsStep(AbstractStep):
             tag_text = result.get("text", "").strip() or result.get("raw", "").strip()
 
             if tag_text and tag_text.lower() != "none":
-                blacklist_raw = await self._get_config(self.config, "tag_blacklist", "") or ""
-                blacklist = [
-                    t.strip().lower() for t in blacklist_raw.split(",") if t.strip()
-                ]
-
                 tag_names = [t.strip() for t in tag_text.split(",") if t.strip()]
                 tag_ids = []
 
                 for tag_name in tag_names:
-                    if blacklist and tag_name.lower() in blacklist:
-                        continue
+                    # Matched against the offered tags only, so a control or
+                    # blacklisted tag named in the reply is simply not found.
                     tag_id = next(
                         (
                             t["id"]
