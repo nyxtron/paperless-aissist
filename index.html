@@ -31,9 +31,13 @@
         feat3_title: "Custom Field Extraction",
         feat3_desc: "Define extraction prompts to pull structured data — invoice totals, dates, reference numbers — straight into Paperless custom fields.",
         feat4_title: "Multi-Provider LLM",
-        feat4_desc: "Supports Ollama (local), OpenAI, and Grok. Mix providers — use a local model for classification and a vision model for OCR.",
+        feat4_desc: "Supports Ollama (local), OpenAI, OpenRouter, LM Studio and Grok. Mix providers — a local model for classification, a vision model for OCR, a small model for decisions.",
         feat5_title: "Multilingual UI",
         feat5_desc: "The web interface ships with English and German translations. More languages can be added by editing a single JSON file.",
+        feat6_title: "Decisions with Probabilities",
+        feat6_desc: "Correspondent and document type are picked from your Paperless lists with a probability for every answer. Below your threshold the field stays as it is and the document gets a review tag instead.",
+        feat7_title: "Automation API & MCP",
+        feat7_desc: "Start, stop and check processing from cron, Home Assistant or your own scripts, and let Claude Desktop or any MCP client drive it through the built-in MCP server. One token, shown once.",
         quickstart_heading: "Get Started in Seconds",
         docker_hint: "Then open http://localhost:8000 and connect your Paperless-ngx instance.",
         footer_credit: "Paperless-AIssist · MIT License",
@@ -53,9 +57,13 @@
         feat3_title: "Benutzerdefinierte Felder",
         feat3_desc: "Extraktions-Prompts ziehen strukturierte Daten — Rechnungsbeträge, Daten, Referenznummern — direkt in Paperless-Felder.",
         feat4_title: "Mehrere LLM-Anbieter",
-        feat4_desc: "Unterstützt Ollama (lokal), OpenAI und Grok. Anbieter kombinieren — lokales Modell für Klassifizierung, Vision-Modell für OCR.",
+        feat4_desc: "Unterstützt Ollama (lokal), OpenAI, OpenRouter, LM Studio und Grok. Anbieter kombinieren — lokales Modell für Klassifizierung, Vision-Modell für OCR, kleines Modell für Entscheidungen.",
         feat5_title: "Mehrsprachige Oberfläche",
         feat5_desc: "Die Web-Oberfläche kommt mit Englisch und Deutsch. Weitere Sprachen lassen sich durch Bearbeiten einer einzigen JSON-Datei hinzufügen.",
+        feat6_title: "Entscheidungen mit Wahrscheinlichkeit",
+        feat6_desc: "Korrespondent und Dokumenttyp werden aus deinen Paperless-Listen gewählt, mit einer Wahrscheinlichkeit für jede Antwort. Unter deiner Schwelle bleibt das Feld wie es ist und das Dokument bekommt stattdessen ein Prüf-Tag.",
+        feat7_title: "Automations-API & MCP",
+        feat7_desc: "Verarbeitung aus Cron, Home Assistant oder eigenen Skripten starten, stoppen und prüfen, und Claude Desktop oder jeden MCP-Client über den eingebauten MCP-Server steuern lassen. Ein Token, einmal angezeigt.",
         quickstart_heading: "In Sekunden loslegen",
         docker_hint: "Dann öffne http://localhost:8000 und verbinde deine Paperless-ngx-Instanz.",
         footer_credit: "Paperless-AIssist · MIT-Lizenz",
@@ -142,6 +150,14 @@
 
       <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <div class="text-indigo-400 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-1" data-i18n="feat6_title">Decisions with Probabilities</h3>
+        <p class="text-gray-400 text-sm" data-i18n="feat6_desc">Correspondent and document type are picked from your Paperless lists with a probability for every answer. Below your threshold the field stays as it is and the document gets a review tag instead.</p>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="text-indigo-400 mb-3">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         </div>
         <h3 class="font-semibold text-white mb-1" data-i18n="feat2_title">Vision OCR</h3>
@@ -161,7 +177,15 @@
           <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
         </div>
         <h3 class="font-semibold text-white mb-1" data-i18n="feat4_title">Multi-Provider LLM</h3>
-        <p class="text-gray-400 text-sm" data-i18n="feat4_desc">Supports Ollama (local), OpenAI, and Grok. Mix providers — use a local model for classification and a vision model for OCR.</p>
+        <p class="text-gray-400 text-sm" data-i18n="feat4_desc">Supports Ollama (local), OpenAI, OpenRouter, LM Studio and Grok. Mix providers — a local model for classification, a vision model for OCR, a small model for decisions.</p>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div class="text-indigo-400 mb-3">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
+        </div>
+        <h3 class="font-semibold text-white mb-1" data-i18n="feat7_title">Automation API &amp; MCP</h3>
+        <p class="text-gray-400 text-sm" data-i18n="feat7_desc">Start, stop and check processing from cron, Home Assistant or your own scripts, and let Claude Desktop or any MCP client drive it through the built-in MCP server. One token, shown once.</p>
       </div>
 
       <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 sm:col-span-2">
