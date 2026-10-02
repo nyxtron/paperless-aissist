@@ -24,7 +24,8 @@ from ..models import (
     ProcessingLog,
 )
 from .paperless import PaperlessClient
-from .control_tags import MODULAR_TAG_DEFAULTS, assignable_tags
+from .control_tags import MODULAR_TAG_DEFAULTS, assignable_tags, review_tag_name
+from .steps.decided import DECISION_FIELDS, decision_enabled
 from .llm_handler import PROMPT_CUTS, LLMHandlerManager
 from ..exceptions import LLMError, LLMUnavailableError
 from ..constants import CONTENT_TRUNCATION_LIMIT, TITLE_MAX_LENGTH
@@ -310,6 +311,77 @@ Available Custom Fields: [{custom_fields_list}]"""
             if log:
                 await session.delete(log)
 
+    @staticmethod
+    def _decision_steps_for(step_instances, doc_tag_names, config) -> list[str]:
+        """Names of the decision-on steps that will run for this document."""
+        return [
+            step.name
+            for step in step_instances
+            if step.name in DECISION_FIELDS
+            and step.can_handle(doc_tag_names)
+            and decision_enabled(config, step.name)
+        ]
+
+    @staticmethod
+    def _strip_full_requests(step_records: list[dict]) -> list[dict]:
+        """The stored run never carries the document text; the preview does."""
+        out = []
+        for record in step_records:
+            decision = (record.get("details") or {}).get("decision")
+            request = decision.get("request") if isinstance(decision, dict) else None
+            if isinstance(request, dict) and "full" in request:
+                request = {k: v for k, v in request.items() if k != "full"}
+                details = {**record["details"], "decision": {**decision, "request": request}}
+                record = {**record, "details": details}
+            out.append(record)
+        return out
+
+    @classmethod
+    def _steps_json(cls, step_records: list[dict]) -> str:
+        return json.dumps({"steps": cls._strip_full_requests(step_records)})
+
+    @staticmethod
+    def _review_plan(ctx, ran: list[str], doc_tag_ids, review_tag_id) -> dict:
+        """Whether the review tag goes on or comes off this document."""
+        add = bool(ctx.review_fields)
+        toggled = [f for f in DECISION_FIELDS if decision_enabled(ctx.config, f)]
+        remove = (
+            bool(toggled)
+            and not add
+            and all(f in ran and f in ctx.decided_fields for f in toggled)
+            and review_tag_id is not None
+            and review_tag_id in doc_tag_ids
+        )
+        return {"add": add, "remove": remove}
+
+    async def _fail_without_writing(
+        self, message: str, *, doc_id, doc, trigger_metadata, log_id,
+        ctx=None, step_records=None, proposed=None, processing_time_ms=0,
+    ) -> dict[str, Any]:
+        """File the row as failed; nothing was written, so the trigger tag stays."""
+        used = self._llm_used(ctx) if ctx is not None else {"provider": None, "model": None}
+        await self._log_processing(
+            doc_id=doc_id, doc_title=doc.get("title"), status="failed", **used,
+            llm_response=self._steps_json(step_records) if step_records is not None else None,
+            error_message=message, processing_time_ms=processing_time_ms,
+            trigger_tags=trigger_metadata["trigger_tags"], log_id=log_id,
+        )
+        return {
+            "success": False, "provider_failure": False, "retryable": False,
+            "document_id": doc_id, "title": doc.get("title"),
+            "trigger_tags": trigger_metadata["trigger_tags"],
+            "trigger_mode": trigger_metadata["trigger_mode"],
+            "updates": {}, "processing_time_ms": processing_time_ms,
+            "steps": step_records or [], "proposed_changes": proposed or {}, "error": message,
+        }
+
+    async def _review_tag_missing(self, *, review_tag: str, **failure) -> dict[str, Any]:
+        """The review tag is gone: nothing is written and the run stops."""
+        message = f"Review tag '{review_tag}' does not exist in Paperless"
+        logger.warning("Document %s: %s; run stopped", failure["doc_id"], message)
+        result = await self._fail_without_writing(message, **failure)
+        return {**result, "stop_run": "review_tag_missing"}
+
     async def _resolve_proposed_changes(
         self,
         proposed: dict[str, Any],
@@ -415,6 +487,17 @@ Available Custom Fields: [{custom_fields_list}]"""
         all_document_types = await self.paperless.get_document_types()
         all_custom_fields = await self.paperless.get_custom_fields()
 
+        # Same decisions as a run; a missing review tag is reported, not a stop.
+        decision_service = None
+        review_tag_id = None
+        review_tag = review_tag_name(config_dict)
+        if any(decision_enabled(config_dict, f) for f in DECISION_FIELDS):
+            from .decision import DecisionServiceManager
+
+            decision_service = await DecisionServiceManager.get_service()
+            all_tags = await self.paperless.get_tags(force_refresh=True)
+            review_tag_id = next((t["id"] for t in all_tags if t["name"] == review_tag), None)
+
         tag_id_to_name = {t["id"]: t["name"] for t in all_tags}
         doc_tag_names = {tag_id_to_name.get(tid, "") for tid in doc.get("tags", [])}
 
@@ -433,6 +516,8 @@ Available Custom Fields: [{custom_fields_list}]"""
             config=config_dict,
             trigger_tags=doc_tag_names,
             ocr_text=doc.get("content", "").strip() if doc.get("content") else "",
+            decision=decision_service,
+            preview=True,
         )
 
         step_records = []
@@ -513,6 +598,15 @@ Available Custom Fields: [{custom_fields_list}]"""
             all_document_types,
             all_custom_fields,
         )
+        if decision_service is not None:
+            ran = [name for name in DECISION_FIELDS if decision_enabled(config_dict, name)]
+            plan = self._review_plan(ctx, ran, doc.get("tags", []), review_tag_id)
+            proposed["review"] = {
+                "tag": {"id": review_tag_id, "name": review_tag},
+                "add_fields": list(ctx.review_fields),
+                "remove": plan["remove"],
+                "missing": review_tag_id is None,
+            }
 
         end_time = time.time()
         processing_time_ms = int((end_time - start_time) * 1000)
@@ -533,10 +627,13 @@ Available Custom Fields: [{custom_fields_list}]"""
         title: str | None,
         correspondent_id: int | None,
         doc_type_id: int | None,
-    ) -> None:
-        """Apply title, correspondent, and document type updates to Paperless."""
+    ) -> set[str]:
+        """Apply title, correspondent, and document type updates to Paperless.
+
+        Returns the fields dropped because Paperless no longer had them.
+        """
         if not (title or correspondent_id is not None or doc_type_id is not None):
-            return
+            return set()
         if title and len(title) > 128:
             title = title[:TITLE_MAX_LENGTH]
         try:
@@ -562,11 +659,14 @@ Available Custom Fields: [{custom_fields_list}]"""
             valid_doc_types = {dt["id"] for dt in doc_types}
 
             dropped = []
+            dropped_fields = set()
             if correspondent_id is not None and correspondent_id not in valid_correspondents:
                 dropped.append(f"correspondent {correspondent_id}")
+                dropped_fields.add("correspondent")
                 correspondent_id = None
             if doc_type_id is not None and doc_type_id not in valid_doc_types:
                 dropped.append(f"document type {doc_type_id}")
+                dropped_fields.add("document_type")
                 doc_type_id = None
 
             if not dropped:
@@ -583,6 +683,8 @@ Available Custom Fields: [{custom_fields_list}]"""
                     correspondent=correspondent_id,
                     document_type=doc_type_id,
                 )
+            return dropped_fields
+        return set()
 
     async def _apply_tag_updates(
         self,
@@ -703,6 +805,37 @@ Available Custom Fields: [{custom_fields_list}]"""
         except Exception as state_error:
             logger.debug("Could not update active document state: %s", state_error)
 
+        decision_steps = self._decision_steps_for(step_instances, doc_tag_names, config_dict)
+        decision_service = None
+        review_tag_id = None
+        review_tag = review_tag_name(config_dict)
+        if decision_steps:
+            from .decision import DecisionServiceManager
+
+            decision_service = await DecisionServiceManager.get_service()
+            # The tag is a precondition of the toggle: checked fresh before any
+            # step runs, so a document is never half written for want of it.
+            try:
+                fresh_tags = await self.paperless.get_tags(force_refresh=True)
+            except Exception as e:
+                # Paperless, not the tag: the document is tried again next time.
+                message = f"Paperless tag list unavailable: {e}"
+                logger.warning("Document %s: %s", doc_id, message)
+                return await self._fail_without_writing(
+                    message, doc_id=doc_id, doc=doc,
+                    trigger_metadata=trigger_metadata, log_id=log_id,
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                )
+            all_tags = [{"id": t["id"], "name": t["name"]} for t in fresh_tags]
+            tag_id_to_name = {t["id"]: t["name"] for t in all_tags}
+            metadata["tags"] = all_tags
+            review_tag_id = next((t["id"] for t in all_tags if t["name"] == review_tag), None)
+            if review_tag_id is None:
+                return await self._review_tag_missing(
+                    doc_id=doc_id, doc=doc, review_tag=review_tag,
+                    trigger_metadata=trigger_metadata, log_id=log_id,
+                )
+
         from .llm_handler import LLMHandlerManager
 
         llm = await LLMHandlerManager.get_handler(for_vision=False)
@@ -716,6 +849,7 @@ Available Custom Fields: [{custom_fields_list}]"""
             config=config_dict,
             trigger_tags=doc_tag_names,
             ocr_text=doc.get("content", "").strip() if doc.get("content") else "",
+            decision=decision_service,
         )
 
         step_records: list[dict] = []
@@ -857,10 +991,11 @@ Available Custom Fields: [{custom_fields_list}]"""
 
         # A failure below falls through to the same handling as a failed step.
         if not any(step["status"] == "failed" for step in step_records):
+            # A field left for review is not a gap for the combined prompt to fill.
             has_classification = any(
                 k in accumulated_update
                 for k in ("title", "correspondent", "document_type", "tags")
-            )
+            ) or bool(ctx.review_fields)
             process_trigger_name = config_dict.get("modular_tag_process") or "ai-process"
             if process_trigger_name in doc_tag_names and not has_classification:
                 async with get_async_session() as session:
@@ -980,7 +1115,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                 doc_title=doc.get("title"),
                 status="failed",
                 **self._llm_used(ctx),
-                llm_response=json.dumps({"steps": step_records}),
+                llm_response=self._steps_json(step_records),
                 error_message=f"AI processing failed: {error_detail}",
                 processing_time_ms=processing_time_ms,
                 trigger_tags=trigger_metadata["trigger_tags"],
@@ -1007,6 +1142,13 @@ Available Custom Fields: [{custom_fields_list}]"""
             metadata["document_types"],
             metadata["custom_fields"],
         )
+        if decision_steps:
+            proposed["review"] = {
+                "tag": {"id": review_tag_id, "name": review_tag},
+                "add_fields": list(ctx.review_fields),
+                "remove": False,
+                "missing": review_tag_id is None,
+            }
 
         process_tag_name = await self._get_config("process_tag")
         processed_tag_name = await self._get_config("processed_tag")
@@ -1036,9 +1178,22 @@ Available Custom Fields: [{custom_fields_list}]"""
         doc_type_id = accumulated_update.pop("document_type", None)
 
         try:
-            await self._apply_metadata_update(
+            if decision_steps:
+                # Backstop: the tag may have gone since the pre-check.
+                fresh = await self.paperless.get_tags(force_refresh=True)
+                review_tag_id = next((t["id"] for t in fresh if t["name"] == review_tag), None)
+                if review_tag_id is None:
+                    proposed["review"].update(tag={"id": None, "name": review_tag}, missing=True)
+                    return await self._review_tag_missing(
+                        doc_id=doc_id, doc=doc, review_tag=review_tag,
+                        trigger_metadata=trigger_metadata, log_id=log_id,
+                        ctx=ctx, step_records=step_records, proposed=proposed,
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                    )
+            dropped = await self._apply_metadata_update(
                 doc_id, title, correspondent_id, doc_type_id
             )
+            ctx.decided_fields -= set(dropped or ())
 
             accumulated_update.pop("text", None)
             accumulated_update.pop("content", None)
@@ -1057,6 +1212,13 @@ Available Custom Fields: [{custom_fields_list}]"""
                 tag_ids_to_remove.append(process_tag_id)
             if processed_tag_id and processed_tag_id not in existing_tag_ids:
                 tag_ids_to_add.append(processed_tag_id)
+            if decision_steps:
+                plan = self._review_plan(ctx, decision_steps, doc.get("tags", []), review_tag_id)
+                if plan["add"] and review_tag_id not in existing_tag_ids:
+                    tag_ids_to_add.append(review_tag_id)
+                if plan["remove"]:
+                    tag_ids_to_remove.append(review_tag_id)
+                proposed["review"]["remove"] = plan["remove"]
 
             if tag_ids_to_add or tag_ids_to_remove:
                 await self._apply_tag_updates(
@@ -1076,7 +1238,7 @@ Available Custom Fields: [{custom_fields_list}]"""
                 doc_title=doc.get("title"),
                 status="failed",
                 **self._llm_used(ctx),
-                llm_response=json.dumps({"steps": step_records}),
+                llm_response=self._steps_json(step_records),
                 error_message=f"Paperless update failed: {error_detail}",
                 processing_time_ms=processing_time_ms,
                 trigger_tags=trigger_metadata["trigger_tags"],
@@ -1102,7 +1264,7 @@ Available Custom Fields: [{custom_fields_list}]"""
             doc_title=doc.get("title"),
             status="success",
             **self._llm_used(ctx),
-            llm_response=json.dumps({"steps": step_records}),
+            llm_response=self._steps_json(step_records),
             error_message=None,
             processing_time_ms=processing_time_ms,
             trigger_tags=trigger_metadata["trigger_tags"],
@@ -1172,6 +1334,7 @@ Available Custom Fields: [{custom_fields_list}]"""
 
         from .scheduler import (
             HAND_STOP_REASON,
+            REVIEW_STOP_KIND,
             get_max_consecutive_failures,
             is_provider_failure,
             is_run_stop_requested,
@@ -1182,6 +1345,7 @@ Available Custom Fields: [{custom_fields_list}]"""
         consecutive_failures = 0
 
         results = []
+        stop = None
         for doc in documents:
             # Asked between documents, so the one in flight is always finished.
             if is_run_stop_requested():
@@ -1190,6 +1354,13 @@ Available Custom Fields: [{custom_fields_list}]"""
                 break
             result = await self.process_document(doc["id"])
             results.append(result)
+
+            if result.get("stop_run"):
+                reason = result.get("error", "run stopped")
+                logger.warning("Run stopped: %s", reason)
+                record_run_stop(reason, 0, REVIEW_STOP_KIND)
+                stop = {"reason": reason, "kind": REVIEW_STOP_KIND}
+                break
 
             if is_provider_failure(result):
                 consecutive_failures += 1
@@ -1221,9 +1392,12 @@ Available Custom Fields: [{custom_fields_list}]"""
             time.perf_counter() - started,
         )
 
-        return {
+        summary = {
             "success": failed == 0,
             "processed": processed,
             "failed": failed,
             "results": results,
         }
+        if stop:
+            summary["stop"] = stop
+        return summary

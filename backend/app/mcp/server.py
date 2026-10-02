@@ -129,7 +129,7 @@ async def list_pending() -> dict:
 
 @mcp.tool
 async def preview_processing(doc_id: int) -> dict:
-    """Dry-run: show what processing would change for a document, writing nothing."""
+    """Dry-run: show what processing would change for a document, writing nothing. Steps carry details.decision and proposed carries review when decision mode is on."""
     paperless = await _get_paperless()
     result = await DocumentProcessor(paperless).process_document_preview(doc_id)
     return {

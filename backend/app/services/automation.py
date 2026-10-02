@@ -12,6 +12,7 @@ from typing import Optional
 
 from .scheduler import (
     DATA_DIR,
+    REVIEW_STOP_KIND,
     _clear_processing,
     get_processing_state,
     process_modular_tagged_documents,
@@ -85,16 +86,23 @@ async def _run_process_all() -> None:
     try:
         logger.info("Automation API process-all run started")
         legacy = await process_tagged_documents()
-        modular = await process_modular_tagged_documents()
+        stop = legacy.get("stop") or {}
+        if stop.get("kind") == REVIEW_STOP_KIND:
+            logger.warning("Modular pass skipped: %s", stop.get("reason"))
+            modular = {}
+        else:
+            modular = await process_modular_tagged_documents()
         failed = legacy.get("failed", 0) + modular.get("failed", 0)
         results = legacy.get("results", []) + modular.get("results", [])
         last_result = {
-            "success": failed == 0,
+            "success": failed == 0 and not stop,
             "status": "completed",
             "processed": legacy.get("processed", 0) + modular.get("processed", 0),
             "failed": failed,
             "results": _compact_results_for_status(results),
         }
+        if stop:
+            last_result["stop"] = stop
         _set_last_result(last_result)
         logger.info(
             "Automation API process-all run completed: processed=%s failed=%s",

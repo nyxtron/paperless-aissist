@@ -16,8 +16,10 @@ from typing import Any, Optional
 
 from ..llm_handler import _extract_json_value
 from ..paperless import normalize_name
+from ...constants import CONTENT_TRUNCATION_LIMIT
 from ...exceptions import LLMError
 from .base import AbstractStep, StepContext, StepResult
+from .decided import decision_details, decision_enabled, decision_question, decision_threshold, review
 
 logger = logging.getLogger(__name__)
 
@@ -218,10 +220,6 @@ class CorrespondentStep(AbstractStep):
 
     async def execute(self, ctx: StepContext) -> StepResult:
         """Detect the correspondent from content and available list."""
-        from ...database import get_async_session
-        from ...models import Prompt
-        from sqlmodel import select
-
         text = ctx.ocr_text
         if not text:
             doc = await ctx.paperless.get_document(ctx.doc_id)
@@ -230,141 +228,25 @@ class CorrespondentStep(AbstractStep):
         if not text:
             return StepResult(data={}, error="No content available")
 
-        async with get_async_session() as session:
-            stmt = select(Prompt).where(
-                Prompt.prompt_type == "correspondent", Prompt.is_active.is_(True)
-            )
-            result = await session.exec(stmt)
-            correspondent_prompt = result.first()
-            prompt_data = (
-                {
-                    "system_prompt": correspondent_prompt.system_prompt,
-                    "user_template": correspondent_prompt.user_template,
-                }
-                if correspondent_prompt
-                else None
-            )
+        fallback_details = None
+        if ctx.decision is not None and decision_enabled(ctx.config, "correspondent"):
+            try:
+                decided, fallback_details = await self._run_decision(ctx, text)
+            except LLMError:
+                raise
+            except Exception as e:
+                logger.warning(f"CorrespondentStep: decision failed for doc {ctx.doc_id}: {e}")
+                return StepResult(data={}, error=str(e))
+            if decided is not None:
+                return decided
 
+        prompt_data = await self._load_prompt()
         if not prompt_data:
-            return StepResult(data={}, error=None)
+            return StepResult(data={}, error=None,
+                              details={"decision": fallback_details} if fallback_details else {})
 
         try:
-            correspondents = await ctx.paperless.get_correspondents()
-            corr_list = ", ".join(f'"{c["name"]}"' for c in correspondents)
-            user_msg = (
-                prompt_data["user_template"]
-                .replace("{content}", text[:10000])
-                .replace("{correspondents_list}", corr_list)
-            )
-            # json_mode stays off: the bundled prompt already asks for JSON and
-            # _parse_response extracts it from the reply. Forcing json_mode on
-            # would break installs whose (legacy or edited) prompt never gets the
-            # new instructions — OpenAI rejects the request and Ollama silently
-            # stops matching.
-            ctx.note_model(ctx.llm)
-            result = await ctx.llm.complete(
-                system_prompt=prompt_data["system_prompt"],
-                user_prompt=user_msg,
-                json_mode=False,
-            )
-            proposal = self._parse_response(result)
-
-            if proposal is None or not proposal.name:
-                return StepResult(data={}, error=None)
-
-            # Reuse an existing correspondent whenever the proposed name matches
-            # one (case/whitespace-insensitive), even if the model flagged it as
-            # new. This fast path avoids taking the write lock for the common case.
-            normalized = normalize_name(proposal.name)
-            match = next(
-                (c for c in correspondents if normalize_name(c["name"]) == normalized),
-                None,
-            )
-            if match:
-                logger.debug(
-                    f"CorrespondentStep: detected {match['name']} for doc {ctx.doc_id}"
-                )
-                return StepResult(data={"correspondent": match["id"]}, error=None)
-
-            # No existing match. Preserve the strict (suggest-only) behavior
-            # unless opt-in creation is enabled.
-            if not self._create_enabled():
-                return StepResult(data={}, error=None)
-
-            # Create gate. Any rejection here is a no-op (the pre-feature
-            # behavior), never a step error — a bad correspondent reply must not
-            # take the whole document down.
-            if not proposal.trusted:
-                # Name came from a non-JSON reply; matching it was fine, creating
-                # from it is not.
-                return StepResult(
-                    data={},
-                    error=None,
-                    skipped=True,
-                    details={"correspondent_create_skipped": "untrusted_response"},
-                )
-            if proposal.is_existing is True:
-                # The model claimed this is an existing correspondent but nothing
-                # matched — the surest sign it mangled a name. Don't create.
-                return StepResult(
-                    data={},
-                    error=None,
-                    skipped=True,
-                    details={"correspondent_create_skipped": "claimed_existing_no_match"},
-                )
-            if not self._is_plausible_new_name(proposal.name):
-                return StepResult(
-                    data={},
-                    error=None,
-                    skipped=True,
-                    details={"correspondent_create_skipped": "implausible_name"},
-                )
-
-            try:
-                created, was_created = await ctx.paperless.get_or_create_correspondent(
-                    proposal.name,
-                    owner_mode=self._create_owner_mode(),
-                    matching_algorithm=self._create_matching_algorithm(),
-                )
-                # Read the id inside the try: a 2xx with an unexpected body would
-                # otherwise raise KeyError here and land in the outer handler as a
-                # fatal step error — exactly the case the no-op below avoids.
-                new_id = created["id"]
-                new_name = created.get("name") or proposal.name
-            except Exception as create_error:
-                # A create failure must not fail the document (which would strip
-                # title/type/tags and retry forever): fall back to the no-op the
-                # step had before creation existed, recording why for the log.
-                logger.warning(
-                    f"CorrespondentStep: could not create correspondent "
-                    f"'{proposal.name}' for doc {ctx.doc_id}: {create_error}"
-                )
-                return StepResult(
-                    data={},
-                    error=None,
-                    skipped=True,
-                    details={"correspondent_create_failed": str(create_error)},
-                )
-
-            if not was_created:
-                # A concurrent run created it first; reuse without noise.
-                return StepResult(data={"correspondent": new_id}, error=None)
-
-            logger.info(
-                f"CorrespondentStep: created correspondent '{new_name}' "
-                f"(id={new_id}) for doc {ctx.doc_id}"
-            )
-            return StepResult(
-                data={"correspondent": new_id},
-                error=None,
-                details={
-                    "created_correspondent": {
-                        "id": new_id,
-                        "name": new_name,
-                    }
-                },
-            )
-
+            result = await self._text_path(ctx, text, prompt_data)
         except LLMError:
             # A provider that is down or refusing fails every document alike.
             # Filed as a step error it looks like a fault of this document, and
@@ -373,3 +255,170 @@ class CorrespondentStep(AbstractStep):
         except Exception as e:
             logger.warning(f"CorrespondentStep: failed for doc {ctx.doc_id}: {e}")
             return StepResult(data={}, error=str(e))
+        if fallback_details:
+            result.details = {**result.details, "decision": fallback_details}
+        return result
+
+    @staticmethod
+    async def _load_prompt() -> Optional[dict[str, str]]:
+        from ...database import get_async_session
+        from ...models import Prompt
+        from sqlmodel import select
+
+        async with get_async_session() as session:
+            stmt = select(Prompt).where(
+                Prompt.prompt_type == "correspondent", Prompt.is_active.is_(True)
+            )
+            row = (await session.exec(stmt)).first()
+        if row is None:
+            return None
+        return {"system_prompt": row.system_prompt, "user_template": row.user_template}
+
+    async def _ask_name(self, ctx, text, prompt_data, correspondents) -> Optional[_Proposal]:
+        corr_list = ", ".join(f'"{c["name"]}"' for c in correspondents)
+        user_msg = (
+            prompt_data["user_template"]
+            .replace("{content}", text[:CONTENT_TRUNCATION_LIMIT])
+            .replace("{correspondents_list}", corr_list)
+        )
+        # json_mode stays off: the bundled prompt already asks for JSON and
+        # _parse_response extracts it from the reply. Forcing json_mode on
+        # would break installs whose (legacy or edited) prompt never gets the
+        # new instructions — OpenAI rejects the request and Ollama silently
+        # stops matching.
+        ctx.note_model(ctx.llm)
+        result = await ctx.llm.complete(
+            system_prompt=prompt_data["system_prompt"], user_prompt=user_msg, json_mode=False
+        )
+        return self._parse_response(result)
+
+    @staticmethod
+    def _match_existing(proposal: _Proposal, correspondents) -> Optional[dict]:
+        normalized = normalize_name(proposal.name)
+        return next((c for c in correspondents if normalize_name(c["name"]) == normalized), None)
+
+    def _create_gate(self, proposal: _Proposal) -> Optional[str]:
+        """Why a proposed name must not become a correspondent, or None."""
+        if not proposal.trusted:
+            # Name came from a non-JSON reply; matching it was fine, creating
+            # from it is not.
+            return "untrusted_response"
+        if proposal.is_existing is True:
+            # The model claimed this is an existing correspondent but nothing
+            # matched — the surest sign it mangled a name. Don't create.
+            return "claimed_existing_no_match"
+        if not self._is_plausible_new_name(proposal.name):
+            return "implausible_name"
+        return None
+
+    async def _create(self, ctx, proposal: _Proposal) -> StepResult:
+        """get_or_create through the client's lock; a failure is a no-op, not a step error."""
+        try:
+            created, was_created = await ctx.paperless.get_or_create_correspondent(
+                proposal.name,
+                owner_mode=self._create_owner_mode(),
+                matching_algorithm=self._create_matching_algorithm(),
+            )
+            # Read the id inside the try: a 2xx with an unexpected body would
+            # otherwise raise KeyError here and land in the outer handler as a
+            # fatal step error — exactly the case the no-op below avoids.
+            new_id = created["id"]
+            new_name = created.get("name") or proposal.name
+        except Exception as create_error:
+            # A create failure must not fail the document (which would strip
+            # title/type/tags and retry forever): fall back to the no-op the
+            # step had before creation existed, recording why for the log.
+            logger.warning(
+                f"CorrespondentStep: could not create correspondent "
+                f"'{proposal.name}' for doc {ctx.doc_id}: {create_error}"
+            )
+            return StepResult(data={}, error=None, skipped=True,
+                              details={"correspondent_create_failed": str(create_error)})
+        if not was_created:
+            # A concurrent run created it first; reuse without noise.
+            return StepResult(data={"correspondent": new_id}, error=None)
+        logger.info(
+            f"CorrespondentStep: created correspondent '{new_name}' (id={new_id}) for doc {ctx.doc_id}"
+        )
+        return StepResult(data={"correspondent": new_id}, error=None,
+                          details={"created_correspondent": {"id": new_id, "name": new_name}})
+
+    async def _text_path(self, ctx, text, prompt_data) -> StepResult:
+        """The text prompt's flow: free-text reply, matched by name, created only on opt-in."""
+        correspondents = await ctx.paperless.get_correspondents()
+        proposal = await self._ask_name(ctx, text, prompt_data, correspondents)
+        if proposal is None or not proposal.name:
+            return StepResult(data={}, error=None)
+        # Reuse an existing correspondent whenever the proposed name matches
+        # one (case/whitespace-insensitive), even if the model flagged it as
+        # new. This fast path avoids taking the write lock for the common case.
+        match = self._match_existing(proposal, correspondents)
+        if match:
+            logger.debug(f"CorrespondentStep: detected {match['name']} for doc {ctx.doc_id}")
+            return StepResult(data={"correspondent": match["id"]}, error=None)
+        # No existing match. Preserve the strict (suggest-only) behavior
+        # unless opt-in creation is enabled.
+        if not self._create_enabled():
+            return StepResult(data={}, error=None)
+        # Create gate. Any rejection here is a no-op (the pre-feature
+        # behavior), never a step error — a bad correspondent reply must not
+        # take the whole document down.
+        gate = self._create_gate(proposal)
+        if gate:
+            return StepResult(data={}, error=None, skipped=True, details={"correspondent_create_skipped": gate})
+        return await self._create(ctx, proposal)
+
+    async def _run_decision(self, ctx, text) -> tuple[Optional[StepResult], Optional[dict]]:
+        """The decision branch: (result, None), or (None, details) to fall back."""
+        threshold = decision_threshold(ctx.config, "correspondent")
+        question = decision_question(ctx.config, "correspondent")
+        correspondents = await ctx.paperless.get_correspondents()
+        decision = await ctx.decision.decide(
+            text[:CONTENT_TRUNCATION_LIMIT], "correspondent", [c["name"] for c in correspondents],
+            question=question, threshold=threshold, ctx=ctx,
+        )
+        if decision.fallback_reason:
+            return None, decision_details(decision, threshold, "fallback")
+        if decision.review_reason:
+            return review(ctx, "correspondent", decision, threshold, decision.review_reason), None
+        if decision.index is not None:
+            if decision.probability >= threshold:
+                ctx.decided_fields.add("correspondent")
+                return StepResult(data={"correspondent": correspondents[decision.index]["id"]},
+                                  details={"decision": decision_details(decision, threshold, "applied")}), None
+            return review(ctx, "correspondent", decision, threshold, "below_threshold"), None
+        # "None of these"
+        if decision.probability < threshold:
+            return review(ctx, "correspondent", decision, threshold, "below_threshold"), None
+        create_on = (ctx.config.get("correspondent_create_new") or "false").lower() == "true"
+        if not create_on:
+            return review(ctx, "correspondent", decision, threshold, "creation_off"), None
+        return await self._create_after_none(ctx, text, correspondents, decision, threshold), None
+
+    async def _create_after_none(self, ctx, text, correspondents, decision, threshold) -> StepResult:
+        """The text model names the new sender; the existing checks decide."""
+        prompt_data = await self._load_prompt()
+        if not prompt_data:
+            return review(ctx, "correspondent", decision, threshold, "no_name_prompt")
+        proposal = await self._ask_name(ctx, text, prompt_data, correspondents)
+        if proposal is None or not proposal.name:
+            return review(ctx, "correspondent", decision, threshold, "no_name")
+        if re.sub(r"[.\s]+$", "", proposal.name).casefold() in _SENTINEL_NAMES:
+            return review(ctx, "correspondent", decision, threshold, "no_name")
+        if self._match_existing(proposal, correspondents):
+            return review(ctx, "correspondent", decision, threshold, "named_existing")
+        gate = self._create_gate(proposal)
+        if gate:
+            return review(ctx, "correspondent", decision, threshold, gate)
+        if ctx.preview:
+            ctx.decided_fields.add("correspondent")
+            details = {**decision_details(decision, threshold, "would_create"), "choice": proposal.name}
+            return StepResult(data={}, skipped=True, details={"decision": details, "would_create": proposal.name})
+        result = await self._create(ctx, proposal)
+        if "correspondent_create_failed" in result.details:
+            return review(ctx, "correspondent", decision, threshold, "create_failed")
+        ctx.decided_fields.add("correspondent")
+        outcome = "created" if "created_correspondent" in result.details else "applied"
+        name = (result.details.get("created_correspondent") or {}).get("name") or proposal.name
+        result.details = {**result.details, "decision": {**decision_details(decision, threshold, outcome), "choice": name}}
+        return result

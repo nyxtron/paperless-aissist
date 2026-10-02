@@ -18,6 +18,7 @@ from ..auth import (
     hash_automation_token,
 )
 from ..exceptions import LLMError
+from ..services.control_tags import review_tag_name
 from ..services.llm_handler import OPENAI_COMPATIBLE_PROVIDERS
 from ..services.log_stream import apply_log_level
 from ..services.paperless_manager import PaperlessClientManager
@@ -262,7 +263,7 @@ async def test_decision_model():
     except LLMError as e:
         result.update(success=False, message=str(e))
     config = await get_llm_config_dict()
-    name = config.get("review_tag") or "ai-review"
+    name = review_tag_name(config)
     try:
         paperless = await PaperlessClientManager.get_client()
         tags = await paperless.get_tags(force_refresh=True)

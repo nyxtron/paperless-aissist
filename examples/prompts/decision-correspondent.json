@@ -1,0 +1,8 @@
+{
+  "name": "Decision: Correspondent",
+  "prompt_type": "decision_correspondent",
+  "document_type_filter": null,
+  "system_prompt": "You assign documents to one of the given options. Answer only with the letter of the matching option.",
+  "user_template": "Document:\n<<<\n{content}\n>>>\n\n{question}\n\nOptions:\n{options}\n\nAnswer with one letter only.",
+  "is_active": true
+}

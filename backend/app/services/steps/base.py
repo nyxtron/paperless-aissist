@@ -59,6 +59,13 @@ class StepContext:
     # the step list — this ordering is enforced by _build_steps() in processor.py.
     detected_type: str | None = None
     models_used: list[dict[str, str]] = field(default_factory=list)
+    # Decision mode (see services/decision): the service for this document,
+    # the fields left for review, and the fields the decision wrote. A
+    # preview reads the same flags but never writes.
+    decision: Any = None
+    review_fields: list[str] = field(default_factory=list)
+    decided_fields: set[str] = field(default_factory=set)
+    preview: bool = False
 
     def note_model(self, handler: Any) -> None:
         """Record that ``handler`` is about to be asked.

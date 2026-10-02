@@ -73,7 +73,9 @@ class TagsStep(AbstractStep):
         try:
             # Only tags that describe a document are on offer: the ones that
             # steer processing, and the blacklist, would otherwise be picked.
-            all_tags = assignable_tags(await ctx.paperless.get_tags(), self.config)
+            # Read from the document's config: the review tag can be renamed
+            # while a run is going.
+            all_tags = assignable_tags(await ctx.paperless.get_tags(), ctx.config)
             tags_list = ", ".join(f'"{t["name"]}"' for t in all_tags)
             user_msg = (
                 prompt_data["user_template"]

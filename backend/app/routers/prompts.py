@@ -39,6 +39,22 @@ class PromptUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+DECISION_PROMPT_TYPES = ("decision_correspondent", "decision_document_type")
+DECISION_VARIABLES = [
+    {"name": "{content}", "description": "The document text content"},
+    {"name": "{question}", "description": "The question set for this field in the decision settings"},
+    {"name": "{options}", "description": 'The lettered options, last one "None of these"'},
+]
+
+
+def _placeholder_warning(prompt_type: str, user_template: str) -> dict | None:
+    """The letter prompt needs its three placeholders; say which are missing."""
+    if prompt_type not in DECISION_PROMPT_TYPES:
+        return None
+    missing = [v["name"] for v in DECISION_VARIABLES if v["name"] not in (user_template or "")]
+    return {"code": "missing_placeholders", "missing": missing} if missing else None
+
+
 def _serialize_prompt(prompt: Prompt, samples: dict[str, dict] | None = None) -> dict:
     samples = samples or load_samples()
     sample = find_sample_for_prompt(prompt, samples)
@@ -131,6 +147,8 @@ async def get_prompt_templates():
                 "value": "vision_ocr",
                 "description": "Vision OCR (prompt sent to vision model for text extraction)",
             },
+            {"value": "decision_correspondent", "description": "Decision: correspondent (letters)", "variables": DECISION_VARIABLES},
+            {"value": "decision_document_type", "description": "Decision: document type (letters)", "variables": DECISION_VARIABLES},
         ],
     }
 
@@ -180,11 +198,16 @@ async def create_prompt(prompt: PromptCreate):
             updated_at=datetime.now(timezone.utc),
         )
         session.add(db_prompt)
-        return {
+        await session.flush()
+        response = {
             "id": db_prompt.id,
             "name": db_prompt.name,
             "message": "Prompt created successfully",
         }
+        warning = _placeholder_warning(db_prompt.prompt_type, db_prompt.user_template)
+        if warning:
+            response["warning"] = warning
+        return response
 
 
 @router.put("/{prompt_id}")
@@ -222,11 +245,15 @@ async def update_prompt(prompt_id: int, prompt: PromptUpdate):
 
         db_prompt.updated_at = datetime.now(timezone.utc)
 
-        return {
+        response = {
             "id": db_prompt.id,
             "name": db_prompt.name,
             "message": "Prompt updated successfully",
         }
+        warning = _placeholder_warning(db_prompt.prompt_type, db_prompt.user_template)
+        if warning:
+            response["warning"] = warning
+        return response
 
 
 @router.post("/load-samples")
