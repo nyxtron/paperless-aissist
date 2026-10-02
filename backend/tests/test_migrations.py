@@ -89,3 +89,17 @@ def test_fresh_empty_db_migrates_from_scratch(tmp_path):
     db = tmp_path / "fresh.db"
     run_migrations(f"sqlite:///{db}")
     assert {"sample_key", "sample_hash", "sample_updated_at"} <= _columns(str(db), "prompts")
+
+
+
+def test_migrations_switch_the_app_loggers_back_on_and_no_others(tmp_path):
+    """Startup runs the migrations; a step's warnings must still be logged afterwards."""
+    import logging
+
+    step_logger = logging.getLogger("app.services.steps.fields_step")
+    sql_logger = logging.getLogger("aiosqlite")
+    step_logger.disabled = sql_logger.disabled = False
+    run_migrations(f"sqlite:///{tmp_path / 'log.db'}")
+    assert step_logger.disabled is False
+    # aiosqlite prints SQL parameters at DEBUG, saved API keys included.
+    assert sql_logger.disabled is True
