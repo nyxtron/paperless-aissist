@@ -77,7 +77,8 @@ class DocumentTypeStep(AbstractStep):
             raise
         except Exception as e:
             logger.warning(f"DocumentTypeStep: failed for doc {ctx.doc_id}: {e}")
-            return StepResult(data={}, error=str(e))
+            return StepResult(data={}, error=str(e),
+                              details={"decision": fallback_details} if fallback_details else {})
         if fallback_details:
             result.details = {**result.details, "decision": fallback_details}
         return result

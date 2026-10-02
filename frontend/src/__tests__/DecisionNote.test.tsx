@@ -37,7 +37,7 @@ describe('DecisionNote', () => {
     render(<DecisionNote decision={base} />)
     expect(
       screen.getByText(
-        'decision.note.decided choice=Telekom p=99.7% threshold=90% model=qwen2.5:7b',
+        'decision.note.decided choice=Telekom p=99.6% threshold=90% model=qwen2.5:7b',
       ),
     ).toBeInTheDocument()
   })
@@ -51,6 +51,25 @@ describe('DecisionNote', () => {
     expect(
       screen.getByText(
         'decision.note.review reason=decision.reason.below_threshold choice=Telekom p=72.0% threshold=90%',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('never rounds a best guess up to the threshold', () => {
+    render(
+      <DecisionNote
+        decision={{
+          ...base,
+          outcome: 'review',
+          reason: 'below_threshold',
+          choice: 'Telekom',
+          probability: 0.8996,
+        }}
+      />,
+    )
+    expect(
+      screen.getByText(
+        'decision.note.review reason=decision.reason.below_threshold choice=Telekom p=89.9% threshold=90%',
       ),
     ).toBeInTheDocument()
   })

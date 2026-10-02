@@ -85,11 +85,15 @@ export function ConfigSectionDecision({
     let alive = true
     const check = () => {
       checkedOnce.current = true
-      documentsApi
-        .getTags()
-        .then((res) => {
+      const lookup = (refresh?: true) =>
+        (refresh ? documentsApi.getTags(true) : documentsApi.getTags()).then((res) => {
           const tags = (res.data?.tags ?? []) as Array<{ name: string }>
-          const exists = tags.some((tag) => tag.name === reviewTag)
+          return tags.some((tag) => tag.name === reviewTag)
+        })
+      lookup()
+        // A tag created a moment ago is not in the cached list yet; ask Paperless once before warning.
+        .then((exists) => exists || lookup(true))
+        .then((exists) => {
           if (alive) setTagCheck({ name: reviewTag, exists })
         })
         .catch(() => {
@@ -194,7 +198,8 @@ export function ConfigSectionDecision({
                 min="0.5"
                 max="1"
                 step="0.01"
-                value={config[`decision_threshold_${field}`] || '0.9'}
+                value={config[`decision_threshold_${field}`] ?? ''}
+                placeholder="0.9"
                 onChange={(e) => save(`decision_threshold_${field}`, e.target.value)}
                 className={`w-32 ${numberClass}`}
               />
@@ -310,7 +315,12 @@ export function ConfigSectionDecision({
             type="text"
             disabled={inherited}
             value={inherited ? '' : config.llm_api_base_decision || ''}
-            placeholder={inherited ? config.llm_api_base || '' : apiBasePlaceholder(ownProvider)}
+            placeholder={
+              inherited
+                ? config.llm_api_base ||
+                  (provider === 'openrouter' ? apiBasePlaceholder('openrouter') : '')
+                : apiBasePlaceholder(ownProvider)
+            }
             onChange={(e) => save('llm_api_base_decision', e.target.value)}
             className={`${fieldClass} disabled:opacity-60`}
           />
@@ -370,7 +380,7 @@ export function ConfigSectionDecision({
             min="1"
             step="1"
             value={config.llm_num_ctx_decision || ''}
-            placeholder={config.llm_num_ctx || '16384'}
+            placeholder={config.llm_num_ctx || ''}
             onChange={(e) => save('llm_num_ctx_decision', e.target.value)}
             className={`w-40 ${numberClass}`}
           />

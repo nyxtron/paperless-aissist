@@ -38,8 +38,9 @@ async def test_a_refusal_keeps_status_and_body():
 
 
 @pytest.mark.asyncio
-async def test_a_retryable_status_is_still_unavailable():
-    handler = _handler(lambda r: httpx.Response(503, text="busy"))
+@pytest.mark.parametrize("status", [408, 425, 429, 503])
+async def test_a_retryable_status_is_still_unavailable(status):
+    handler = _handler(lambda r: httpx.Response(status, text="busy"))
     with pytest.raises(LLMUnavailableError):
         await handler.post_json("/x", {})
     await handler.close()
@@ -89,14 +90,54 @@ async def test_a_cut_prompt_is_noted_from_the_count():
     await handler.close()
 
 
+def _ollama(data, context_length):
+    """Answers the POST with data and GET /api/ps with the loaded window."""
+
+    def respond(request):
+        if request.url.path == "/api/ps":
+            return httpx.Response(200, json={"models": [{"name": "m", "context_length": context_length}]})
+        return httpx.Response(200, json=data)
+
+    return respond
+
+
 @pytest.mark.asyncio
 async def test_a_cut_prompt_is_noted_from_usage_too():
     data = {"answers": {}, "usage": {"input_tokens": 2050}}
-    handler = _handler(lambda r: httpx.Response(200, json=data))
-    handler.num_ctx = 4096
+    handler = _handler(_ollama(data, 4096))
     token = PROMPT_CUTS.set([])
     try:
         await handler.post_json("/v1/systemone", {}, prompt_parts=("", "x" * 20000))
+        assert PROMPT_CUTS.get() == [{"evaluated": 2050, "window": 4096}]
+    finally:
+        PROMPT_CUTS.reset(token)
+    await handler.close()
+
+
+@pytest.mark.asyncio
+async def test_systemone_is_judged_by_the_server_window_not_num_ctx():
+    # /v1/systemone ignores options.num_ctx, so a smaller configured window
+    # must not make a prompt that fit the server's look cut.
+    data = {"answers": {}, "usage": {"input_tokens": 3000}}
+    handler = _handler(_ollama(data, 8192))
+    handler.num_ctx = 2048
+    token = PROMPT_CUTS.set([])
+    try:
+        await handler.post_json("/v1/systemone", {}, prompt_parts=("", "x" * 20000))
+        assert PROMPT_CUTS.get() == []
+    finally:
+        PROMPT_CUTS.reset(token)
+    await handler.close()
+
+
+@pytest.mark.asyncio
+async def test_chat_is_still_judged_by_num_ctx():
+    data = {"logprobs": [], "prompt_eval_count": 2050}
+    handler = _handler(_ollama(data, 8192))
+    handler.num_ctx = 4096
+    token = PROMPT_CUTS.set([])
+    try:
+        await handler.post_json("/api/chat", {}, prompt_parts=("s", "x" * 20000))
         assert PROMPT_CUTS.get() == [{"evaluated": 2050, "window": 4096}]
     finally:
         PROMPT_CUTS.reset(token)

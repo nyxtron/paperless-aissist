@@ -35,6 +35,7 @@ def test_go_json_is_compact_and_escapes_like_ollama():
     # Written as escapes on purpose: the raw U+2028/U+2029 characters are invisible.
     assert go_json({"a": "<b> & c"}) == '{"a":"\\u003cb\\u003e \\u0026 c"}'
     assert go_json("ä\u2028") == '"ä\\u2028"'
+    assert go_json("\u2029") == '"\\u2029"'
 
 
 def test_the_nimble_message_matches_the_measured_rendering():
@@ -70,6 +71,11 @@ def test_the_systemone_questions_match_the_measured_request():
         "c1": {"type": "choice", "instructions": "Who sent it?",
                "criteria": {"C KG": None, NONE_LABEL: NONE_DESCRIPTION}},
     }
+
+
+def test_duplicate_options_keep_separate_criteria():
+    q = systemone_questions("Q?", [("c0", ["Telekom", "Telekom", NONE_LABEL])], {NONE_LABEL: NONE_DESCRIPTION})
+    assert list(q["c0"]["criteria"]) == ["Telekom", "Telekom (2)", NONE_LABEL]
 
 
 def test_the_digest_is_short_and_stable():

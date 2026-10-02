@@ -409,7 +409,9 @@ class LLMHandler:
                 evaluated = data.get("prompt_eval_count") or (data.get("usage") or {}).get(
                     "input_tokens"
                 )
-                await self._note_if_cut(prompt_parts[0], prompt_parts[1], evaluated, self.num_ctx)
+                # /v1/systemone ignores options.num_ctx; only the server's window counts there.
+                window = None if path == "/v1/systemone" else self.num_ctx
+                await self._note_if_cut(prompt_parts[0], prompt_parts[1], evaluated, window)
             return data
         finally:
             await self._after_request()

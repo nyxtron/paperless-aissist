@@ -5,8 +5,6 @@ hands back a probability per option. The concrete adapters are below the
 base class; the service only knows the base.
 """
 
-import json
-import logging
 import math
 from dataclasses import dataclass, field
 from typing import Any, Mapping, NoReturn, Optional
@@ -23,7 +21,6 @@ from .formats import (
     unique_keys,
 )
 
-logger = logging.getLogger(__name__)
 
 TOP_LOGPROBS = 20
 
@@ -60,7 +57,8 @@ def letter_probs(top: list[dict[str, Any]], n: int) -> tuple[dict[int, float], f
 
     Whitespace around a token is stripped, only an exact uppercase option
     letter counts, and the first occurrence wins ("B" and " B" are not added
-    up). The mass is how much of the model's answer sat on letters at all.
+    up). An entry without a number is no candidate. The mass is how much of
+    the model's answer sat on letters at all.
     """
     found: dict[int, float] = {}
     for entry in top:
@@ -68,8 +66,9 @@ def letter_probs(top: list[dict[str, Any]], n: int) -> tuple[dict[int, float], f
         if len(token) != 1 or token not in LETTERS[:n]:
             continue
         index = LETTERS.index(token)
-        if index not in found:
-            found[index] = float(entry["logprob"])
+        logprob = entry.get("logprob")
+        if index not in found and isinstance(logprob, (int, float)):
+            found[index] = float(logprob)
     if not found:
         return {}, 0.0
     best = max(found.values())
@@ -125,30 +124,33 @@ _UNSUPPORTED_PARAMETER = ("logprob", "top_logprobs", "max_tokens", "temperature"
                           "unknown field")
 
 
-def classify_http_error(error: LLMHttpError) -> Optional[tuple[str, bool]]:
+def classify_http_error(error: LLMHttpError, *, systemone: bool = True) -> Optional[tuple[str, bool]]:
     """(reason, provider-level) for a refusal the decision can live with, or None.
 
     Provider-level means no document will get further on this route; the rest
-    only hit this document. None leaves the error a provider failure.
+    only hit this document. None leaves the error a provider failure. Only the
+    SystemOne route can be missing; a plain 404 on /api/chat is a wrong URL.
     """
     body = (error.body or "").lower()
     status = error.status_code
-    if status == 413 or (status == 400 and "input is never truncated" in body):
+    # Ollama's wording changed in 0.35: "exceeds the available context size".
+    too_long = "input is never truncated" in body or "exceeds the available context size" in body
+    if status == 413 or (status == 400 and too_long):
         return "context_exceeded", False
     if status == 400 and "not supported by system one" in body:
         return "format_unsupported", True
     if status == 404 and "no endpoints found" in body:
         return "no_logprobs", True
     # Ollama's own "model not found" is a JSON 404; only a missing route is plain text.
-    if status == 404 and body.strip().startswith("404 page not found"):
+    if systemone and status == 404 and body.strip().startswith("404 page not found"):
         return "route_missing", True
     if status in (400, 422) and any(mark in body for mark in _UNSUPPORTED_PARAMETER):
         return "unsupported_parameter", True
     return None
 
 
-def _raise_classified(error: LLMHttpError) -> NoReturn:
-    verdict = classify_http_error(error)
+def _raise_classified(error: LLMHttpError, *, systemone: bool = True) -> NoReturn:
+    verdict = classify_http_error(error, systemone=systemone)
     if verdict is None:
         raise error
     reason, provider_level = verdict
@@ -228,7 +230,7 @@ class OllamaLettersAdapter(_LettersAdapter):
                 "/api/chat", payload, prompt_parts=(messages[0]["content"], messages[1]["content"])
             )
         except LLMHttpError as e:
-            _raise_classified(e)
+            _raise_classified(e, systemone=False)
         probs, mass = letter_probs(_ollama_top(data), len(labels))
         rendered, full = self._render(text, question, labels)
         return RoundResult(probs, mass, rendered, full, data.get("prompt_eval_count"))
@@ -250,7 +252,7 @@ class OpenAILettersAdapter(_LettersAdapter):
         try:
             data = await self.handler.post_json("/chat/completions", payload)
         except LLMHttpError as e:
-            _raise_classified(e)
+            _raise_classified(e, systemone=False)
         probs, mass = letter_probs(_openai_top(data), len(labels))
         rendered, full = self._render(text, question, labels)
         usage = data.get("usage") or {}
@@ -274,7 +276,7 @@ class OllamaNimbleAdapter(Adapter):
         try:
             data = await self.handler.post_json("/api/chat", payload, prompt_parts=("", content))
         except LLMHttpError as e:
-            _raise_classified(e)
+            _raise_classified(e, systemone=False)
         probs, mass = letter_probs(_ollama_top(data), len(labels))
         placeholder = _placeholder(text)
         shown = _plain_placeholder(
@@ -283,26 +285,16 @@ class OllamaNimbleAdapter(Adapter):
         return RoundResult(probs, mass, shown, content, data.get("prompt_eval_count"))
 
 
-# /v1/systemone refuses a body over 64 KiB; the rest is room to spare.
-SYSTEMONE_BODY_BUDGET = 48 * 1024
-SYSTEMONE_DEFAULT_WINDOW = 8192
-
-
 class OllamaSystemOneAdapter(Adapter):
-    """Ollama's decision route: all chunks of a round in one request."""
+    """Ollama's decision route, one question per request."""
 
     method = "ollama_systemone"
     uses_prompt = False
     max_options = 26
 
     async def score_rounds(self, text, question, asks, descriptions) -> list[RoundResult]:
-        if len(asks) > 1 and await self._fits(text, question, asks, descriptions):
-            try:
-                return await self._send(text, question, asks, descriptions)
-            except DecisionSkipped as e:
-                if e.reason != "context_exceeded":
-                    raise
-                logger.debug("SystemOne round too long together, asking one question at a time")
+        # Several questions in one body let the other chunks' options colour
+        # each answer, so every chunk is asked on its own.
         results = []
         for ask in asks:
             results += await self._send(text, question, [ask], descriptions)
@@ -311,18 +303,6 @@ class OllamaSystemOneAdapter(Adapter):
     def _payload(self, text, question, asks, descriptions) -> dict[str, Any]:
         return {"model": self.handler.model, "state": text,
                 "questions": systemone_questions(question, asks, descriptions)}
-
-    async def _fits(self, text, question, asks, descriptions) -> bool:
-        """Whether the round should go in one request, judged by size alone."""
-        body = json.dumps(self._payload(text, question, asks, descriptions),
-                          ensure_ascii=False, separators=(",", ":"))
-        size = len(body.encode("utf-8"))
-        if size > SYSTEMONE_BODY_BUDGET:
-            return False
-        # /v1/systemone ignores options.num_ctx, so only the server's window
-        # counts. A token per three bytes overestimates the prompt.
-        window = await self.handler._ollama_window() or SYSTEMONE_DEFAULT_WINDOW
-        return size / 3 <= window - 256
 
     async def _send(self, text, question, asks, descriptions) -> list[RoundResult]:
         payload = self._payload(text, question, asks, descriptions)

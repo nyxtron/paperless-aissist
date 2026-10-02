@@ -122,6 +122,26 @@ describe('ConfigPanel', () => {
     expect(savedKeys()).not.toContain('llm_api_key_decision')
   })
 
+  it('shows the stored threshold again when the save is refused', async () => {
+    mocks.mockGetAll.mockResolvedValue({
+      data: { data: { decision_threshold_correspondent: '0.95' }, secrets_set: [] },
+    })
+    render(<ConfigPanel />)
+    fireEvent.click(await screen.findByText('config.tabLLM'))
+    const [threshold] = await screen.findAllByLabelText('config.decisionThreshold')
+    expect(threshold).toHaveValue(0.95)
+
+    vi.useFakeTimers()
+    mocks.mockSet.mockRejectedValue({ response: { status: 400 } })
+    fireEvent.change(threshold, { target: { value: '' } })
+    expect(threshold).toHaveValue(null)
+    await act(() => vi.advanceTimersByTimeAsync(1500))
+
+    expect(mocks.mockSet).toHaveBeenCalledWith('decision_threshold_correspondent', '')
+    expect(toast.error).toHaveBeenCalledWith('config.saveKeyFailed')
+    expect(threshold).toHaveValue(0.95)
+  })
+
   it('treats the decision model key as a secret', () => {
     expect(SENSITIVE_KEYS.has('llm_api_key_decision')).toBe(true)
   })

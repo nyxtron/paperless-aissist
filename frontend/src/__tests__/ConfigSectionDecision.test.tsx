@@ -85,6 +85,21 @@ describe('ConfigSectionDecision', () => {
     expect(onSave).toHaveBeenCalledWith(key, value)
   })
 
+  it('shows the default threshold as a placeholder, not as a value', () => {
+    render(
+      <ConfigSectionDecision
+        config={{ ...base, decision_threshold_correspondent: '' }}
+        onSave={vi.fn()}
+        secretsSet={[]}
+      />,
+    )
+    const field = screen.getByLabelText(
+      'config.decisionThreshold field=decision.field.correspondent',
+    )
+    expect(field).toHaveValue(null)
+    expect(field).toHaveAttribute('placeholder', '0.9')
+  })
+
   it('shows inherited placeholders and disables URL and key while the provider is empty', () => {
     const { rerender } = render(
       <ConfigSectionDecision
@@ -105,6 +120,31 @@ describe('ConfigSectionDecision', () => {
       'placeholder',
       'config.alreadySetPlaceholder',
     )
+  })
+
+  it('shows the URL the main connection falls back to while inherited', () => {
+    // Only OpenRouter has a default URL; Ollama with no stored URL shows none.
+    const { rerender } = render(
+      <ConfigSectionDecision
+        config={{ ...base, llm_provider: 'openrouter', llm_api_base: '' }}
+        onSave={vi.fn()}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.getByLabelText('config.apiBaseUrl')).toBeDisabled()
+    expect(screen.getByLabelText('config.apiBaseUrl')).toHaveAttribute(
+      'placeholder',
+      'https://openrouter.ai/api/v1',
+    )
+
+    rerender(
+      <ConfigSectionDecision
+        config={{ ...base, llm_api_base: '' }}
+        onSave={vi.fn()}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.getByLabelText('config.apiBaseUrl')).toHaveAttribute('placeholder', '')
   })
 
   it('asks for a URL once an own provider is set', () => {
@@ -243,7 +283,24 @@ describe('ConfigSectionDecision', () => {
     expect(mocks.getTags).toHaveBeenCalledTimes(1)
     expect(screen.queryByText(/config\.reviewTag(Present|Missing)/)).not.toBeInTheDocument()
     expect(await screen.findByText('config.reviewTagMissing tag=needs-check')).toBeInTheDocument()
-    expect(mocks.getTags).toHaveBeenCalledTimes(2)
+    expect(mocks.getTags).toHaveBeenCalledTimes(3)
+    expect(mocks.getTags).toHaveBeenLastCalledWith(true)
+  })
+
+  it('asks Paperless again before calling the tag missing', async () => {
+    mocks.getTags
+      .mockResolvedValueOnce({ data: { tags: [{ id: 1, name: 'other' }] } })
+      .mockResolvedValueOnce({
+        data: {
+          tags: [
+            { id: 1, name: 'other' },
+            { id: 2, name: 'ai-review' },
+          ],
+        },
+      })
+    render(<ConfigSectionDecision config={base} onSave={vi.fn()} secretsSet={[]} />)
+    expect(await screen.findByText('config.reviewTagPresent tag=ai-review')).toBeInTheDocument()
+    expect(mocks.getTags.mock.calls).toEqual([[], [true]])
   })
 
   it('says it could not check the tag when Paperless does not answer', async () => {

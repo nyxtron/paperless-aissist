@@ -32,11 +32,12 @@ def test_sensitive_key_not_in_data(client):
 
 
 def test_empty_sensitive_key_preserves_existing(client):
-    """Saving an empty value for a sensitive key returns existing value."""
+    """Saving an empty value for a sensitive key keeps the existing value."""
     client.post("/api/config", json={"key": "paperless_token", "value": "real-token"})
     response = client.post("/api/config", json={"key": "paperless_token", "value": ""})
     assert response.status_code == 200
-    assert response.json()["value"] == "real-token"
+    assert response.json()["value"] == ""
+    assert "paperless_token" in client.get("/api/config").json()["secrets_set"]
 
 
 def test_config_delete(client):

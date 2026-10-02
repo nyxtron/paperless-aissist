@@ -268,8 +268,10 @@ async def test_decision_model():
         paperless = await PaperlessClientManager.get_client()
         tags = await paperless.get_tags(force_refresh=True)
         exists = any(t.get("name") == name for t in tags)
-    except Exception:
-        exists = False
+    except Exception as e:
+        # Not the same as a missing tag: the UI says it could not check.
+        logger.warning("Review tag check skipped, Paperless unavailable: %s", e)
+        exists = None
     result["review_tag"] = {"name": name, "exists": exists}
     return result
 
@@ -394,7 +396,8 @@ async def set_config(data: ConfigUpdate = Body(...), description: Optional[str] 
         if data.key in SENSITIVE_KEYS and (not data.value or not data.value.strip()):
             if config is None:
                 raise HTTPException(status_code=404, detail="Config not found")
-            return {"key": data.key, "value": config.value}
+            # The stored secret stays, and stays hidden like on every read.
+            return {"key": data.key, "value": ""}
 
         if config:
             config.value = data.value

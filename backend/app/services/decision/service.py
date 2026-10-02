@@ -129,10 +129,11 @@ class DecisionService:
         await self._handler.close()
 
     def _fallback(
-        self, reason: str, detail: Optional[str], requests: int = 0, method: str = "text"
+        self, reason: str, detail: Optional[str], requests: int = 0, method: str = "text",
+        digest: Optional[dict[str, Any]] = None,
     ) -> Decision:
         return Decision(method, self.provider, self.model, requests=requests,
-                        fallback_reason=reason, fallback_detail=detail)
+                        fallback_reason=reason, fallback_detail=detail, **(digest or {}))
 
     def _remembered_unsupported(self) -> Optional[tuple[str, Optional[str]]]:
         if self._unsupported_until is None:
@@ -148,7 +149,7 @@ class DecisionService:
     async def probe(self) -> Decision:
         """The settings page's test: a fresh two-option question."""
         self.forget_unsupported()
-        question = await _config("decision_question_correspondent") or DEFAULT_QUESTIONS["correspondent"]
+        question = (await _config("decision_question_correspondent") or "").strip() or DEFAULT_QUESTIONS["correspondent"]
         return await self.decide(PROBE_TEXT, "correspondent", PROBE_OPTIONS, question=question, threshold=0.9)
 
     async def decide(
@@ -204,7 +205,7 @@ class DecisionService:
                 self.method, self.provider, self.model, index=index, choice=choice,
                 probability=p, mass=r.mass, top=self._top(r, r_names[id(r)]),
                 requests=adapter.requests, review_reason=review, rendered=r.rendered,
-                full=r.full if preview else None, **text_digest(text),
+                full=r.full if preview else None, **digest,
             )
 
         # The option names each result was asked about, by result identity, so
@@ -217,6 +218,8 @@ class DecisionService:
                 r_names[id(r)] = [labels[i] for i in idxs] + [NONE_LABEL]
             return results
 
+        # Once anything is sent, the stored request names the text it was for.
+        digest = text_digest(text)
         try:
             first = [(f"c{i}", idxs) for i, idxs in enumerate(chunks(range(len(labels)), per_chunk))]
             results = await run_named(first)
@@ -266,9 +269,9 @@ class DecisionService:
         except DecisionUnsupported as e:
             self._unsupported = (e.reason, e.detail)
             self._unsupported_until = time.monotonic() + UNSUPPORTED_RECHECK_SECONDS
-            return self._fallback(e.reason, e.detail, adapter.requests, adapter.method)
+            return self._fallback(e.reason, e.detail, adapter.requests, adapter.method, digest=digest)
         except DecisionSkipped as e:
-            return self._fallback(e.reason, e.detail, adapter.requests, adapter.method)
+            return self._fallback(e.reason, e.detail, adapter.requests, adapter.method, digest=digest)
 
     @staticmethod
     def _top(r: RoundResult, names: list[str]) -> list[dict[str, Any]]:

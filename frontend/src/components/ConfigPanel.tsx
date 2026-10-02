@@ -123,11 +123,18 @@ export default function ConfigPanel() {
         resolve()
         return
       }
-      setConfigs((prev) => ({ ...prev, [key]: value }))
+      // A refused save shows the stored value again instead of the typed one.
+      let previous: string | undefined
+      setConfigs((prev) => {
+        previous = prev[key]
+        return { ...prev, [key]: value }
+      })
+      const revert = () => setConfigs((c) => ({ ...c, [key]: previous ?? '' }))
       if (IMMEDIATE_SAVE_KEYS.has(key)) {
         configApi.set(key, value)
           .catch((e) => {
             console.error(`Failed to save ${key}:`, e)
+            revert()
             toast.error(t('config.saveKeyFailed', { key }))
           })
           .finally(resolve)
@@ -139,6 +146,7 @@ export default function ConfigPanel() {
           await configApi.set(key, value)
         } catch (e) {
           console.error(`Failed to save ${key}:`, e)
+          revert()
           toast.error(t('config.saveKeyFailed', { key }))
         }
         resolve()

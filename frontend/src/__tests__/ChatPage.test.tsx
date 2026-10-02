@@ -265,6 +265,14 @@ describe('ChatPage', () => {
       expect(screen.getByText('[user] Rechnung der Telekom')).toBeInTheDocument()
     })
 
+    it('opens no proposed changes box when nothing is proposed', async () => {
+      // The review plan is always present once a decision step ran, even
+      // when it has nothing to add or remove.
+      await openPreview({ steps: [], proposed_changes: { review: review() } })
+
+      expect(screen.queryByText('chat.proposedChanges')).not.toBeInTheDocument()
+    })
+
     it('says which fields would get the review tag', async () => {
       await openPreview({
         proposed_changes: { review: review({ add_fields: ['correspondent', 'document_type'] }) },

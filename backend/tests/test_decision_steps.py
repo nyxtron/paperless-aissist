@@ -196,6 +196,15 @@ class TestCorrespondentDecision:
         assert r.details["decision"]["outcome"] == "fallback" and r.details["decision"]["fallback_reason"] == "no_logprobs"
 
     @pytest.mark.asyncio
+    async def test_a_text_path_failure_after_a_fallback_keeps_the_note(self, text_prompt):
+        ctx = _ctx(FakeService(fallback_reason="no_logprobs", fallback_detail="200 without logprobs"))
+        # first call feeds the decision branch, second call is the text path
+        ctx.paperless.get_correspondents = AsyncMock(side_effect=[CORRESPONDENTS, RuntimeError("paperless down")])
+        r = await _run(ctx)
+        assert r.error == "paperless down" and r.data == {}
+        assert r.details["decision"]["outcome"] == "fallback" and r.details["decision"]["fallback_reason"] == "no_logprobs"
+
+    @pytest.mark.asyncio
     async def test_an_outage_in_the_decision_is_raised(self):
         svc = FakeService(index=0, choice="Amazon", probability=0.9)
 
@@ -337,6 +346,16 @@ class TestDocumentTypeDecision:
         with patch.object(DocumentTypeStep, "_load_prompt", AsyncMock(return_value=prompt)):
             r = await (await DocumentTypeStep.from_config(ctx.config)).execute(ctx)
         assert r.data == {"document_type": 8} and svc.calls == [] and "decision" not in r.details
+
+    @pytest.mark.asyncio
+    async def test_a_text_path_failure_after_a_fallback_keeps_the_note(self):
+        ctx = _type_ctx(FakeService(fallback_reason="no_logprobs", fallback_detail="200 without logprobs"))
+        ctx.paperless.get_document_types = AsyncMock(side_effect=[TYPES, RuntimeError("paperless down")])
+        prompt = {"system_prompt": "s", "user_template": "{content} {document_types_list}"}
+        with patch.object(DocumentTypeStep, "_load_prompt", AsyncMock(return_value=prompt)):
+            r = await (await DocumentTypeStep.from_config(ctx.config)).execute(ctx)
+        assert r.error == "paperless down" and r.data == {}
+        assert r.details["decision"]["outcome"] == "fallback" and r.details["decision"]["fallback_reason"] == "no_logprobs"
 
     @pytest.mark.asyncio
     async def test_an_outage_in_the_decision_is_raised(self):

@@ -6,7 +6,8 @@ import type { DecisionDetails } from '../api/types'
 // The backend's label for the extra option that names none of the list.
 const NONE_LABEL = 'None of these'
 
-const pct = (p: number | null) => (p === null ? '–' : `${(p * 100).toFixed(1)}%`)
+// Floored, so a probability just under the threshold never prints as the threshold.
+const pct = (p: number | null) => (p === null ? '–' : `${(Math.floor(p * 1000) / 10).toFixed(1)}%`)
 const pctThreshold = (t: number) => `${Math.round(t * 100)}%`
 
 // One line per decided field, wherever a step's result is shown: what was

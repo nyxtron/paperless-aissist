@@ -303,7 +303,7 @@
     "decisionHelp": "Den Buchstabenblock erzeugt AIssist: eine Zeile pro Option, A: Name, die letzte Zeile ist \"None of these\". Den Platzhalter {content} vorne lassen, damit Ollamas Prompt-Cache ihn wiederverwenden kann.",
     "nimbleTitle": "Nimble-Format",
     "nimbleHelp": "Nimble wurde auf dieses Format trainiert, daher kann es hier nicht bearbeitet werden. System-Prompt und Template kommen aus dem Modell in Ollama.",
-    "warnMissingPlaceholders": "Gespeichert, aber im Template fehlt {{missing}}",
+    "warnMissingPlaceholders": "Gespeichert, aber ohne {{missing}} im Template",
     "sampleStatus": {
       "custom": "Eigener Prompt",
       "sample_current": "Beispiel aktuell",

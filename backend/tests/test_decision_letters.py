@@ -1,6 +1,8 @@
 """Letters in, a decision out: the parser on captured replies and the rounds
 on a fake adapter, with the rules the 60-document measurement was scored by."""
 
+import math
+
 import pytest
 
 from app.services.decision.adapters import (
@@ -10,8 +12,8 @@ from app.services.decision.adapters import (
     RoundResult,
     letter_probs,
 )
-from app.services.decision.formats import NONE_LABEL
-from app.services.decision.service import DecisionService, chunks
+from app.services.decision.formats import NONE_LABEL, text_digest
+from app.services.decision.service import UNSUPPORTED_RECHECK_SECONDS, DecisionService, chunks
 from app.services.llm_handler import LLMHandler
 
 # Captured from Ollama 0.35.0, qwen2.5:7b, four options A..D (logprobs rounded).
@@ -40,9 +42,19 @@ class TestLetterProbs:
         assert probs == {} and mass == 0.0
 
     def test_blank_tokens_are_skipped(self):
-        probs, _ = letter_probs([{"token": "", "logprob": -0.1}, {"token": "  ", "logprob": -0.2},
-                                 {"token": "A", "logprob": -1.0}], 2)
-        assert set(probs) == {0}
+        probs, mass = letter_probs([{"token": "", "logprob": -0.1}, {"token": "  ", "logprob": -0.2},
+                                    {"token": "A", "logprob": -1.0}], 2)
+        assert probs == {0: 1.0} and mass == pytest.approx(math.exp(-1.0))
+
+    def test_a_two_letter_token_is_not_a_letter(self):
+        probs, mass = letter_probs([{"token": "AB", "logprob": -0.1}, {"token": "A", "logprob": -1.0}], 2)
+        assert probs == {0: 1.0} and mass == pytest.approx(math.exp(-1.0))
+
+    def test_a_candidate_without_a_number_is_skipped(self):
+        # The first usable occurrence wins, not the first spelling of the letter.
+        probs, mass = letter_probs([{"token": "A", "logprob": None}, {"token": "B"},
+                                    {"token": "B", "logprob": -0.1}], 3)
+        assert probs == {1: 1.0} and mass == pytest.approx(math.exp(-0.1))
 
     def test_letters_beyond_n_are_ignored(self):
         probs, _ = letter_probs([{"token": "C", "logprob": -0.1}, {"token": "A", "logprob": -1.0}], 2)
@@ -120,11 +132,23 @@ class TestRounds:
         assert (d.index, d.probability, d.requests, d.review_reason) == (3, 0.95, 3, None)
 
     @pytest.mark.asyncio
+    async def test_a_single_winner_in_a_later_chunk_reports_that_round(self):
+        s = _service({"c0": {NONE_LABEL: 0.9}, "c1": {"Firma 020": 0.95}, "c2": {NONE_LABEL: 0.9}}, masses={"c1": 0.8})
+        d = await _decide(s, NAMES[:40])
+        assert (d.index, d.rendered, d.mass, d.top[0]) == (20, "<c1>", 0.8, {"name": "Firma 020", "p": 0.95})
+
+    @pytest.mark.asyncio
     async def test_no_winner_is_none_with_the_lowest_none_probability(self):
         s = _service({"c0": {NONE_LABEL: 0.95}, "c1": {NONE_LABEL: 0.6}, "c2": {NONE_LABEL: 0.99}})
         d = await _decide(s, NAMES[:40])
         assert (d.index, d.choice, d.probability) == (None, NONE_LABEL, 0.6)
         assert d.rendered == "<c1>"
+
+    @pytest.mark.asyncio
+    async def test_low_mass_in_any_chunk_of_an_all_none_first_round_is_a_review(self):
+        s = _service({"c0": {NONE_LABEL: 0.95}, "c1": {NONE_LABEL: 0.92}, "c2": {NONE_LABEL: 0.99}}, masses={"c2": 0.3})
+        d = await _decide(s, NAMES[:40])
+        assert (d.choice, d.probability, d.review_reason, d.rendered, d.mass) == (NONE_LABEL, 0.92, "low_mass", "<c1>", 1.0)
 
     @pytest.mark.asyncio
     async def test_several_winners_go_to_a_final_round(self):
@@ -157,11 +181,15 @@ class TestRounds:
         for i in range(9, 20):
             script[f"c{i}"] = [{NONE_LABEL: 0.9}]
         for i in range(3):  # nested chunk i holds the winners names[9i], names[9i+3], names[9i+6]
-            script[f"c{i}"].append({names[i * 9]: 0.9})
+            script[f"c{i}"].append({names[i * 9 + (3 if i == 1 else 0)]: 0.9})
         script["final"] = {names[0]: 0.95}
         s = _service(script, max_options=4)
         d = await _decide(s, names)
         assert (d.index, d.probability, d.requests) == (0, 0.6, 24)
+        asked = s._adapter_calls[0].asked
+        assert asked[20] == ("c0", [names[0], names[3], names[6], NONE_LABEL])
+        assert asked[21] == ("c1", [names[9], names[12], names[15], NONE_LABEL])
+        assert asked[-1] == ("final", [names[0], names[12], names[18], NONE_LABEL])
 
     @pytest.mark.asyncio
     async def test_a_nested_round_that_picks_none_is_a_review(self):
@@ -191,6 +219,19 @@ class TestRounds:
         assert (d.index, d.review_reason) == (0, "low_mass")
 
     @pytest.mark.asyncio
+    async def test_low_mass_in_the_first_round_survives_the_nesting(self):
+        names = [f"N{i:03d}" for i in range(60)]
+        script = {f"c{i}": [{names[i * 3]: 0.9}] for i in range(9)}
+        for i in range(9, 20):
+            script[f"c{i}"] = [{NONE_LABEL: 0.9}]
+        for i in range(3):
+            script[f"c{i}"].append({names[i * 9]: 0.9})
+        script["final"] = {names[0]: 0.95}
+        s = _service(script, masses={"c0": [0.3, 1.0]}, max_options=4)
+        d = await _decide(s, names)
+        assert (d.index, d.review_reason) == (0, "low_mass")
+
+    @pytest.mark.asyncio
     async def test_low_mass_in_the_deciding_round_is_a_review(self):
         s = _service({"c0": {"Firma 003": 0.95}, "c1": {NONE_LABEL: 0.9}, "c2": {NONE_LABEL: 0.9}}, masses={"c0": 0.3})
         d = await _decide(s, NAMES[:40])
@@ -203,22 +244,46 @@ class TestRounds:
         assert d.review_reason is None
 
     @pytest.mark.asyncio
+    async def test_a_round_without_a_mass_is_not_low(self):
+        # SystemOne answers with probabilities only, so its rounds carry no mass.
+        s = _service({"c0": {"Firma 003": 0.95}}, masses={"c0": None})
+        d = await _decide(s, NAMES[:5])
+        assert (d.index, d.mass, d.review_reason) == (3, None, None)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mass, review", [(0.49, "low_mass"), (0.5, None)])
+    async def test_the_mass_rule_is_pinned_at_half(self, mass, review):
+        s = _service({"c0": {"Firma 003": 0.95}}, masses={"c0": mass})
+        d = await _decide(s, NAMES[:5])
+        assert d.review_reason == review
+
+    @pytest.mark.asyncio
     async def test_a_round_without_letters_falls_back(self):
         s = _service({"c0": "no_letters", "c1": {NONE_LABEL: 0.9}, "c2": {NONE_LABEL: 0.9}})
         d = await _decide(s, NAMES[:40])
         assert (d.fallback_reason, d.requests) == ("no_letters", 1)
         assert d.method == "fake"
         assert s._unsupported_until is None
+        # The logged request still names the text it was sent for.
+        assert (d.text_chars, d.text_sha256) == (4, text_digest("text")["text_sha256"])
 
     @pytest.mark.asyncio
-    async def test_a_provider_without_logprobs_is_remembered(self):
-        s = _service({"c0": "unsupported"})
+    async def test_a_provider_without_logprobs_is_remembered(self, monkeypatch):
+        clock = [1000.0]
+        monkeypatch.setattr("app.services.decision.service.time.monotonic", lambda: clock[0])
+        s = _service({"c0": ["unsupported", "unsupported"]})
         d = await _decide(s, NAMES[:5])
-        assert (d.fallback_reason, d.fallback_detail) == ("no_logprobs", "200 without logprobs")
-        assert d.method == "fake"
+        assert (d.fallback_reason, d.fallback_detail, d.method) == ("no_logprobs", "200 without logprobs", "fake")
+        assert (d.text_chars, d.text_sha256) == (4, text_digest("text")["text_sha256"])
+        assert s._unsupported_until == 1000.0 + UNSUPPORTED_RECHECK_SECONDS
+        clock[0] = 1000.0 + UNSUPPORTED_RECHECK_SECONDS - 1
         again = await _decide(s, NAMES[:5])
-        assert again.fallback_reason == "no_logprobs" and again.requests == 0
-        assert again.method == "text"
+        assert (again.fallback_reason, again.fallback_detail, again.requests, again.method) == (
+            "no_logprobs", "200 without logprobs", 0, "text")
+        clock[0] = 1000.0 + UNSUPPORTED_RECHECK_SECONDS
+        third = await _decide(s, NAMES[:5])
+        assert (third.fallback_reason, third.requests, s._unsupported_until) == (
+            "no_logprobs", 1, clock[0] + UNSUPPORTED_RECHECK_SECONDS)
 
     @pytest.mark.asyncio
     async def test_an_empty_list_sends_nothing(self):
@@ -226,6 +291,37 @@ class TestRounds:
         d = await _decide(s, [])
         assert (d.fallback_reason, d.requests) == ("empty_list", 0)
         assert d.method == "text"
+        assert (d.text_chars, d.text_sha256) == (0, "")
+
+    @pytest.mark.asyncio
+    async def test_an_inactive_prompt_falls_back_before_any_request(self):
+        calls = []
+
+        async def loader(field):
+            calls.append(field)
+            return {"system": "s", "user": "u"} if field == "correspondent" else None
+
+        class Cls(FakeAdapter):
+            uses_prompt = True
+
+            def __init__(self, h, p=None):
+                super().__init__(h, p, {"c0": {"Firma 003": 0.95}})
+
+        s = DecisionService(LLMHandler(provider="ollama", model="fake", api_base="http://x"), Cls, None, loader)
+        d = await s.decide("text", "document_type", NAMES[:5], question="Q?", threshold=0.9)
+        assert (d.fallback_reason, d.requests, d.method, s._adapter_calls) == ("prompt_inactive", 0, "text", [])
+        await s.decide("text", "correspondent", NAMES[:5], question="Q?", threshold=0.9)
+        assert calls == ["document_type", "correspondent"]
+        a = s._adapter_calls[0]
+        assert a.prompt == {"system": "s", "user": "u"} and a.handler is s._handler
+
+    @pytest.mark.asyncio
+    async def test_a_configured_fallback_sends_nothing(self):
+        handler = LLMHandler(provider="grok", model="grok-3", api_base="http://x")
+        s = DecisionService(handler, None, "provider_unsupported", None)
+        d = await _decide(s, NAMES[:5])
+        assert (d.fallback_reason, d.method, d.requests, d.provider, s._adapter_calls) == (
+            "provider_unsupported", "text", 0, "grok", [])
 
     @pytest.mark.asyncio
     async def test_the_model_is_noted_once_and_only_when_asked(self):

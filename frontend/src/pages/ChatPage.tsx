@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { configApi, documentsApi } from '../api/client'
 import { extractApiError } from '../api/errorUtils'
-import type { ChatDocument, ChatMessage, ProcessingPreview } from '../api/types'
+import type { ChatDocument, ChatMessage, ProcessingPreview, ProposedChanges } from '../api/types'
 import { DecisionNote } from '../components/DecisionNote'
 import { PromptCutNote } from '../components/PromptCutNote'
 import {
@@ -15,6 +15,13 @@ import {
 } from '../utils/documentListCache'
 
 type DocumentListRefreshMode = 'automatic' | 'manual'
+
+// The review plan is there whenever a decision step ran, even with nothing in it.
+const hasProposedChanges = (changes: ProposedChanges) =>
+  Object.keys(changes).some((key) => key !== 'review') ||
+  Boolean(changes.review?.missing) ||
+  (changes.review?.add_fields.length ?? 0) > 0 ||
+  Boolean(changes.review?.remove)
 
 export function clearChatDocumentCacheForTests() {
   invalidateDocumentListCache('chat')
@@ -402,7 +409,7 @@ export default function ChatPage() {
                     </div>
                   ))}
                   {previewResult.proposed_changes &&
-                    Object.keys(previewResult.proposed_changes).length > 0 && (
+                    hasProposedChanges(previewResult.proposed_changes) && (
                       <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                         <h4 className="text-sm font-medium dark:text-gray-200 mb-2">
                           {t('chat.proposedChanges')}
