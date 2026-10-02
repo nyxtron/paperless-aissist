@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import Dashboard from '../components/Dashboard'
@@ -151,6 +151,23 @@ describe('Dashboard', () => {
 
     await screen.findByText('Recent Invoice')
     expect(screen.queryByText(/dashboard\.promptCut/)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['success', 'dashboard.success'],
+    ['failed', 'dashboard.failed'],
+    ['skipped', 'dashboard.skipped'],
+    ['processing', 'dashboard.statusProcessing'],
+    ['queued', 'queued'],
+  ])('shows the log status %s in the reader language', async (status, text) => {
+    mocks.mockGetRecent.mockResolvedValue({
+      data: [{ ...logWithSteps([]).data[0], status }],
+    })
+    render(<Dashboard />)
+
+    // The stat cards use the same words, so look in the log row itself.
+    const row = (await screen.findByText('Telekom Rechnung')).closest('tr') as HTMLElement
+    expect(within(row).getByText(text)).toBeInTheDocument()
   })
 
   it('sums up how sure each decided field was', async () => {

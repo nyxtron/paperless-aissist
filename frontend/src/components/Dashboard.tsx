@@ -138,6 +138,22 @@ export default function Dashboard() {
   }
 
   // One short summary per decided field, from the stored run.
+  // A log row is finished (success, failed, skipped) or still being processed.
+  const logStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'success':
+        return t('dashboard.success')
+      case 'failed':
+        return t('dashboard.failed')
+      case 'skipped':
+        return t('dashboard.skipped')
+      case 'processing':
+        return t('dashboard.statusProcessing')
+      default:
+        return status
+    }
+  }
+
   const getDecisionSummary = (llmResponse?: string | null): string | null => {
     if (!llmResponse) return null
     try {
@@ -405,7 +421,7 @@ export default function Dashboard() {
                               : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300'
                         }`}
                       >
-                        {log.status}
+                        {logStatusLabel(log.status)}
                       </span>
                       {log.status === 'failed' && log.error_message && (
                         <p

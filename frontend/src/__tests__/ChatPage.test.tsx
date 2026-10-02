@@ -301,6 +301,13 @@ describe('ChatPage', () => {
       await openPreview({ steps: [{ name: 'document_type', status: 'completed', duration_ms: 3 }] })
 
       expect(screen.getByText('processing.stepName.document_type')).toBeInTheDocument()
+      expect(screen.getByText('processing.stepStatus.completed')).toBeInTheDocument()
+    })
+
+    it('shows a status it does not know as it comes', async () => {
+      await openPreview({ steps: [{ name: 'title', status: 'retried', duration_ms: 3 }] })
+
+      expect(screen.getByText('retried')).toBeInTheDocument()
     })
 
     it('names the custom fields it would fill', async () => {

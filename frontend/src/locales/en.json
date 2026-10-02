@@ -22,10 +22,6 @@
     "yes": "yes",
     "no": "no"
   },
-  "language": {
-    "en": "EN",
-    "de": "DE"
-  },
   "theme": {
     "label": "Appearance",
     "system": "System",
@@ -59,7 +55,8 @@
     "confirmReset": "Are you sure you want to delete all processing logs? This cannot be undone.",
     "resetFailed": "Failed to reset stats",
     "promptCut": "Prompt cut in: {{steps}}. Raise the context window.",
-    "decision": "Decisions: {{summary}}"
+    "decision": "Decisions: {{summary}}",
+    "statusProcessing": "Processing"
   },
   "config": {
     "title": "Configuration",
@@ -387,6 +384,11 @@
       "document_type": "Document type",
       "tags": "Tags",
       "fields": "Custom fields"
+    },
+    "stepStatus": {
+      "completed": "completed",
+      "skipped": "skipped",
+      "failed": "failed"
     }
   },
   "logs": {

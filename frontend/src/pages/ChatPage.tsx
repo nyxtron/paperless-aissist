@@ -9,7 +9,7 @@ import type { ChatDocument, ChatMessage, ProcessingPreview, ProposedChanges } fr
 import { DecisionNote } from '../components/DecisionNote'
 import { PromptCutNote } from '../components/PromptCutNote'
 import { filledFields, formatFields } from '../utils/customFields'
-import { stepLabel } from '../utils/stepLabels'
+import { stepLabel, stepStatusLabel } from '../utils/stepLabels'
 import {
   getCachedDocumentList,
   invalidateDocumentListCache,
@@ -410,7 +410,9 @@ export default function ChatPage() {
                     <div key={idx} className="text-sm">
                       <div className="flex justify-between">
                         <span className="dark:text-gray-200">{stepLabel(t, step.name)}</span>
-                        <span className="text-gray-500 dark:text-gray-400">{step.status}</span>
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {stepStatusLabel(t, step.status)}
+                        </span>
                       </div>
                       {step.details?.prompt_cut && <PromptCutNote cut={step.details.prompt_cut} />}
                       {step.details?.decision && (

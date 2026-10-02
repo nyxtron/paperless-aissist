@@ -22,10 +22,6 @@
     "yes": "ja",
     "no": "nein"
   },
-  "language": {
-    "en": "EN",
-    "de": "DE"
-  },
   "theme": {
     "label": "Darstellung",
     "system": "System",
@@ -59,7 +55,8 @@
     "confirmReset": "Alle Verarbeitungsprotokolle löschen? Dies kann nicht rückgängig gemacht werden.",
     "resetFailed": "Statistiken konnten nicht zurückgesetzt werden",
     "promptCut": "Prompt gekürzt bei: {{steps}}. Kontextfenster erhöhen.",
-    "decision": "Entscheidungen: {{summary}}"
+    "decision": "Entscheidungen: {{summary}}",
+    "statusProcessing": "In Verarbeitung"
   },
   "config": {
     "title": "Konfiguration",
@@ -387,6 +384,11 @@
       "document_type": "Dokumenttyp",
       "tags": "Tags",
       "fields": "Benutzerdefinierte Felder"
+    },
+    "stepStatus": {
+      "completed": "abgeschlossen",
+      "skipped": "übersprungen",
+      "failed": "fehlgeschlagen"
     }
   },
   "logs": {
