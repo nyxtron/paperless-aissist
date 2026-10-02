@@ -297,6 +297,41 @@ describe('ChatPage', () => {
       expect(screen.getByText('chat.reviewMissing')).toBeInTheDocument()
     })
 
+    it('names the steps in the chosen language', async () => {
+      await openPreview({ steps: [{ name: 'document_type', status: 'completed', duration_ms: 3 }] })
+
+      expect(screen.getByText('processing.stepName.document_type')).toBeInTheDocument()
+    })
+
+    it('names the custom fields it would fill', async () => {
+      await openPreview({
+        proposed_changes: {
+          custom_fields: [
+            { id: 3, name: 'Seiten', value: null },
+            { id: 7, name: 'rechnungsbetrag', value: 'EUR104.99' },
+          ],
+        },
+      })
+
+      expect(
+        screen.getByText('processing.updateCustomFields rechnungsbetrag: EUR104.99'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/Seiten/)).not.toBeInTheDocument()
+    })
+
+    it('opens no proposed changes box for fields that stay empty', async () => {
+      await openPreview({
+        proposed_changes: {
+          custom_fields: [
+            { id: 3, name: 'Seiten', value: null },
+            { id: 5, name: 'Links', value: [] },
+          ],
+        },
+      })
+
+      expect(screen.queryByText('chat.proposedChanges')).not.toBeInTheDocument()
+    })
+
     it('says the review tag would come off', async () => {
       await openPreview({ proposed_changes: { review: review({ remove: true }) } })
 

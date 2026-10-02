@@ -18,7 +18,9 @@
     "disabled": "Deaktiviert",
     "none": "-- Keiner --",
     "selectTag": "-- Tag auswählen --",
-    "optional": "optional"
+    "optional": "optional",
+    "yes": "ja",
+    "no": "nein"
   },
   "language": {
     "en": "EN",
@@ -116,6 +118,7 @@
     "decisionThreshold": "Schwelle ({{field}})",
     "decisionThresholdHint": "0,50 bis 1,00. Unter dieser Wahrscheinlichkeit bleibt das Feld zur Prüfung offen.",
     "decisionQuestion": "Frage ({{field}})",
+    "decisionQuestionHint": "Wird zu jedem Dokument für dieses Feld gestellt. Der Buchstaben-Prompt bekommt sie als {question}, Nimble und SystemOne als Beschreibung des Felds. Leer gilt der graue Standard.",
     "decisionFormat": "Format",
     "decisionFormatAuto": "Automatisch",
     "decisionFormatLetters": "Letters",
@@ -336,10 +339,11 @@
     "failedMsg": "Verarbeitung fehlgeschlagen",
     "updatesApplied": "Angewendete Änderungen:",
     "updateTitle": "Titel:",
-    "updateCorrespondent": "Korrespondent-ID:",
-    "updateDocType": "Dokumenttyp-ID:",
+    "updateCorrespondent": "Korrespondent:",
+    "updateDocType": "Dokumenttyp:",
     "updateTags": "Tags:",
     "updateCustomFields": "Benutzerdefinierte Felder:",
+    "updateDate": "Datum:",
     "updateContent": "Inhalt:",
     "reviewTagAdded": "Prüf-Tag {{tag}} gesetzt für: {{fields}}",
     "reviewTagRemoved": "Prüf-Tag {{tag}} entfernt",
@@ -372,7 +376,18 @@
     "runStoppedReviewTag": "Angehalten: {{reason}}. Legen Sie den Prüf-Tag in Paperless an oder schalten Sie den Entscheidungsmodus aus.",
     "pageOfPages": "Seite {{page}} von {{pages}}",
     "promptCut": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token eines Fensters von {{window}} gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen.",
-    "promptCutNoWindow": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen."
+    "promptCutNoWindow": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen.",
+    "reviewTagHint": "Prüfen Sie diese Felder in Paperless und entfernen Sie den Prüf-Tag, sobald sie stimmen; ein späterer Lauf, der jedes Feld mit eingeschalteter Entscheidung entscheidet, entfernt ihn ebenfalls.",
+    "stepName": {
+      "ocr": "OCR",
+      "ocr_fix": "OCR-Korrektur",
+      "date": "Datum",
+      "title": "Titel",
+      "correspondent": "Korrespondent",
+      "document_type": "Dokumenttyp",
+      "tags": "Tags",
+      "fields": "Benutzerdefinierte Felder"
+    }
   },
   "logs": {
     "title": "System-Protokolle",
@@ -466,7 +481,10 @@
       "fallback": "Entscheidungsmodus nicht verfügbar: {{reason}}; der Text-Prompt wurde verwendet",
       "wouldCreate": "Würde den Korrespondenten {{name}} anlegen",
       "showRequest": "Anfrage anzeigen",
-      "hideRequest": "Anfrage ausblenden"
+      "hideRequest": "Anfrage ausblenden",
+      "alternatives": "Ebenfalls erwogen: {{list}}",
+      "suggestion": "Vermutlich {{name}} (nicht angelegt)",
+      "noneOfThese": "keiner davon"
     }
   }
 }

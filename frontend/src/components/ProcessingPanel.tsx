@@ -4,7 +4,7 @@ import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock, AlertTriangle, 
 import { toast } from 'sonner'
 
 import { configApi, documentsApi, schedulerApi } from '../api/client'
-import type { DecisionDetails, ReviewPlan, SchedulerStatus } from '../api/types'
+import type { DecisionDetails, NamedCustomField, ReviewPlan, SchedulerStatus } from '../api/types'
 import {
   getCachedDocumentList,
   getDocumentListStamp,
@@ -13,7 +13,9 @@ import {
   loadCachedDocumentList,
   setCachedDocumentList,
 } from '../utils/documentListCache'
+import { filledFields, formatFields } from '../utils/customFields'
 import { buildPaperlessDocumentUrl } from '../utils/paperlessLinks'
+import { stepLabel } from '../utils/stepLabels'
 import { DecisionNote } from './DecisionNote'
 import { PromptCutNote, type PromptCut } from './PromptCutNote'
 
@@ -69,8 +71,9 @@ interface ProcessingResult {
     correspondent?: { id: number; name: string }
     document_type?: { id: number; name: string }
     tags?: Array<{ id: number; name: string }>
-    custom_fields?: Array<{ id: number; name: string; value: string }>
+    custom_fields?: NamedCustomField[]
     content?: string
+    created_date?: string
     review?: ReviewPlan
   }
   error?: string
@@ -343,8 +346,18 @@ export default function ProcessingPanel() {
   const review = result?.proposed_changes?.review
   // A tag that was gone by the time of the write was never set.
   const reviewFields = review && !review.missing ? review.add_fields : []
+  const changes = result?.proposed_changes
+  // Open the box only for a row it will show.
   const showUpdates =
-    Object.keys(result?.proposed_changes ?? {}).some((key) => key !== 'review') ||
+    Boolean(
+      changes?.title ||
+      changes?.correspondent ||
+      changes?.document_type ||
+      changes?.tags?.length ||
+      filledFields(changes?.custom_fields).length ||
+      changes?.content ||
+      changes?.created_date,
+    ) ||
     reviewFields.length > 0 ||
     Boolean(review?.remove)
 
@@ -570,7 +583,9 @@ export default function ProcessingPanel() {
                     <div className="mt-0.5">{getStatusIcon(step.status)}</div>
                     <div className="min-w-0">
                       <div>
-                        <span className="text-sm text-gray-700 dark:text-gray-200">{step.name}</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-200">
+                          {stepLabel(t, step.name)}
+                        </span>
                         {step.error && (
                           <span className="text-xs text-red-600 dark:text-red-400 ml-2">- {step.error}</span>
                         )}
@@ -615,20 +630,23 @@ export default function ProcessingPanel() {
                       {(result.proposed_changes.document_type as { id: number; name: string }).name}
                     </div>
                   )}
-                  {result.proposed_changes.tags && (
+                  {(result.proposed_changes.tags?.length ?? 0) > 0 && (
                     <div>
                       {t('processing.updateTags')}{' '}
-                      {JSON.stringify(
-                        (result.proposed_changes.tags as Array<{ id: number; name: string }>).map(
-                          (t) => t.name,
-                        ),
-                      )}
+                      {(result.proposed_changes.tags as Array<{ id: number; name: string }>)
+                        .map((tag) => tag.name)
+                        .join(', ')}
                     </div>
                   )}
-                  {result.proposed_changes.custom_fields && (
+                  {filledFields(result.proposed_changes.custom_fields).length > 0 && (
                     <div>
                       {t('processing.updateCustomFields')}{' '}
-                      {JSON.stringify(result.proposed_changes.custom_fields)}
+                      {formatFields(result.proposed_changes.custom_fields, t)}
+                    </div>
+                  )}
+                  {result.proposed_changes.created_date && (
+                    <div>
+                      {t('processing.updateDate')} {result.proposed_changes.created_date}
                     </div>
                   )}
                   {result.proposed_changes.content && (
@@ -645,6 +663,9 @@ export default function ProcessingPanel() {
                           .map((field) => t(`decision.field.${field}`))
                           .join(', '),
                       })}
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('processing.reviewTagHint')}
+                      </p>
                     </div>
                   )}
                   {review?.remove && (

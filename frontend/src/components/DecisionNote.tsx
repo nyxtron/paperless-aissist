@@ -57,6 +57,24 @@ export function DecisionNote({
     })
   }
   const request = decision.request?.full ?? decision.request?.rendered
+  // What else the deciding round leaned to, so a review shows what it was between.
+  // top is the last round while the main line's p is the weakest round, so an
+  // option above that p would read as the better answer and is left out.
+  const alternatives =
+    decision.outcome === 'review'
+      ? (decision.top ?? [])
+          .filter(
+            (option) =>
+              option.name !== decision.choice &&
+              option.p >= 0.01 &&
+              (decision.probability === null || option.p < decision.probability),
+          )
+          .slice(0, 2)
+          .map(
+            (option) =>
+              `${option.name === NONE_LABEL ? t('decision.note.noneOfThese') : option.name} ${pct(option.p)}`,
+          )
+      : []
 
   return (
     <div className={`mt-1 text-xs ${color}`}>
@@ -68,6 +86,14 @@ export function DecisionNote({
         )}
         <span>{line}</span>
       </p>
+      {alternatives.length > 0 && (
+        <p className="ml-4">
+          {t('decision.note.alternatives', { list: alternatives.join(' · ') })}
+        </p>
+      )}
+      {decision.outcome === 'review' && decision.suggestion && (
+        <p className="ml-4">{t('decision.note.suggestion', { name: decision.suggestion })}</p>
+      )}
       {decision.outcome === 'fallback' && decision.fallback_detail && (
         <p className="ml-4 break-all">{decision.fallback_detail}</p>
       )}

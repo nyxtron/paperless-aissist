@@ -18,7 +18,9 @@
     "disabled": "Disabled",
     "none": "-- None --",
     "selectTag": "-- Select tag --",
-    "optional": "optional"
+    "optional": "optional",
+    "yes": "yes",
+    "no": "no"
   },
   "language": {
     "en": "EN",
@@ -116,6 +118,7 @@
     "decisionThreshold": "Threshold ({{field}})",
     "decisionThresholdHint": "0.50 to 1.00. Below this probability the field is left for review.",
     "decisionQuestion": "Question ({{field}})",
+    "decisionQuestionHint": "Asked about this field for every document. The letter prompt gets it as {question}, Nimble and SystemOne as the field's description. Empty uses the grey default.",
     "decisionFormat": "Format",
     "decisionFormatAuto": "Auto",
     "decisionFormatLetters": "Letters",
@@ -336,10 +339,11 @@
     "failedMsg": "Processing failed",
     "updatesApplied": "Updates Applied:",
     "updateTitle": "Title:",
-    "updateCorrespondent": "Correspondent ID:",
-    "updateDocType": "Document Type ID:",
+    "updateCorrespondent": "Correspondent:",
+    "updateDocType": "Document Type:",
     "updateTags": "Tags:",
     "updateCustomFields": "Custom Fields:",
+    "updateDate": "Date:",
     "updateContent": "Content:",
     "reviewTagAdded": "Review tag {{tag}} added for: {{fields}}",
     "reviewTagRemoved": "Review tag {{tag}} removed",
@@ -372,7 +376,18 @@
     "runStoppedReviewTag": "Stopped: {{reason}}. Create the review tag in Paperless or turn decision mode off.",
     "pageOfPages": "page {{page}} of {{pages}}",
     "promptCut": "Prompt cut: Ollama read only {{evaluated}} tokens of a {{window}}-token window, so the instructions and lists were dropped. Raise the context window.",
-    "promptCutNoWindow": "Prompt cut: Ollama read only {{evaluated}} tokens, so the instructions and lists were dropped. Raise the context window."
+    "promptCutNoWindow": "Prompt cut: Ollama read only {{evaluated}} tokens, so the instructions and lists were dropped. Raise the context window.",
+    "reviewTagHint": "Check these fields in Paperless and remove the tag once they are right; a later run that decides every field with decision mode on takes it off as well.",
+    "stepName": {
+      "ocr": "OCR",
+      "ocr_fix": "OCR fix",
+      "date": "Date",
+      "title": "Title",
+      "correspondent": "Correspondent",
+      "document_type": "Document type",
+      "tags": "Tags",
+      "fields": "Custom fields"
+    }
   },
   "logs": {
     "title": "System Logs",
@@ -466,7 +481,10 @@
       "fallback": "Decision mode not available: {{reason}}; the text prompt was used",
       "wouldCreate": "Would create correspondent {{name}}",
       "showRequest": "Show request",
-      "hideRequest": "Hide request"
+      "hideRequest": "Hide request",
+      "alternatives": "Also considered: {{list}}",
+      "suggestion": "Probably {{name}} (not created)",
+      "noneOfThese": "none of these"
     }
   }
 }

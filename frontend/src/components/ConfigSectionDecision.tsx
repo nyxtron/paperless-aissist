@@ -217,6 +217,7 @@ export function ConfigSectionDecision({
                 onChange={(e) => save(`decision_question_${field}`, e.target.value)}
                 className={fieldClass}
               />
+              <p className={hintClass}>{t('config.decisionQuestionHint')}</p>
             </div>
           </div>
         ))}

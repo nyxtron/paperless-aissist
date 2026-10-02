@@ -16,6 +16,7 @@ import { configApi, statsApi } from '../api/client'
 import type { DecisionOutcome } from '../api/types'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { buildPaperlessDocumentUrl } from '../utils/paperlessLinks'
+import { stepLabel } from '../utils/stepLabels'
 import { useTheme } from '../contexts/ThemeContext'
 
 const COLORS = ['#22c55e', '#ef4444', '#f59e0b']
@@ -130,7 +131,7 @@ export default function Dashboard() {
       }
       return (parsed.steps || [])
         .filter((step) => step.details?.prompt_cut && step.name)
-        .map((step) => step.name as string)
+        .map((step) => stepLabel(t, step.name as string))
     } catch {
       return []
     }
@@ -152,9 +153,9 @@ export default function Dashboard() {
           const d = step.details!.decision!
           const p = d.probability == null ? '–' : `${Math.round(d.probability * 100)}%`
           if (!d.outcome || d.outcome === 'applied' || d.outcome === 'created') {
-            return `${step.name}: ${p}`
+            return `${stepLabel(t, step.name!)}: ${p}`
           }
-          return `${step.name}: ${t(`decision.outcome.${d.outcome}`)} ${p}`
+          return `${stepLabel(t, step.name!)}: ${t(`decision.outcome.${d.outcome}`)} ${p}`
         })
       return parts.length ? parts.join(' · ') : null
     } catch {

@@ -139,7 +139,11 @@ describe('Dashboard', () => {
     })
     render(<Dashboard />)
 
-    expect(await screen.findByText('dashboard.promptCut title, correspondent')).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'dashboard.promptCut processing.stepName.title, processing.stepName.correspondent',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('says nothing about cut prompts when none was cut', async () => {
@@ -161,7 +165,7 @@ describe('Dashboard', () => {
 
     expect(
       await screen.findByText(
-        'dashboard.decision correspondent: decision.outcome.review 72% · document_type: 98%',
+        'dashboard.decision processing.stepName.correspondent: decision.outcome.review 72% · processing.stepName.document_type: 98%',
       ),
     ).toBeInTheDocument()
   })
@@ -175,7 +179,9 @@ describe('Dashboard', () => {
     render(<Dashboard />)
 
     expect(
-      await screen.findByText('dashboard.decision correspondent: decision.outcome.fallback –'),
+      await screen.findByText(
+        'dashboard.decision processing.stepName.correspondent: decision.outcome.fallback –',
+      ),
     ).toBeInTheDocument()
   })
 

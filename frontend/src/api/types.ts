@@ -24,6 +24,13 @@ export interface Step {
   status: string
 }
 
+/** A custom field as previews and results name it; documentlink values are id lists. */
+export interface NamedCustomField {
+  id: number
+  name: string
+  value: string | number | boolean | number[] | null
+}
+
 /** Proposed metadata changes from processing. */
 export interface ProposedChanges {
   /** Suggested new title, if applicable. */
@@ -34,8 +41,10 @@ export interface ProposedChanges {
   document_type?: { id: number; name: string }
   /** Suggested tags with IDs and names. */
   tags?: Array<{ id: number; name: string }>
-  /** Suggested custom field values. */
-  custom_fields?: Array<{ field: number; value: string }>
+  /** Custom field values with field ID and name; fields already on the document come along. */
+  custom_fields?: NamedCustomField[]
+  /** Document date the date step found, as YYYY-MM-DD. */
+  created_date?: string
   /** Review tag plan, present when a decision step ran. */
   review?: ReviewPlan
 }
@@ -93,6 +102,8 @@ export interface DecisionDetails {
   fallback_detail: string | null
   /** The deciding request with the text left out; full carries it, preview only. */
   request: { text_chars: number; text_sha256: string; rendered: string | null; full?: string }
+  /** The sender the text model named when creating correspondents is off; nothing was created. */
+  suggestion?: string
 }
 
 /** Whether the review tag goes on or comes off; tag.id is null when the tag is missing. */

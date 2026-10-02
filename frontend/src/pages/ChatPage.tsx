@@ -8,6 +8,8 @@ import { extractApiError } from '../api/errorUtils'
 import type { ChatDocument, ChatMessage, ProcessingPreview, ProposedChanges } from '../api/types'
 import { DecisionNote } from '../components/DecisionNote'
 import { PromptCutNote } from '../components/PromptCutNote'
+import { filledFields, formatFields } from '../utils/customFields'
+import { stepLabel } from '../utils/stepLabels'
 import {
   getCachedDocumentList,
   invalidateDocumentListCache,
@@ -16,9 +18,17 @@ import {
 
 type DocumentListRefreshMode = 'automatic' | 'manual'
 
-// The review plan is there whenever a decision step ran, even with nothing in it.
+// Open the box only for a row it will show; the review plan is there whenever
+// a decision step ran, even with nothing in it.
 const hasProposedChanges = (changes: ProposedChanges) =>
-  Object.keys(changes).some((key) => key !== 'review') ||
+  Boolean(
+    changes.title ||
+    changes.correspondent ||
+    changes.document_type ||
+    changes.tags?.length ||
+    filledFields(changes.custom_fields).length ||
+    changes.created_date,
+  ) ||
   Boolean(changes.review?.missing) ||
   (changes.review?.add_fields.length ?? 0) > 0 ||
   Boolean(changes.review?.remove)
@@ -399,7 +409,7 @@ export default function ChatPage() {
                   {previewResult.steps?.map((step, idx) => (
                     <div key={idx} className="text-sm">
                       <div className="flex justify-between">
-                        <span className="dark:text-gray-200">{step.name}</span>
+                        <span className="dark:text-gray-200">{stepLabel(t, step.name)}</span>
                         <span className="text-gray-500 dark:text-gray-400">{step.status}</span>
                       </div>
                       {step.details?.prompt_cut && <PromptCutNote cut={step.details.prompt_cut} />}
@@ -416,31 +426,39 @@ export default function ChatPage() {
                         </h4>
                         {previewResult.proposed_changes.title && (
                           <p className="text-sm dark:text-gray-300">
-                            Title: {previewResult.proposed_changes.title}
+                            {t('processing.updateTitle')} {previewResult.proposed_changes.title}
                           </p>
                         )}
                         {previewResult.proposed_changes.correspondent && (
                           <p className="text-sm dark:text-gray-300">
-                            Correspondent: {previewResult.proposed_changes.correspondent.name}
+                            {t('processing.updateCorrespondent')}{' '}
+                            {previewResult.proposed_changes.correspondent.name}
                           </p>
                         )}
                         {previewResult.proposed_changes.document_type && (
                           <p className="text-sm dark:text-gray-300">
-                            Type: {previewResult.proposed_changes.document_type.name}
+                            {t('processing.updateDocType')}{' '}
+                            {previewResult.proposed_changes.document_type.name}
                           </p>
                         )}
-                        {previewResult.proposed_changes.tags && (
+                        {(previewResult.proposed_changes.tags?.length ?? 0) > 0 && (
                           <p className="text-sm dark:text-gray-300">
-                            Tags:{' '}
-                            {previewResult.proposed_changes.tags.map((tag) => tag.name).join(', ')}
-                          </p>
-                        )}
-                        {previewResult.proposed_changes.custom_fields && (
-                          <p className="text-sm dark:text-gray-300">
-                            Fields:{' '}
-                            {previewResult.proposed_changes.custom_fields
-                              .map((f) => `${f.field}: ${f.value}`)
+                            {t('processing.updateTags')}{' '}
+                            {(previewResult.proposed_changes.tags ?? [])
+                              .map((tag) => tag.name)
                               .join(', ')}
+                          </p>
+                        )}
+                        {filledFields(previewResult.proposed_changes.custom_fields).length > 0 && (
+                          <p className="text-sm dark:text-gray-300">
+                            {t('processing.updateCustomFields')}{' '}
+                            {formatFields(previewResult.proposed_changes.custom_fields, t)}
+                          </p>
+                        )}
+                        {previewResult.proposed_changes.created_date && (
+                          <p className="text-sm dark:text-gray-300">
+                            {t('processing.updateDate')}{' '}
+                            {previewResult.proposed_changes.created_date}
                           </p>
                         )}
                         {previewResult.proposed_changes.review?.missing && (

@@ -249,6 +249,11 @@ describe('ConfigSectionDecision', () => {
     expect(order).toEqual(['discard', 'delete'])
   })
 
+  it('explains what the question is for under both fields', () => {
+    render(<ConfigSectionDecision config={base} onSave={vi.fn()} secretsSet={[]} />)
+    expect(screen.getAllByText('config.decisionQuestionHint')).toHaveLength(2)
+  })
+
   it('checks the review tag against Paperless', async () => {
     mocks.getTags.mockResolvedValue({ data: { tags: [{ id: 1, name: 'other' }] } })
     render(

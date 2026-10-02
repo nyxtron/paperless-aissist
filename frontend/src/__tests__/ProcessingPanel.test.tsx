@@ -624,6 +624,67 @@ describe('ProcessingPanel', () => {
       ).toBeInTheDocument()
     })
 
+    it('says what to do about the review tag', async () => {
+      await processWith({ review: review({ add_fields: ['document_type'] }) })
+
+      expect(screen.getByText('processing.reviewTagHint')).toBeInTheDocument()
+    })
+
+    it('lists applied fields and tags as text and names the steps', async () => {
+      await processWith({
+        tags: [
+          { id: 1, name: 'Oliver' },
+          { id: 2, name: 'eMail' },
+        ],
+        custom_fields: [
+          { id: 3, name: 'Seiten', value: null },
+          { id: 7, name: 'rechnungsbetrag', value: 'EUR167.40' },
+        ],
+      })
+
+      expect(screen.getByText('processing.updateTags Oliver, eMail')).toBeInTheDocument()
+      expect(
+        screen.getByText('processing.updateCustomFields rechnungsbetrag: EUR167.40'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/Seiten/)).not.toBeInTheDocument()
+      expect(screen.getByText('processing.stepName.correspondent')).toBeInTheDocument()
+    })
+
+    it('writes yes or no for a checkbox field and sets fields apart', async () => {
+      await processWith({
+        custom_fields: [
+          { id: 4, name: 'Bezahlt', value: false },
+          { id: 5, name: 'Bezug', value: [12, 34] },
+          { id: 7, name: 'rechnungsbetrag', value: 'EUR167.40' },
+        ],
+      })
+
+      expect(
+        screen.getByText(
+          'processing.updateCustomFields Bezahlt: common.no · Bezug: 12, 34 · rechnungsbetrag: EUR167.40',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    it('shows the date the date step found', async () => {
+      await processWith({ created_date: '2026-03-01' })
+
+      expect(screen.getByText('processing.updatesApplied')).toBeInTheDocument()
+      expect(screen.getByText('processing.updateDate 2026-03-01')).toBeInTheDocument()
+    })
+
+    it('opens no updates box for changes it would not show', async () => {
+      await processWith({ text: 'recognised text', tags: [] })
+
+      expect(screen.queryByText('processing.updatesApplied')).not.toBeInTheDocument()
+    })
+
+    it('opens no updates box for custom fields that stay empty', async () => {
+      await processWith({ custom_fields: [{ id: 3, name: 'Seiten', value: null }] })
+
+      expect(screen.queryByText('processing.updatesApplied')).not.toBeInTheDocument()
+    })
+
     it('says when the review tag came off', async () => {
       await processWith({ review: review({ remove: true }) })
 

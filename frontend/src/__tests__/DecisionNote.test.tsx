@@ -178,4 +178,104 @@ describe('DecisionNote', () => {
     fireEvent.click(screen.getByText('decision.note.showRequest'))
     expect(screen.getByText('[user] <document text, 120 chars>')).toBeInTheDocument()
   })
+
+  it('says what a review was between', () => {
+    render(
+      <DecisionNote
+        decision={{
+          ...base,
+          outcome: 'review',
+          reason: 'below_threshold',
+          choice: 'Bestellbestätigung',
+          probability: 0.8231,
+          top: [
+            { name: 'Bestellbestätigung', p: 0.899 },
+            { name: 'Rechnung', p: 0.101 },
+            { name: 'None of these', p: 0.000004 },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText('decision.note.alternatives list=Rechnung 10.1%')).toBeInTheDocument()
+  })
+
+  it('translates "None of these" among the alternatives', () => {
+    render(
+      <DecisionNote
+        decision={{
+          ...base,
+          outcome: 'review',
+          reason: 'below_threshold',
+          probability: 0.6,
+          top: [
+            { name: 'Telekom', p: 0.6 },
+            { name: 'None of these', p: 0.3 },
+            { name: 'Vodafone', p: 0.05 },
+          ],
+        }}
+      />,
+    )
+    expect(
+      screen.getByText(
+        'decision.note.alternatives list=decision.note.noneOfThese 30.0% · Vodafone 5.0%',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('lists no alternatives for a decided field', () => {
+    render(
+      <DecisionNote
+        decision={{
+          ...base,
+          top: [
+            { name: 'Telekom', p: 0.9 },
+            { name: 'Vodafone', p: 0.1 },
+          ],
+        }}
+      />,
+    )
+    expect(screen.queryByText(/decision\.note\.alternatives/)).not.toBeInTheDocument()
+  })
+
+  it('names the sender the text model read for an unknown correspondent', () => {
+    render(
+      <DecisionNote
+        decision={{
+          ...base,
+          outcome: 'review',
+          reason: 'creation_off',
+          choice: 'None of these',
+          probability: 0.9997,
+          top: [
+            { name: 'None of these', p: 0.9997 },
+            { name: 'Woom', p: 0.0002 },
+          ],
+          suggestion: 'Nadine-Fotogenial',
+        }}
+      />,
+    )
+    expect(
+      screen.getByText('decision.note.reviewNone reason=decision.reason.creation_off'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('decision.note.suggestion name=Nadine-Fotogenial')).toBeInTheDocument()
+    expect(screen.queryByText(/decision\.note\.alternatives/)).not.toBeInTheDocument()
+  })
+
+  it('leaves out an alternative that beat the best guess in a later round', () => {
+    render(
+      <DecisionNote
+        decision={{
+          ...base,
+          outcome: 'review',
+          reason: 'below_threshold',
+          probability: 0.4,
+          top: [
+            { name: 'Telekom', p: 0.52 },
+            { name: 'Stadtwerke', p: 0.47 },
+          ],
+        }}
+      />,
+    )
+    expect(screen.queryByText(/decision\.note\.alternatives/)).not.toBeInTheDocument()
+  })
 })

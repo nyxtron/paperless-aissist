@@ -1135,10 +1135,23 @@ Available Custom Fields: [{custom_fields_list}]"""
                 "error": f"AI processing failed: {error_detail}",
             }
 
+        # A correspondent created in this run is not in the list fetched before the steps.
+        correspondents = metadata["correspondents"] + [
+            record["details"]["created_correspondent"]
+            for record in step_records
+            if (record.get("details") or {}).get("created_correspondent")
+        ]
+        chosen = accumulated_update.get("correspondent")
+        if isinstance(chosen, int) and all(c["id"] != chosen for c in correspondents):
+            # Created meanwhile by another document of the same batch.
+            try:
+                correspondents = await self.paperless.get_correspondents(force_refresh=True)
+            except Exception as e:
+                logger.warning(f"Doc {doc_id}: correspondent list not refreshed for the result: {e}")
         proposed = await self._resolve_proposed_changes(
             accumulated_update,
             all_tags,
-            metadata["correspondents"],
+            correspondents,
             metadata["document_types"],
             metadata["custom_fields"],
         )
