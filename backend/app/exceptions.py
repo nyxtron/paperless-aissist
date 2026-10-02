@@ -25,6 +25,19 @@ class LLMUnavailableError(LLMError):
     pass
 
 
+class LLMHttpError(LLMError):
+    """A request the provider refused, with what it said.
+
+    The message alone cannot tell a rejected parameter from a wrong key, and
+    callers that fall back on one but not the other need the status and body.
+    """
+
+    def __init__(self, message: str, *, status_code: int, body: str):
+        super().__init__(message)
+        self.status_code = status_code
+        self.body = body
+
+
 class DocumentProcessingError(PaperlessAissistError):
     """Raised when document processing fails."""
 

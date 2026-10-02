@@ -168,9 +168,11 @@ async def lifespan(app: FastAPI):
 
     from .services.paperless_manager import PaperlessClientManager
     from .services.llm_handler import LLMHandlerManager
+    from .services.decision import DecisionServiceManager
 
     await PaperlessClientManager.close()
     await LLMHandlerManager.close()
+    await DecisionServiceManager.close()
 
 
 run_migrations()

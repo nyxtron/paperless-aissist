@@ -12,7 +12,7 @@ import re
 import time
 import httpx
 from typing import Any, Callable, Iterator, Optional
-from ..exceptions import LLMError, LLMUnavailableError
+from ..exceptions import LLMError, LLMHttpError, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -374,16 +374,61 @@ class LLMHandler:
                 # The answer is already here and worth more than a clean close.
                 logger.debug("Could not close a replaced LLM client: %s", e)
 
+    async def post_json(
+        self,
+        path: str,
+        payload: dict[str, Any],
+        *,
+        prompt_parts: Optional[tuple[str, str]] = None,
+    ) -> dict[str, Any]:
+        """POST a JSON body and return the JSON answer.
+
+        A refusal keeps its status and body (LLMHttpError), a provider that is
+        down stays retryable, and a prompt Ollama cut is noted like in
+        complete(). The finish reason is left alone: a one-token answer always
+        ends with "length".
+        """
+        self._in_flight += 1
+        try:
+            try:
+                response = await self.client.post(path, json=payload)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                detail = _http_error_detail(e)
+                if e.response.status_code in RETRYABLE_STATUS:
+                    raise LLMUnavailableError(f"{self.provider} request failed: {detail}")
+                raise LLMHttpError(
+                    f"{self.provider} request failed: {detail}",
+                    status_code=e.response.status_code,
+                    body=e.response.text or "",
+                )
+            except httpx.HTTPError as e:
+                raise _llm_error_for(e, f"{self.provider} request failed: {_http_error_detail(e)}")
+            data = response.json()
+            if prompt_parts is not None and self.provider == "ollama":
+                evaluated = data.get("prompt_eval_count") or (data.get("usage") or {}).get(
+                    "input_tokens"
+                )
+                await self._note_if_cut(prompt_parts[0], prompt_parts[1], evaluated, self.num_ctx)
+            return data
+        finally:
+            await self._after_request()
+
     @classmethod
-    async def from_config(cls, for_vision: bool = False) -> "LLMHandler":
+    async def from_config(
+        cls, for_vision: bool = False, role: Optional[str] = None
+    ) -> "LLMHandler":
         """Construct a LLMHandler from the application config.
 
         Args:
             for_vision: If True, use the vision-specific config keys (_vision suffix).
+            role: "decision" reads the llm_*_decision keys (see _decision_from_config).
 
         Returns:
             A configured LLMHandler instance.
         """
+        if role == "decision":
+            return await cls._decision_from_config()
         suffix = "_vision" if for_vision else ""
         provider = await cls._get_config(f"llm_provider{suffix}")
         model = await cls._get_config(f"llm_model{suffix}")
@@ -440,6 +485,52 @@ class LLMHandler:
             temperature=temperature,
             max_tokens=max_tokens,
             num_ctx=num_ctx,
+        )
+
+    @classmethod
+    async def _decision_from_config(cls) -> "LLMHandler":
+        """The handler for the decision model.
+
+        With no provider of its own the connection is the main LLM's as a
+        group, and a stored decision URL or key is ignored; only the model may
+        differ. With its own provider nothing is inherited, so a key never
+        goes to a host it was not meant for. An empty URL or model stays
+        empty: the decision service turns that into a fallback, not a request.
+        """
+        own_provider = await cls._get_config("llm_provider_decision")
+        model = await cls._get_config("llm_model_decision")
+        if own_provider:
+            provider = own_provider
+            api_base = await cls._get_config("llm_api_base_decision")
+            api_key = await cls._get_config("llm_api_key_decision") or None
+        else:
+            provider = await cls._get_config("llm_provider") or "ollama"
+            api_base = await cls._get_config("llm_api_base")
+            api_key = await cls._get_config("llm_api_key") or None
+            if not model:
+                model = await cls._get_config("llm_model") or (
+                    "openai/gpt-4o-mini" if provider == "openrouter" else "llama3"
+                )
+        if provider == "openrouter" and not api_base:
+            api_base = OPENROUTER_API_BASE
+        timeout_str = (
+            await cls._get_config("llm_timeout_decision")
+            or await cls._get_config("llm_timeout")
+        )
+        num_ctx_str = (
+            await cls._get_config("llm_num_ctx_decision")
+            or await cls._get_config("llm_num_ctx")
+        )
+        logger.info(
+            f"Decision provider: {provider}, model: {model or '(none)'}, API base: {api_base}"
+        )
+        return cls(
+            provider=provider,
+            model=model or "",
+            api_base=api_base,
+            api_key=api_key,
+            timeout=float(timeout_str) if timeout_str else 600.0,
+            num_ctx=cls._parse_positive_int(num_ctx_str),
         )
 
     @staticmethod
