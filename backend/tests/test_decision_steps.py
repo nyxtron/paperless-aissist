@@ -2,6 +2,8 @@
 service, with values away from the defaults so a step that ignored a setting
 would show."""
 
+import asyncio
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -81,11 +83,13 @@ class TestCorrespondentDecision:
         assert svc.calls[0]["question"] == "Wer schickt das?" and len(svc.calls[0]["text"]) == 10000
 
     @pytest.mark.asyncio
-    async def test_below_the_threshold_is_a_review(self):
+    async def test_below_the_threshold_is_a_review(self, text_prompt):
         ctx = _ctx(FakeService(index=1, choice="Telekom", probability=0.7))
         r = await _run(ctx)
         assert r.skipped and r.data == {} and ctx.review_fields == ["correspondent"] and not ctx.decided_fields
         assert r.details["decision"]["reason"] == "below_threshold"
+        ctx.llm.complete.assert_not_awaited()
+        assert "suggestion" not in r.details["decision"]
 
     @pytest.mark.asyncio
     async def test_none_below_the_threshold_is_a_review_without_a_text_call(self, text_prompt):
@@ -94,16 +98,127 @@ class TestCorrespondentDecision:
         assert r.details["decision"]["reason"] == "below_threshold" and ctx.llm.complete.await_count == 0
 
     @pytest.mark.asyncio
-    async def test_a_tournament_review_is_passed_on(self):
+    async def test_a_tournament_review_is_passed_on(self, text_prompt):
         ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.8, review_reason="final_none"))
         r = await _run(ctx)
         assert r.details["decision"]["reason"] == "final_none" and ctx.review_fields == ["correspondent"]
+        # Only a confident "None of these" with creation off asks for a sender hint.
+        ctx.llm.complete.assert_not_awaited()
+        assert "suggestion" not in r.details["decision"]
 
     @pytest.mark.asyncio
     async def test_none_with_creation_off_is_a_review(self):
         ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
         r = await _run(ctx)
         assert r.details["decision"]["reason"] == "creation_off"
+
+    @pytest.mark.asyncio
+    async def test_creation_off_still_names_the_sender_as_a_suggestion(self, text_prompt):
+        p = AsyncMock()
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95), paperless=p)
+        ctx.llm.complete = AsyncMock(return_value={"name": "Nadine-Fotogenial", "is_existing": False})
+        r = await _run(ctx)
+        assert (r.data, r.details["decision"]["outcome"], r.details["decision"]["reason"]) == ({}, "review", "creation_off")
+        assert r.details["decision"]["suggestion"] == "Nadine-Fotogenial"
+        assert ctx.review_fields == ["correspondent"] and "correspondent" not in ctx.decided_fields
+        ctx.llm.complete.assert_awaited_once()
+        p.get_or_create_correspondent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("name", ["Keine Sorgen GmbH", "Not Found GmbH", "Kein & Aber", "Nadine Schwarz."])
+    async def test_a_real_name_with_a_telling_word_is_kept(self, text_prompt, name):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.complete = AsyncMock(return_value={"name": name, "is_existing": False})
+        r = await _run(ctx)
+        assert r.details["decision"]["suggestion"] == name.rstrip(".")
+
+    @pytest.mark.asyncio
+    async def test_a_new_sender_the_model_calls_known_is_still_suggested(self, text_prompt):
+        # Seen live: {"name": "IONITY GmbH", "is_existing": true} for a sender not in Paperless.
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.complete = AsyncMock(return_value={"name": "IONITY GmbH", "is_existing": True})
+        r = await _run(ctx)
+        assert r.details["decision"]["suggestion"] == "IONITY GmbH"
+
+    @pytest.mark.asyncio
+    async def test_a_bare_name_from_an_older_prompt_is_suggested_too(self, text_prompt):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.complete = AsyncMock(return_value={"text": "Nadine-Fotogenial"})
+        r = await _run(ctx)
+        assert r.details["decision"]["suggestion"] == "Nadine-Fotogenial"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "reply",
+        [{"name": "None", "is_existing": False}, {"name": ""}, {"text": "None"}, {"text": "Unbekannt."},
+         {"text": "Der Absender dieses Dokuments ist leider nicht eindeutig zu erkennen."}],
+    )
+    async def test_no_usable_name_gives_no_suggestion(self, text_prompt, reply):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.complete = AsyncMock(return_value=reply)
+        r = await _run(ctx)
+        assert r.details["decision"]["reason"] == "creation_off" and "suggestion" not in r.details["decision"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "reply",
+        [{"name": "amazon", "is_existing": True}, {"name": "Telekom", "is_existing": False}, {"text": "Amazon"},
+         {"text": '{"name": null, "is_existing": false}'}, {"text": "Absender: Telekom GmbH"}, {"text": "?"},
+         {"text": "Not found"}, {"text": "Kein Absender erkennbar"}, {"text": "Unbekannter Absender"},
+         {"text": "Not found!"}, {"text": "Keiner"}, {"text": "-"}, {"text": "N.A."},
+         {"name": "Unknown sender", "is_existing": False}, {"name": "?", "is_existing": False}, {"text": "Telekom."}],
+    )
+    async def test_a_listed_name_or_a_non_answer_is_no_suggestion(self, text_prompt, reply):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.complete = AsyncMock(return_value=reply)
+        r = await _run(ctx)
+        assert r.details["decision"]["reason"] == "creation_off" and "suggestion" not in r.details["decision"]
+
+    @pytest.mark.asyncio
+    async def test_the_preview_shows_the_suggestion_too(self, text_prompt):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95), preview=True)
+        ctx.llm.complete = AsyncMock(return_value={"name": "Nadine-Fotogenial", "is_existing": False})
+        r = await _run(ctx)
+        assert r.details["decision"]["suggestion"] == "Nadine-Fotogenial"
+
+    @pytest.mark.asyncio
+    async def test_any_error_while_asking_costs_only_the_suggestion(self, text_prompt):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.complete = AsyncMock(side_effect=RuntimeError("bad reply"))
+        r = await _run(ctx)
+        assert (r.error, r.details["decision"]["reason"]) == (None, "creation_off")
+        assert "suggestion" not in r.details["decision"]
+
+    @pytest.mark.asyncio
+    async def test_a_hanging_text_model_is_not_waited_for_in_full(self, text_prompt):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.timeout = 0.05
+
+        async def hang(**kwargs):
+            await asyncio.sleep(5)
+
+        ctx.llm.complete = AsyncMock(side_effect=hang)
+        started = time.monotonic()
+        r = await _run(ctx)
+        assert time.monotonic() - started < 2
+        assert (r.error, r.details["decision"]["reason"]) == (None, "creation_off")
+        assert "suggestion" not in r.details["decision"]
+
+    @pytest.mark.asyncio
+    async def test_a_failing_text_model_costs_only_the_suggestion(self, text_prompt):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        ctx.llm.complete = AsyncMock(side_effect=LLMUnavailableError("ollama request failed: connect"))
+        r = await _run(ctx)
+        assert (r.error, r.details["decision"]["reason"]) == (None, "creation_off")
+        assert "suggestion" not in r.details["decision"]
+
+    @pytest.mark.asyncio
+    async def test_without_a_text_prompt_nothing_is_asked(self):
+        ctx = _ctx(FakeService(index=None, choice=NONE_LABEL, probability=0.95))
+        with patch.object(CorrespondentStep, "_load_prompt", AsyncMock(return_value=None)):
+            r = await _run(ctx)
+        assert "suggestion" not in r.details["decision"]
+        ctx.llm.complete.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_none_with_creation_on_asks_the_text_model_and_creates(self, text_prompt):
@@ -116,6 +231,8 @@ class TestCorrespondentDecision:
         assert r.details["decision"]["choice"] == "Neue GmbH"
         assert r.details["created_correspondent"] == {"id": 99, "name": "Neue GmbH"}
         assert ctx.decided_fields == {"correspondent"} and ctx.models_used[-1]["model"] == "qwen2.5:7b"
+        ctx.llm.complete.assert_awaited_once()
+        assert "suggestion" not in r.details["decision"]
 
     @pytest.mark.asyncio
     async def test_a_name_that_exists_is_a_review_not_a_write(self, text_prompt):

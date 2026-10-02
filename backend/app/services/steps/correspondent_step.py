@@ -8,6 +8,7 @@ plausible new name, and only through the client's locked get-or-create so
 concurrent documents cannot create duplicates.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -34,11 +35,23 @@ _SENTINEL_NAMES = {
     "unbekannt",
     "keine",
     "kein",
+    "not found",
+    "nicht gefunden",
+    "kein absender",
+    "nicht erkennbar",
 }
 # A real correspondent name is short. Anything longer is almost always the model
 # answering in prose ("Der Absender dieses Dokuments ist ...") rather than naming
 # a sender, and must never become a correspondent.
 _MAX_NAME_WORDS = 6
+# The sender hint with creation off is optional; it waits at most this long.
+_SUGGESTION_TIMEOUT = 120.0
+# Ways a model says it found no sender, beyond the exact words above.
+_NO_SENDER = re.compile(
+    r"^(?:n\.?\s?a\.?|-+|keine?r?|unbekannte?r?\b.*|unknown\b.*|not found|nicht gefunden"
+    r"|kein(?:e|en)?\s+absender\b.*|no\s+sender\b.*|absender\s+(?:nicht|unbekannt)\b.*)$",
+    re.IGNORECASE,
+)
 _MAX_NAME_LEN = 80
 
 
@@ -138,7 +151,11 @@ class CorrespondentStep(AbstractStep):
             return None
 
         parsed = CorrespondentStep._extract_json_object(raw)
-        if isinstance(parsed, dict) and isinstance(parsed.get("name"), str):
+        if isinstance(parsed, dict):
+            # JSON without a usable name ({"name": null}) names nobody; read as
+            # a bare name it would turn into a sender called '{"name": null}'.
+            if not isinstance(parsed.get("name"), str):
+                return None
             name = CorrespondentStep._clean_name(parsed["name"])
             is_existing = CorrespondentStep._coerce_bool(parsed.get("is_existing"))
             return _Proposal(name, is_existing, True) if name else None
@@ -393,8 +410,44 @@ class CorrespondentStep(AbstractStep):
             return review(ctx, "correspondent", decision, threshold, "below_threshold"), None
         create_on = (ctx.config.get("correspondent_create_new") or "false").lower() == "true"
         if not create_on:
-            return review(ctx, "correspondent", decision, threshold, "creation_off"), None
+            result = review(ctx, "correspondent", decision, threshold, "creation_off")
+            suggestion = await self._suggest_name(ctx, text, correspondents)
+            if suggestion:
+                result.details["decision"]["suggestion"] = suggestion
+            return result, None
         return await self._create_after_none(ctx, text, correspondents, decision, threshold), None
+
+    async def _suggest_name(self, ctx, text, correspondents) -> Optional[str]:
+        """The sender the text model reads off the document, shown with the review.
+
+        Nothing is created, so the name only has to look like a sender. A failed
+        request costs the hint, not the document.
+        """
+        prompt_data = await self._load_prompt()
+        if not prompt_data:
+            return None
+        # A hanging provider must not hold the document for the full timeout
+        # over a hint; the steps that need the model will report it anyway.
+        limit = getattr(ctx.llm, "timeout", None)
+        wait = min(limit, _SUGGESTION_TIMEOUT) if isinstance(limit, (int, float)) and limit > 0 else _SUGGESTION_TIMEOUT
+        try:
+            proposal = await asyncio.wait_for(
+                self._ask_name(ctx, text, prompt_data, correspondents), timeout=wait
+            )
+        except Exception as e:
+            logger.warning(f"CorrespondentStep: no sender suggestion for doc {ctx.doc_id}: {e!r}")
+            return None
+        if proposal is None or not self._is_plausible_new_name(proposal.name):
+            return None
+        name = re.sub(r"[\s.!?\-]+$", "", proposal.name.strip().strip("\"'")).strip()
+        # A hint has to read like a name: letters, no JSON left over, no "no sender" in other words.
+        if not re.search(r"\w", name) or re.search(r'[{}\[\]":?]', name) or _NO_SENDER.search(name):
+            return None
+        # A name already in the list is not an unknown sender. The model's own
+        # is_existing claim is no help here: it often marks a new sender as known.
+        if self._match_existing(_Proposal(name, None, proposal.trusted), correspondents):
+            return None
+        return name
 
     async def _create_after_none(self, ctx, text, correspondents, decision, threshold) -> StepResult:
         """The text model names the new sender; the existing checks decide."""
