@@ -1,6 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { LANGUAGES } from '../languages'
 import {
   LayoutDashboard,
   Settings,
@@ -48,7 +49,7 @@ export default function Layout() {
     <div className="flex items-center flex-wrap gap-2">
       <ThemeSwitch />
       <span className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
-      {(['en', 'de'] as const).map((lng) => (
+      {LANGUAGES.map((lng) => (
         <button
           key={lng}
           onClick={() => i18n.changeLanguage(lng)}
@@ -58,7 +59,7 @@ export default function Layout() {
               : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
           }`}
         >
-          {t(`language.${lng}`)}
+          {lng.toUpperCase()}
         </button>
       ))}
       {isAuthEnabled && (

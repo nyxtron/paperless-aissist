@@ -12,6 +12,7 @@ from ..services.paperless import PaperlessClient
 from ..services.paperless_manager import PaperlessClientManager
 from ..services.processor import DocumentProcessor
 from ..services.scheduler import (
+    REVIEW_STOP_KIND,
     try_trigger_processing,
     process_tagged_documents as process_tagged_with_state,
     process_modular_tagged_documents as process_modular_with_state,
@@ -103,14 +104,21 @@ async def trigger_processing():
 
     try:
         legacy = await process_tagged_with_state()
-        modular = await process_modular_with_state()
+        stop = legacy.get("stop")
+        if stop and stop.get("kind") == REVIEW_STOP_KIND:
+            modular = {}
+        else:
+            modular = await process_modular_with_state()
         failed = legacy.get("failed", 0) + modular.get("failed", 0)
-        return {
-            "success": failed == 0,
+        body = {
+            "success": failed == 0 and not stop,
             "processed": legacy.get("processed", 0) + modular.get("processed", 0),
             "failed": failed,
             "results": legacy.get("results", []) + modular.get("results", []),
         }
+        if stop:
+            body["stop"] = stop
+        return body
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

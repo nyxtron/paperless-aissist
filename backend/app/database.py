@@ -110,7 +110,22 @@ def run_migrations(database_url: str = DATABASE_URL) -> None:
 
     logger.info("Running Alembic migrations...")
     command.upgrade(alembic_cfg, "head")
+    _enable_app_loggers()
     logger.info("Migrations complete")
+
+
+def _enable_app_loggers() -> None:
+    """Switch the app's own loggers back on after the migrations.
+
+    Alembic's fileConfig switches off every logger that exists when it runs,
+    which silenced the processing steps and the decision service. Third-party
+    loggers stay off: some of them print SQL parameters or request URLs.
+    """
+    import logging
+
+    for name, existing in logging.root.manager.loggerDict.items():
+        if (name == "app" or name.startswith("app.")) and isinstance(existing, logging.Logger):
+            existing.disabled = False
 
 
 def _backup_database(database_url: str, alembic_cfg, logger) -> None:

@@ -9,6 +9,7 @@ from typing import Any
 
 from ...exceptions import LLMError
 from .base import AbstractStep, StepContext, StepResult
+from .monetary import format_monetary
 
 logger = logging.getLogger(__name__)
 
@@ -191,13 +192,25 @@ class FieldsStep(AbstractStep):
         if not combined_fields:
             return StepResult(data={}, error=None)
 
-        field_name_to_id = {cf["name"].lower(): cf["id"] for cf in custom_fields}
+        fields_by_name = {cf["name"].lower(): cf for cf in custom_fields}
 
         existing_cf = {cf["field"]: cf["value"] for cf in doc.get("custom_fields", [])}
         for field_name, field_value in combined_fields.items():
-            field_id = field_name_to_id.get(field_name)
-            if field_id and field_value:
-                existing_cf[field_id] = field_value
+            field = fields_by_name.get(field_name)
+            if not field or not field.get("id") or not field_value:
+                continue
+            if field.get("data_type") == "monetary":
+                # Paperless refuses the whole update over one amount it cannot read.
+                default_currency = (field.get("extra_data") or {}).get("default_currency")
+                amount = format_monetary(field_value, default_currency)
+                if amount is None:
+                    logger.warning(
+                        f"FieldsStep: doc {ctx.doc_id}: {field['name']} = {field_value!r} "
+                        "is not an amount Paperless accepts, field left as it is"
+                    )
+                    continue
+                field_value = amount
+            existing_cf[field["id"]] = field_value
 
         converted_fields = [
             {"field": fid, "value": val} for fid, val in existing_cf.items()

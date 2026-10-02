@@ -4,4 +4,5 @@ export interface ConfigSectionProps {
   onTest?: (key: string) => Promise<boolean>
   secretsSet?: string[]
   onSecretsChanged?: () => void
+  onSecretRemoved?: (key: string) => void
 }

@@ -25,12 +25,22 @@ FORCE_TAG_DEFAULTS: dict[str, str] = {
     "force_ocr_fix_tag": "force-ocr-fix",
 }
 
+# The tag a document gets when a decision was not sure enough. Its own line in
+# control_tag_names(): in MODULAR_TAG_DEFAULTS it would be stripped as a
+# trigger tag at every commit.
+REVIEW_TAG_DEFAULT = "ai-review"
+
+
+def review_tag_name(config: Mapping[str, Any]) -> str:
+    name = config.get("review_tag")
+    return str(name).strip() if name and str(name).strip() else REVIEW_TAG_DEFAULT
+
 
 def control_tag_names(config: Mapping[str, Any]) -> set[str]:
     """Lower-cased names of every tag that drives or marks processing."""
     names = [config.get(key) or default for key, default in MODULAR_TAG_DEFAULTS.items()]
     names += [config.get(key) or default for key, default in FORCE_TAG_DEFAULTS.items()]
-    names += [config.get("process_tag"), config.get("processed_tag")]
+    names += [config.get("process_tag"), config.get("processed_tag"), review_tag_name(config)]
     return {str(name).strip().lower() for name in names if name and str(name).strip()}
 
 

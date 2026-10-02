@@ -87,6 +87,22 @@ async def test_preview_processing_returns_proposed(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_preview_processing_passes_decisions_and_review_through(monkeypatch):
+    from app.mcp import server
+    monkeypatch.setattr(server, "_get_paperless", AsyncMock(return_value=AsyncMock()))
+    class _Proc:
+        def __init__(self, p): ...
+        async def process_document_preview(self, doc_id):
+            return {"document_id": doc_id, "title": "T",
+                    "proposed_changes": {"review": {"tag": {"id": 3, "name": "ai-review"}, "add_fields": ["correspondent"], "remove": False, "missing": False}},
+                    "steps": [{"name": "correspondent", "status": "skipped", "details": {"decision": {"outcome": "review"}}}]}
+    monkeypatch.setattr(server, "DocumentProcessor", _Proc)
+    out = await server.preview_processing(42)
+    assert out["steps"][0]["details"]["decision"]["outcome"] == "review"
+    assert out["proposed"]["review"]["add_fields"] == ["correspondent"]
+
+
+@pytest.mark.asyncio
 async def test_process_document_runs_pipeline(monkeypatch):
     from app.mcp import server
     from app.services import scheduler as sched_module

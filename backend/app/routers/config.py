@@ -17,14 +17,18 @@ from ..auth import (
     generate_automation_token,
     hash_automation_token,
 )
+from ..exceptions import LLMError
+from ..services.control_tags import review_tag_name
 from ..services.llm_handler import OPENAI_COMPATIBLE_PROVIDERS
 from ..services.log_stream import apply_log_level
+from ..services.paperless_manager import PaperlessClientManager
 
 
 SENSITIVE_KEYS = {
     "paperless_token",
     "llm_api_key",
     "llm_api_key_vision",
+    "llm_api_key_decision",
     AUTOMATION_API_TOKEN_HASH_KEY,
 }
 
@@ -45,6 +49,14 @@ LLM_HANDLER_KEYS = {
     for suffix in ("", "_vision")
 }
 
+# What the decision service is built from, besides the main keys it falls back to.
+DECISION_SERVICE_KEYS = {
+    f"llm_{name}_decision"
+    for name in ("provider", "model", "api_base", "api_key", "timeout", "temperature", "max_tokens", "num_ctx")
+} | {"decision_format"}
+
+THRESHOLD_KEYS = {"decision_threshold_correspondent", "decision_threshold_document_type"}
+
 
 async def _config_changed(key: str) -> None:
     """Drop cached values and clients built from the old setting."""
@@ -58,6 +70,13 @@ async def _config_changed(key: str) -> None:
         from ..services.llm_handler import LLMHandlerManager
 
         await LLMHandlerManager.reset()
+
+    # LLM_HANDLER_KEYS carries the vision keys too; a reset on those is cheap
+    # and keeps the rule simple.
+    if key in LLM_HANDLER_KEYS or key in DECISION_SERVICE_KEYS:
+        from ..services.decision import DecisionServiceManager
+
+        await DecisionServiceManager.reset()
 
     if key in ("paperless_url", "paperless_token"):
         from ..services.paperless_manager import PaperlessClientManager
@@ -73,6 +92,13 @@ class ConfigUpdate(BaseModel):
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
+
+
+async def get_llm_config_dict() -> dict[str, str]:
+    """Every stored config value by key."""
+    async with get_async_session() as session:
+        configs = await session.exec(select(Config))
+        return {c.key: c.value for c in configs.all()}
 
 
 async def get_llm_config():
@@ -219,6 +245,37 @@ async def test_ollama_connection():
     return result
 
 
+@router.post("/test-decision")
+async def test_decision_model():
+    """Ask the decision model one small question and check the review tag."""
+    from ..services.decision import DecisionServiceManager
+
+    result: dict = {"success": False}
+    try:
+        service = await DecisionServiceManager.get_service()
+        decision = await service.probe()
+        result.update(
+            success=decision.fallback_reason is None,
+            method=decision.method, model=decision.model, choice=decision.choice,
+            probability=decision.probability, fallback_reason=decision.fallback_reason,
+            fallback_detail=decision.fallback_detail, request=decision.rendered,
+        )
+    except LLMError as e:
+        result.update(success=False, message=str(e))
+    config = await get_llm_config_dict()
+    name = review_tag_name(config)
+    try:
+        paperless = await PaperlessClientManager.get_client()
+        tags = await paperless.get_tags(force_refresh=True)
+        exists = any(t.get("name") == name for t in tags)
+    except Exception as e:
+        # Not the same as a missing tag: the UI says it could not check.
+        logger.warning("Review tag check skipped, Paperless unavailable: %s", e)
+        exists = None
+    result["review_tag"] = {"name": name, "exists": exists}
+    return result
+
+
 @router.get("", response_model=ConfigResponse)
 async def get_configs():
     """Return all non-sensitive config key-value pairs.
@@ -324,6 +381,13 @@ async def set_config(data: ConfigUpdate = Body(...), description: Optional[str] 
                 )
         data.value = normalized
 
+    if data.key in THRESHOLD_KEYS:
+        try:
+            value = float(data.value.strip().replace(",", "."))
+        except (AttributeError, ValueError):
+            raise HTTPException(status_code=400, detail="must be a number between 0.50 and 1.00")
+        data.value = f"{min(1.0, max(0.5, value)):.2f}"
+
     async with get_async_session() as session:
         stmt = select(Config).where(Config.key == data.key)
         config = await session.exec(stmt)
@@ -332,7 +396,8 @@ async def set_config(data: ConfigUpdate = Body(...), description: Optional[str] 
         if data.key in SENSITIVE_KEYS and (not data.value or not data.value.strip()):
             if config is None:
                 raise HTTPException(status_code=404, detail="Config not found")
-            return {"key": data.key, "value": config.value}
+            # The stored secret stays, and stays hidden like on every read.
+            return {"key": data.key, "value": ""}
 
         if config:
             config.value = data.value

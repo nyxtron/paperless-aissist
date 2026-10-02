@@ -5,15 +5,17 @@ import { configApi } from '../api/client'
 import { ConfigSectionPaperless } from './ConfigSectionPaperless'
 import { ConfigSectionLLM } from './ConfigSectionLLM'
 import { ConfigSectionVision } from './ConfigSectionVision'
+import { ConfigSectionDecision } from './ConfigSectionDecision'
 import { ConfigSectionScheduler } from './ConfigSectionScheduler'
 import { ConfigSectionTags } from './ConfigSectionTags'
 import { ConfigSectionAdvanced } from './ConfigSectionAdvanced'
 import { Server, Brain, Clock, Tag, Settings } from 'lucide-react'
 
-const SENSITIVE_KEYS = new Set([
+export const SENSITIVE_KEYS = new Set([
   'paperless_token',
   'llm_api_key',
   'llm_api_key_vision',
+  'llm_api_key_decision',
   'automation_api_token_hash',
 ])
 const IMMEDIATE_SAVE_KEYS = new Set(['document_list_refresh_mode'])
@@ -55,6 +57,19 @@ export default function ConfigPanel() {
     llm_max_tokens_vision: '',
     llm_num_ctx: '',
     llm_num_ctx_vision: '',
+    decision_correspondent: 'false',
+    decision_document_type: 'false',
+    decision_threshold_correspondent: '0.9',
+    decision_threshold_document_type: '0.9',
+    decision_question_correspondent: '',
+    decision_question_document_type: '',
+    decision_format: 'auto',
+    review_tag: 'ai-review',
+    llm_provider_decision: '',
+    llm_model_decision: '',
+    llm_api_base_decision: '',
+    llm_timeout_decision: '',
+    llm_num_ctx_decision: '',
     log_level: 'INFO',
     ocr_fix_max_chars: '10000',
     max_concurrent_processing: '3',
@@ -108,11 +123,18 @@ export default function ConfigPanel() {
         resolve()
         return
       }
-      setConfigs((prev) => ({ ...prev, [key]: value }))
+      // A refused save shows the stored value again instead of the typed one.
+      let previous: string | undefined
+      setConfigs((prev) => {
+        previous = prev[key]
+        return { ...prev, [key]: value }
+      })
+      const revert = () => setConfigs((c) => ({ ...c, [key]: previous ?? '' }))
       if (IMMEDIATE_SAVE_KEYS.has(key)) {
         configApi.set(key, value)
           .catch((e) => {
             console.error(`Failed to save ${key}:`, e)
+            revert()
             toast.error(t('config.saveKeyFailed', { key }))
           })
           .finally(resolve)
@@ -124,12 +146,21 @@ export default function ConfigPanel() {
           await configApi.set(key, value)
         } catch (e) {
           console.error(`Failed to save ${key}:`, e)
+          revert()
           toast.error(t('config.saveKeyFailed', { key }))
         }
         resolve()
       }, 1000)
       saveTimeoutsRef.current.set(key, timeoutId)
     })
+  }, [])
+
+  // Forget a secret that was just removed, so neither a pending save nor save-all writes it back.
+  const discardSecret = useCallback((key: string) => {
+    const pending = saveTimeoutsRef.current.get(key)
+    if (pending) clearTimeout(pending)
+    saveTimeoutsRef.current.delete(key)
+    setConfigs((prev) => ({ ...prev, [key]: '' }))
   }, [])
 
   const handleSaveAll = async () => {
@@ -193,6 +224,13 @@ export default function ConfigPanel() {
           <div className="space-y-4">
             <ConfigSectionLLM config={configs} onSave={handleSave} secretsSet={secretsSet} />
             <ConfigSectionVision config={configs} onSave={handleSave} secretsSet={secretsSet} />
+            <ConfigSectionDecision
+              config={configs}
+              onSave={handleSave}
+              secretsSet={secretsSet}
+              onSecretsChanged={loadConfigs}
+              onSecretRemoved={discardSecret}
+            />
           </div>
         )
       case 'scheduler':

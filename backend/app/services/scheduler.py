@@ -87,6 +87,8 @@ STATE_FILE = os.path.join(DATA_DIR, "scheduler_state.json")
 
 # Marks a run that a person ended, as opposed to one the failure limit cut off.
 HAND_STOP_REASON = "stopped on request"
+# Marks a run that stopped because the review tag is missing in Paperless.
+REVIEW_STOP_KIND = "review_tag"
 
 
 def _now_iso() -> str:
@@ -241,16 +243,42 @@ def is_run_stop_requested() -> bool:
         return bool(_load_state().get("stop_requested"))
 
 
-def record_run_stop(reason: str, failures: int):
-    """Note that a run gave up early, for the status endpoint to report."""
+def record_run_stop(reason: str, failures: int, kind: Optional[str] = None):
+    """Note that a run gave up early, for the status endpoint to report.
+
+    kind says what kind of stop it was, so the page can word it: "hand" for a
+    person, "failures" for the breaker, "review_tag" for a precondition that
+    was missing. Older state files have no kind; the page then falls back to
+    the failure count as before.
+    """
+    if kind is None:
+        kind = "hand" if reason == HAND_STOP_REASON else "failures"
     with lock:
         state = _load_state()
         state["last_stop"] = {
             "reason": reason,
             "failures": failures,
             "at": _now_iso(),
+            "kind": kind,
         }
         _save_state(state)
+
+
+def _note_hand_stop(stop: dict[str, Any]) -> bool:
+    """Carry a stop asked for from the outside into this run's own flag.
+
+    A stop already recorded for another reason stays what it is.
+    """
+    if not is_run_stop_requested():
+        return False
+    if not stop:
+        stop["reason"] = HAND_STOP_REASON
+        stop["failures"] = 0
+        stop["kind"] = "hand"
+    return True
+
+
+_note_hand_stop_for_tests = _note_hand_stop
 
 
 def mark_document_started(
@@ -429,21 +457,28 @@ async def process_documents_task():
     _set_processing()
 
     try:
-        result = await process_tagged_documents()
+        try:
+            result = await process_tagged_documents()
 
-        if result.get("processed", 0) > 0:
-            logger.info(f"Auto-processed {result.get('processed')} documents")
-    except Exception as e:
-        logger.error(f"Auto-processing failed: {e}")
+            if result.get("processed", 0) > 0:
+                logger.info(f"Auto-processed {result.get('processed')} documents")
+            stop = result.get("stop") or {}
+        except Exception as e:
+            logger.error(f"Auto-processing failed: {e}")
+            stop = {}
 
-    try:
-        modular_result = await process_modular_tagged_documents()
-        if modular_result.get("processed", 0) > 0:
-            logger.info(
-                f"Auto-processed {modular_result.get('processed')} documents (modular pipeline)"
-            )
-    except Exception as e:
-        logger.error(f"Modular auto-processing failed: {e}")
+        if stop.get("kind") == REVIEW_STOP_KIND:
+            logger.warning("Modular pass skipped: %s", stop.get("reason"))
+        else:
+            try:
+                modular_result = await process_modular_tagged_documents()
+                if modular_result.get("processed", 0) > 0:
+                    logger.info(
+                        f"Auto-processed {modular_result.get('processed')} documents "
+                        "(modular pipeline)"
+                    )
+            except Exception as e:
+                logger.error(f"Modular auto-processing failed: {e}")
     finally:
         with lock:
             _clear_processing()
@@ -589,7 +624,8 @@ async def process_tagged_documents() -> dict:
     """Process all documents tagged with the legacy process_tag.
 
     Returns:
-        Dict with "processed" count and "results" list.
+        Dict with "processed" count and "results" list, plus "stop" when a
+        missing review tag ended the run.
     """
     from ..services.paperless_manager import PaperlessClientManager
     from ..services.processor import DocumentProcessor
@@ -670,15 +706,6 @@ async def process_modular_tagged_documents() -> dict:
     consecutive_failures = 0
     stop: dict[str, Any] = {}
 
-    def _note_hand_stop(stop: dict[str, Any]) -> bool:
-        """Carry a stop asked for from the outside into this run's own flag."""
-        if not is_run_stop_requested():
-            return False
-        if not stop:
-            stop["reason"] = HAND_STOP_REASON
-            stop["failures"] = 0
-        return True
-
     async def _limited_process(doc_id: int):
         nonlocal consecutive_failures
         # gather cannot be cut short, so the queued coroutines bow out themselves.
@@ -691,6 +718,11 @@ async def process_modular_tagged_documents() -> dict:
             if stop or _note_hand_stop(stop):
                 return {"success": True, "skipped": True, "reason": "run stopped"}
             result = await process_one(doc_id)
+            if isinstance(result, dict) and result.get("stop_run") and not stop:
+                stop["reason"] = result.get("error", "run stopped")
+                stop["failures"] = 0
+                stop["kind"] = REVIEW_STOP_KIND
+                return result
 
         if is_provider_failure(result):
             consecutive_failures += 1
@@ -701,6 +733,7 @@ async def process_modular_tagged_documents() -> dict:
                     else str(result)
                 )
                 stop["failures"] = consecutive_failures
+                stop["kind"] = "failures"
         elif isinstance(result, dict) and result.get("success") and not result.get("skipped"):
             consecutive_failures = 0
         return result
@@ -710,15 +743,17 @@ async def process_modular_tagged_documents() -> dict:
     )
 
     if stop:
-        if stop["reason"] == HAND_STOP_REASON:
+        if stop.get("kind") == "hand":
             logger.info("Run stopped on request; documents in flight were finished")
+        elif stop.get("kind") == REVIEW_STOP_KIND:
+            logger.warning("Run stopped: %s", stop["reason"])
         else:
             logger.warning(
                 "Run stopped after %d consecutive provider failures: %s",
                 stop["failures"],
                 stop["reason"],
             )
-        record_run_stop(stop["reason"], stop["failures"])
+        record_run_stop(stop["reason"], stop["failures"], stop.get("kind"))
 
     # A document whose trigger tag disappeared while it queued is neither work done
     # nor a failure, so it stays out of both counts.

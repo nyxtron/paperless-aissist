@@ -71,6 +71,16 @@ class TestWhichTagsAreControlTags:
 
         assert [t["name"] for t in assignable_tags(tags, {})] == ["Steuer"]
 
+    def test_the_review_tag_counts(self):
+        assert "ai-review" in control_tag_names({})
+        assert "needs-check" in control_tag_names({"review_tag": "needs-check"})
+        assert "ai-review" not in control_tag_names({"review_tag": "needs-check"})
+
+    def test_the_review_tag_is_not_a_trigger_tag(self):
+        from app.services.control_tags import FORCE_TAG_DEFAULTS, MODULAR_TAG_DEFAULTS
+
+        assert "review_tag" not in MODULAR_TAG_DEFAULTS and "review_tag" not in FORCE_TAG_DEFAULTS
+
 
 def _ctx(reply: str) -> StepContext:
     llm = MagicMock()
@@ -89,7 +99,7 @@ def _ctx(reply: str) -> StepContext:
     )
 
 
-async def _run(ctx: StepContext):
+async def _run(ctx: StepContext, step_config: dict | None = None):
     prompt = MagicMock()
     prompt.system_prompt = "Assign tags."
     prompt.user_template = "Tags: {tags_list}\n\n{content}"
@@ -97,7 +107,8 @@ async def _run(ctx: StepContext):
     session.exec = AsyncMock(return_value=MagicMock(first=MagicMock(return_value=prompt)))
     with patch("app.database.get_async_session") as db:
         db.return_value.__aenter__.return_value = session
-        return await (await TagsStep.from_config(ctx.config)).execute(ctx)
+        step = await TagsStep.from_config(step_config if step_config is not None else ctx.config)
+        return await step.execute(ctx)
 
 
 class TestTheTagsStep:
@@ -131,3 +142,16 @@ class TestTheTagsStep:
         result = await _run(_ctx("ai-ocr, force_ocr"))
 
         assert not result.data.get("tags")
+
+    @pytest.mark.asyncio
+    async def test_a_renamed_review_tag_is_read_per_document(self):
+        """The step was built with one config; the document carries the live one."""
+        ctx = _ctx("Steuer")
+        ctx.paperless.get_tags = AsyncMock(return_value=[
+            {"id": 1, "name": "needs-check"}, {"id": 2, "name": "ai-review"}, {"id": 3, "name": "Steuer"}])
+        ctx.config = {**ctx.config, "review_tag": "needs-check"}
+
+        await _run(ctx, step_config={"modular_tag_process": "ai-process"})
+
+        sent = ctx.llm.complete.await_args.kwargs["user_prompt"]
+        assert '"needs-check"' not in sent and '"ai-review"' in sent and '"Steuer"' in sent
