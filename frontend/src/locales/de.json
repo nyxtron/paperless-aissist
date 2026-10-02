@@ -56,7 +56,8 @@
     "noLogsForFilter": "Keine Protokolleinträge für diesen Filter.",
     "confirmReset": "Alle Verarbeitungsprotokolle löschen? Dies kann nicht rückgängig gemacht werden.",
     "resetFailed": "Statistiken konnten nicht zurückgesetzt werden",
-    "promptCut": "Prompt gekürzt bei: {{steps}}. Kontextfenster erhöhen."
+    "promptCut": "Prompt gekürzt bei: {{steps}}. Kontextfenster erhöhen.",
+    "decision": "Entscheidungen: {{summary}}"
   },
   "config": {
     "title": "Konfiguration",
@@ -108,6 +109,39 @@
     "visionPdfModeImages": "Seitenbilder",
     "visionPdfModeHelp": "Nutze Seitenbilder für lokale OpenAI-kompatible Runtimes. Native PDF ist nur mit der offiziellen OpenAI API zuverlässig.",
     "visionSectionDisabledHint": "Vision OCR ist deaktiviert, kann hier aber bereits vorkonfiguriert werden.",
+    "decisionSection": "Entscheidungsmodus",
+    "decisionSectionHint": "Wählt Korrespondent und Dokumenttyp aus Ihren Paperless-Listen und gibt an, wie sicher sich das Modell ist. Unter der Schwelle bleibt das Feld unverändert und das Dokument erhält den Prüf-Tag. Braucht einen Anbieter, der Token-Wahrscheinlichkeiten liefert; sonst wird der Text-Prompt verwendet.",
+    "decisionCorrespondent": "Korrespondent entscheiden",
+    "decisionDocumentType": "Dokumenttyp entscheiden",
+    "decisionThreshold": "Schwelle ({{field}})",
+    "decisionThresholdHint": "0,50 bis 1,00. Unter dieser Wahrscheinlichkeit bleibt das Feld zur Prüfung offen.",
+    "decisionQuestion": "Frage ({{field}})",
+    "decisionFormat": "Format",
+    "decisionFormatAuto": "Automatisch",
+    "decisionFormatLetters": "Letters",
+    "decisionFormatNimble": "Nimble",
+    "decisionFormatSystemOne": "SystemOne",
+    "decisionFormatHint": "Automatisch wählt Nimble, wenn der Modellname nimble enthält, sonst Letters. Letters funktioniert mit Ollama, OpenAI-kompatiblen Servern und OpenRouter; Nimble und SystemOne brauchen Ollama, SystemOne über dessen Route /v1/systemone.",
+    "decisionFormatUnusable": "Dieser Anbieter kann dieses Format nicht ausführen, daher wird der Text-Prompt verwendet. Grok kann den Entscheidungsmodus gar nicht ausführen.",
+    "decisionModelSection": "Entscheidungsmodell",
+    "decisionModelHint": "Eigene Verbindung: Anbieter, URL, Schlüssel und Modell kommen nicht vom Haupt-LLM. Leere Felder für Timeout und Kontextfenster übernehmen die Werte des Haupt-LLM.",
+    "decisionInherited": "Nutzt Anbieter, URL und Schlüssel des Haupt-LLM. Mit einem Modellnamen hier entscheidet ein anderes Modell auf demselben Server; leer gilt das Hauptmodell.",
+    "decisionInheritedOption": "Wie das Hauptmodell",
+    "decisionUrlRequired": "Ein eigener Anbieter braucht eine URL; ohne sie wird der Text-Prompt verwendet.",
+    "decisionModelRequired": "Ein eigener Anbieter braucht ein Modell; ohne Modell wird der Text-Prompt verwendet.",
+    "decisionRemoveKey": "Gespeicherten Schlüssel entfernen",
+    "decisionKeyRemoved": "Schlüssel des Entscheidungsmodells entfernt",
+    "decisionContextWindow": "Kontextfenster (Ollama Letters und Nimble; bei SystemOne ignoriert)",
+    "reviewTag": "Prüf-Tag",
+    "reviewTagHint": "Wird an Dokumente mit einem zur Prüfung offenen Feld gehängt und entfernt, sobald ein späterer Lauf jedes Feld mit eingeschalteter Entscheidung entscheidet. Muss in Paperless existieren.",
+    "reviewTagMissing": "Der Tag {{tag}} existiert in Paperless nicht. Läufe mit eingeschalteter Entscheidung stoppen, bis es ihn gibt.",
+    "reviewTagPresent": "Der Tag {{tag}} existiert in Paperless.",
+    "reviewTagUnknown": "Prüf-Tag konnte nicht geprüft werden, Paperless hat nicht geantwortet",
+    "decisionTest": "Entscheidungsmodell testen",
+    "decisionTesting": "Teste…",
+    "decisionTestOk": "{{method}} auf {{model}}: {{choice}} ({{p}})",
+    "decisionTestFallback": "Fällt auf den Text-Prompt zurück: {{reason}}",
+    "decisionTestFailed": "Test fehlgeschlagen: {{message}}",
     "schedulerSection": "Automatische Verarbeitung",
     "schedulerRunning": "Aktiv",
     "schedulerStopped": "Gestoppt",
@@ -266,6 +300,10 @@
     "confirmLoadPromptSample": "Diesen Prompt durch das mitgelieferte Beispiel ersetzen?",
     "samplesLoaded": "Geladen: {{created}} erstellt, {{updated}} aktualisiert",
     "loadPromptSample": "Beispiel-Prompt laden",
+    "decisionHelp": "Den Buchstabenblock erzeugt AIssist: eine Zeile pro Option, A: Name, die letzte Zeile ist \"None of these\". Den Platzhalter {content} vorne lassen, damit Ollamas Prompt-Cache ihn wiederverwenden kann.",
+    "nimbleTitle": "Nimble-Format",
+    "nimbleHelp": "Nimble wurde auf dieses Format trainiert, daher kann es hier nicht bearbeitet werden. System-Prompt und Template kommen aus dem Modell in Ollama.",
+    "warnMissingPlaceholders": "Gespeichert, aber im Template fehlt {{missing}}",
     "sampleStatus": {
       "custom": "Eigener Prompt",
       "sample_current": "Beispiel aktuell",
@@ -303,6 +341,8 @@
     "updateTags": "Tags:",
     "updateCustomFields": "Benutzerdefinierte Felder:",
     "updateContent": "Inhalt:",
+    "reviewTagAdded": "Prüf-Tag {{tag}} gesetzt für: {{fields}}",
+    "reviewTagRemoved": "Prüf-Tag {{tag}} entfernt",
     "noDocuments": "Keine Dokumente zu verarbeiten",
     "noDocumentsHint": "Markieren Sie Dokumente in Paperless mit dem Prozess-Tag, um die Warteschlange zu füllen.",
     "manualRefreshTitle": "Dokumentenliste nicht geladen",
@@ -329,6 +369,7 @@
     "stopRequested": "Wird angehalten, sobald die laufenden Dokumente fertig sind. Der Scheduler behält sein Intervall.",
     "stopFailed": "Der Lauf konnte nicht zum Anhalten aufgefordert werden",
     "runStoppedByHand": "Auf Wunsch angehalten; die laufenden Dokumente wurden fertig gemacht.",
+    "runStoppedReviewTag": "Angehalten: {{reason}}. Legen Sie den Prüf-Tag in Paperless an oder schalten Sie den Entscheidungsmodus aus.",
     "pageOfPages": "Seite {{page}} von {{pages}}",
     "promptCut": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token eines Fensters von {{window}} gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen.",
     "promptCutNoWindow": "Prompt gekürzt: Ollama hat nur {{evaluated}} Token gelesen, Anweisungen und Listen fehlten. Kontextfenster erhöhen."
@@ -374,6 +415,58 @@
     "previewing": "Vorschau wird erstellt...",
     "previewHint": "KI-Verarbeitung simulieren, ohne Paperless zu verändern",
     "previewSuccess": "Vorschau erfolgreich erstellt",
-    "proposedChanges": "Vorgeschlagene Änderungen"
+    "proposedChanges": "Vorgeschlagene Änderungen",
+    "reviewAdd": "Würde den Prüf-Tag {{tag}} setzen für: {{fields}}",
+    "reviewRemove": "Würde den Prüf-Tag {{tag}} entfernen",
+    "reviewMissing": "Der Prüf-Tag {{tag}} existiert in Paperless nicht"
+  },
+  "decision": {
+    "outcome": {
+      "applied": "übernommen",
+      "created": "angelegt",
+      "would_create": "würde angelegt",
+      "review": "zur Prüfung",
+      "fallback": "Text-Prompt verwendet"
+    },
+    "reason": {
+      "below_threshold": "nicht sicher genug",
+      "low_mass": "das Modell hat kaum mit einem Buchstaben geantwortet",
+      "final_none": "die letzte Runde hat alle Kandidaten verworfen",
+      "creation_off": "unbekannter Absender, und das Anlegen von Korrespondenten ist aus",
+      "none_of_these": "keiner der vorhandenen Typen passt",
+      "named_existing": "das Textmodell hat einen vorhandenen Korrespondenten genannt",
+      "no_name_prompt": "kein aktiver Korrespondenten-Prompt, um den Absender zu benennen",
+      "no_name": "das Textmodell hat keinen brauchbaren Namen geliefert",
+      "untrusted_response": "der Name kam nicht als JSON",
+      "claimed_existing_no_match": "das Textmodell nannte den Namen vorhanden, aber nichts passte",
+      "implausible_name": "der Name sieht nicht nach einem Absender aus",
+      "create_failed": "Paperless hat das Anlegen des Korrespondenten abgelehnt"
+    },
+    "fallback": {
+      "no_logprobs": "der Anbieter hat keine Token-Wahrscheinlichkeiten geliefert",
+      "unsupported_parameter": "der Anbieter hat einen Parameter abgelehnt, den die Entscheidung braucht",
+      "route_missing": "dieses Ollama hat kein /v1/systemone",
+      "format_unsupported": "das gewählte Format funktioniert mit diesem Anbieter oder Modell nicht",
+      "provider_unsupported": "dieser Anbieter liefert keine Token-Wahrscheinlichkeiten",
+      "url_missing": "Entscheidungs-URL fehlt",
+      "model_missing": "Entscheidungsmodell fehlt",
+      "prompt_inactive": "der Entscheidungs-Prompt ist aus oder fehlt",
+      "empty_list": "die Liste in Paperless ist leer",
+      "no_letters": "das Modell hat nicht mit einem Buchstaben geantwortet",
+      "context_exceeded": "das Dokument passt nicht in den Kontext des Modells"
+    },
+    "field": {
+      "correspondent": "Korrespondent",
+      "document_type": "Dokumenttyp"
+    },
+    "note": {
+      "decided": "Entschieden: {{choice}} ({{p}} ≥ {{threshold}}) · {{model}}",
+      "review": "Zur Prüfung: {{reason}} · beste Vermutung {{choice}} ({{p}} < {{threshold}})",
+      "reviewNone": "Zur Prüfung: {{reason}}",
+      "fallback": "Entscheidungsmodus nicht verfügbar: {{reason}}; der Text-Prompt wurde verwendet",
+      "wouldCreate": "Würde den Korrespondenten {{name}} anlegen",
+      "showRequest": "Anfrage anzeigen",
+      "hideRequest": "Anfrage ausblenden"
+    }
   }
 }

@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { configApi, statsApi } from '../api/client'
+import type { DecisionOutcome } from '../api/types'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { buildPaperlessDocumentUrl } from '../utils/paperlessLinks'
 import { useTheme } from '../contexts/ThemeContext'
@@ -132,6 +133,32 @@ export default function Dashboard() {
         .map((step) => step.name as string)
     } catch {
       return []
+    }
+  }
+
+  // One short summary per decided field, from the stored run.
+  const getDecisionSummary = (llmResponse?: string | null): string | null => {
+    if (!llmResponse) return null
+    try {
+      const parsed = JSON.parse(llmResponse) as {
+        steps?: Array<{
+          name?: string
+          details?: { decision?: { outcome?: DecisionOutcome; probability?: number | null } }
+        }>
+      }
+      const parts = (parsed.steps || [])
+        .filter((step) => step.details?.decision && step.name)
+        .map((step) => {
+          const d = step.details!.decision!
+          const p = d.probability == null ? '–' : `${Math.round(d.probability * 100)}%`
+          if (!d.outcome || d.outcome === 'applied' || d.outcome === 'created') {
+            return `${step.name}: ${p}`
+          }
+          return `${step.name}: ${t(`decision.outcome.${d.outcome}`)} ${p}`
+        })
+      return parts.length ? parts.join(' · ') : null
+    } catch {
+      return null
     }
   }
 
@@ -391,6 +418,13 @@ export default function Dashboard() {
                         <p className="mt-1 text-xs text-amber-700 dark:text-amber-300 max-w-sm">
                           {t('dashboard.promptCut', {
                             steps: getCutSteps(log.llm_response).join(', '),
+                          })}
+                        </p>
+                      )}
+                      {getDecisionSummary(log.llm_response) && (
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-300 max-w-sm">
+                          {t('dashboard.decision', {
+                            summary: getDecisionSummary(log.llm_response),
                           })}
                         </p>
                       )}

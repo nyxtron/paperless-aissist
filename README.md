@@ -12,6 +12,7 @@ Run metadata cheaply on local [Ollama](https://ollama.ai) and reserve a paid vis
 - **Separate text & vision models** — keep metadata generation on a local Ollama model and reserve a paid vision model for the documents you tag for OCR; each is configured independently
 - **Configurable prompts** — every step is driven by prompts you edit in the web UI, with bundled samples to start from
 - **Correspondent, document type & tag classification** — LLM picks from your existing Paperless metadata
+- **Decision mode** — picks correspondent and document type from your Paperless lists with a probability per answer; an unsure pick leaves the field unchanged and tags the document for review
 - **Title generation** — replaces scanned filenames with meaningful titles
 - **Custom field extraction** — pulls structured data into Paperless custom fields, including optional per-document-type fields
 - **Vision OCR** — uses vision models (Ollama, OpenAI, Grok, OpenRouter) to read documents directly from page images
@@ -91,7 +92,7 @@ volumes:
 
 1. Go to **Settings** and verify your Paperless and Ollama URLs
 2. Set the LLM model (see recommendations below)
-3. Create at minimum two tags in Paperless-ngx: `ai-process` and `ai-processed`. Optionally create modular step tags (see below) for per-step triggering.
+3. Create at minimum two tags in Paperless-ngx: `ai-process` and `ai-processed`. Optionally create modular step tags (see below) for per-step triggering. Before you turn on decision mode, also create the review tag `ai-review`.
 4. Tag any document with `ai-process` for metadata processing using existing Paperless text. For Vision OCR plus metadata processing, add both `ai-ocr` and `ai-process`.
 
 ## Configuration
@@ -105,7 +106,7 @@ volumes:
 
 ## LLM Providers
 
-The provider is selected per-model in Settings. Ollama runs locally; OpenAI, Grok, and OpenRouter require an API key. The vision model can use a different provider than the main LLM — configure it separately via `llm_provider_vision` and `llm_api_key_vision` (e.g. main = Ollama, vision = OpenAI).
+The provider is selected per-model in Settings. Ollama runs locally; OpenAI, Grok, and OpenRouter require an API key. The vision model can use a different provider than the main LLM — configure it separately via `llm_provider_vision` and `llm_api_key_vision` (e.g. main = Ollama, vision = OpenAI). Decision mode can also use a model or connection of its own (see Decision Mode below).
 
 | Provider | API Base URL | Notes |
 |----------|-------------|-------|
@@ -150,7 +151,10 @@ Available endpoints:
 The status response includes `is_processing`, `current_document_ids`,
 `active_documents` with trigger tags, active step, and runtime. `last_result`
 contains the last completed Automation API run and is `null` until the first
-API-triggered run finishes. Live progress while a run is active is reported via
+API-triggered run finishes. A run stopped by a missing review tag (see Decision
+Mode below) ends with `success: false`, and the stopped document's entry in
+`results` names the tag; for `ai-process` documents `last_result.stop` holds the
+reason as well. Live progress while a run is active is reported via
 `active_documents`.
 
 Home Assistant example:
@@ -213,9 +217,9 @@ document on, without a restart.
 Each document tagged with `ai-process` runs the standard metadata pipeline using the existing text from Paperless. Vision OCR is intentionally tag-controlled because it is slower and can be more expensive. Add `ai-ocr` when you want Paperless-AIssist to re-read the PDF with a vision model.
 
 1. **Title** — generates a document title
-2. **Classification** — detects correspondent, document type, and tags
+2. **Classification** — detects correspondent, document type, and tags; in decision mode correspondent and document type are picked with a probability, and an unsure pick leaves the field for review
 3. **Custom field extraction** — extracts structured data into Paperless custom fields
-4. **Tag swap** — removes whichever trigger tag(s) were present, adds `ai-processed`
+4. **Tag swap** — removes whichever trigger tag(s) were present, adds `ai-processed`, and in decision mode adds or removes the review tag
 
 Classification only picks from what already exists in Paperless. If you switch on **Settings → Advanced → Create New Correspondents**, the correspondent step creates one when nothing matches, after a duplicate check against the server. Paperless gives a created correspondent to the API user, so in a multi-user setup nobody else sees it; **Owner of New Correspondents** lets you pick "Nobody" to make it visible to all users, and **Matching for New Correspondents** sets the Paperless matching algorithm on it. All three are off by default and only apply to correspondents created from then on.
 
@@ -261,6 +265,18 @@ Documents tagged with any modular tag are picked up by the scheduler and the pro
 
 Up to **3 documents** are processed in parallel by default. The limit can be changed in **Settings → Advanced → Parallel Documents** — set it to `1` for sequential processing on low-power hardware, e.g. when a single machine runs both the vision and text models in Ollama. Each run logs the active limit.
 
+## Decision Mode
+
+Correspondent and document type can be decided from the Paperless lists with a probability per answer instead of a free-text reply. Each option gets a letter, the model answers with one letter, and AIssist reads how likely each letter was. Below a threshold (default 0.9) the field stays as it is and the document gets the review tag (default `ai-review`, create it in Paperless first). A confident "None of these" (at or above the threshold) leaves the field alone and adds the review tag as well. For the correspondent only, with **Create New Correspondents** on, the normal correspondent prompt names the sender instead and creates it through the usual checks; a name that already exists in Paperless goes to review. A later run that decides every field with decision mode on takes the review tag off again.
+
+Settings → LLM/Vision → Decision mode. Everything there takes effect from the next document. The decision model can be the main model (leave the provider at **Same as main model**; only the model name may differ, e.g. `nimble` on the same Ollama) or its own connection. **Test decision model** sends a sample question and shows the answer with its probability, or why the text prompt would be used. The section also shows whether the review tag exists: while it is missing, a run stops at the first document that needs a decision, writes nothing to that document and says why on the Process page.
+
+What works: Ollama (any instruct model via letters, `nimble` via its own format, `/v1/systemone` when selected), OpenAI (not the reasoning models), LM Studio and vLLM through the OpenAI setting, and the OpenRouter providers that return log-probabilities. Grok does not. Where it cannot work, the field falls back to the normal text prompt and the log says why.
+
+The letter prompts are ordinary prompts on the Prompts page (`{content}`, `{question}`, `{options}`). Nimble's format is fixed: AIssist sends `{"context": …, "schema": [{"name": "field", "description": <question>, "choices": [{"code": "A", "value": <option>, "description": <option>}, …]}]}` plus `Requested field: "field"`, and Ollama adds the model's own system prompt. The processing log keeps each decision with its probability and the request (without the document text); the chat preview shows the full request.
+
+Measured on a 60-document German archive: correspondent 54/60 right with qwen2.5:7b and 58/60 with Nimble, no wrong name written at p ≥ 0.9.
+
 ## Prompts
 
 All processing steps are driven by configurable prompts managed in the **Prompts** page of the web UI.
@@ -272,6 +288,8 @@ All processing steps are driven by configurable prompts managed in the **Prompts
 | `title` | Generates a document title |
 | `correspondent` | Detects the correspondent from your Paperless list |
 | `document_type` | Classifies the document type |
+| `decision_correspondent` | Picks the correspondent by letter in decision mode (`{content}`, `{question}`, `{options}`) |
+| `decision_document_type` | Picks the document type by letter in decision mode (`{content}`, `{question}`, `{options}`) |
 | `tag` | Assigns tags from your Paperless list |
 | `date` | Detects the original document date for Paperless `created_date` |
 | `extract` | Extracts custom fields for all documents (expects JSON response) |

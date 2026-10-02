@@ -34,7 +34,8 @@ vi.mock('../api/client', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, params?: { tag?: string; fields?: string }) =>
+      params?.fields ? `${key} ${params.tag}: ${params.fields}` : key,
     i18n: { language: 'en' },
   }),
 }))
@@ -537,6 +538,125 @@ describe('ProcessingPanel', () => {
     expect(await screen.findAllByText('processing.promptCut')).toHaveLength(1)
   })
 
+  it('shows a decision note under a step', async () => {
+    mocks.mockProcess.mockResolvedValue({
+      data: {
+        success: true,
+        document_id: 1,
+        title: 'Doc',
+        updates: {},
+        processing_time_ms: 1,
+        proposed_changes: {},
+        steps: [
+          {
+            name: 'correspondent',
+            status: 'completed',
+            duration_ms: 5,
+            details: {
+              decision: {
+                method: 'ollama_letters',
+                provider: 'ollama',
+                model: 'qwen2.5:7b',
+                outcome: 'applied',
+                reason: null,
+                choice: 'Telekom',
+                probability: 0.99,
+                threshold: 0.9,
+                top: [],
+                requests: 1,
+                mass: 1,
+                fallback_reason: null,
+                fallback_detail: null,
+                request: { text_chars: 1, text_sha256: 'a', rendered: 'r' },
+              },
+            },
+          },
+        ],
+      },
+    })
+    render(<ProcessingPanel />)
+    await screen.findByText('Invoice 2024')
+
+    fireEvent.click(screen.getAllByText(/processing.processBtn/i)[0])
+
+    expect(await screen.findByText('decision.note.decided')).toBeInTheDocument()
+  })
+
+  describe('review tag in the run result', () => {
+    const review = (extra: Record<string, unknown> = {}) => ({
+      tag: { id: 3, name: 'ai-review' },
+      add_fields: [],
+      remove: false,
+      missing: false,
+      ...extra,
+    })
+
+    const processWith = async (
+      proposedChanges: Record<string, unknown>,
+      extra: Record<string, unknown> = {},
+    ) => {
+      mocks.mockProcess.mockResolvedValue({
+        data: {
+          success: true,
+          document_id: 1,
+          title: 'Invoice 2024',
+          updates: {},
+          processing_time_ms: 1,
+          steps: [{ name: 'correspondent', status: 'completed', duration_ms: 5 }],
+          proposed_changes: proposedChanges,
+          ...extra,
+        },
+      })
+      render(<ProcessingPanel />)
+      await screen.findByText('Invoice 2024')
+      fireEvent.click(screen.getAllByText(/processing.processBtn/i)[0])
+      await screen.findByText('processing.resultTitle')
+    }
+
+    it('names the fields the review tag was added for', async () => {
+      await processWith({ review: review({ add_fields: ['correspondent', 'document_type'] }) })
+
+      expect(screen.getByText('processing.updatesApplied')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'processing.reviewTagAdded ai-review: decision.field.correspondent, decision.field.document_type',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    it('says when the review tag came off', async () => {
+      await processWith({ review: review({ remove: true }) })
+
+      expect(screen.getByText('processing.reviewTagRemoved')).toBeInTheDocument()
+      expect(screen.queryByText(/processing\.reviewTagAdded/)).not.toBeInTheDocument()
+    })
+
+    it('shows no empty updates box when the review tag stayed as it was', async () => {
+      await processWith({ review: review() })
+
+      expect(screen.queryByText('processing.updatesApplied')).not.toBeInTheDocument()
+    })
+
+    it('never claims a missing review tag was added', async () => {
+      // The tag went between the check before the steps and the write, so
+      // the document was left as it was.
+      await processWith(
+        {
+          title: 'Invoice 2024',
+          review: review({
+            tag: { id: null, name: 'ai-review' },
+            add_fields: ['correspondent'],
+            missing: true,
+          }),
+        },
+        { success: false, error: "Review tag 'ai-review' does not exist in Paperless" },
+      )
+
+      expect(screen.getByText('processing.updatesApplied')).toBeInTheDocument()
+      expect(screen.queryByText(/processing\.reviewTagAdded/)).not.toBeInTheDocument()
+    })
+  })
+
   it('renders date step details in single document processing results', async () => {
     render(<ProcessingPanel />)
 
@@ -934,6 +1054,23 @@ describe('ProcessingPanel while a run is going', () => {
 
     expect(await screen.findByText('processing.runStoppedByHand')).toBeInTheDocument()
     expect(screen.queryByText('processing.runStoppedBody')).not.toBeInTheDocument()
+  })
+
+  it('words a run stopped by a missing review tag', async () => {
+    mocks.mockGetStatus.mockResolvedValue(
+      idle({
+        last_stop: {
+          reason: "Review tag 'ai-review' does not exist in Paperless",
+          failures: 0,
+          at: '2026-10-01T10:00:00Z',
+          kind: 'review_tag',
+        },
+      }),
+    )
+    render(<ProcessingPanel />)
+
+    expect(await screen.findByText('processing.runStoppedReviewTag')).toBeInTheDocument()
+    expect(screen.queryByText('processing.runStoppedByHand')).not.toBeInTheDocument()
   })
 
   it('still explains a run the failure limit cut off', async () => {

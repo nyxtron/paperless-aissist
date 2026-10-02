@@ -4,7 +4,7 @@ import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock, AlertTriangle, 
 import { toast } from 'sonner'
 
 import { configApi, documentsApi, schedulerApi } from '../api/client'
-import { SchedulerStatus } from '../api/types'
+import type { DecisionDetails, ReviewPlan, SchedulerStatus } from '../api/types'
 import {
   getCachedDocumentList,
   getDocumentListStamp,
@@ -14,6 +14,7 @@ import {
   setCachedDocumentList,
 } from '../utils/documentListCache'
 import { buildPaperlessDocumentUrl } from '../utils/paperlessLinks'
+import { DecisionNote } from './DecisionNote'
 import { PromptCutNote, type PromptCut } from './PromptCutNote'
 
 interface TaggedDocument {
@@ -43,6 +44,7 @@ interface ProcessingStep {
     evidence?: string
     reason?: string
     prompt_cut?: PromptCut
+    decision?: DecisionDetails
     [key: string]: unknown
   }
 }
@@ -69,6 +71,7 @@ interface ProcessingResult {
     tags?: Array<{ id: number; name: string }>
     custom_fields?: Array<{ id: number; name: string; value: string }>
     content?: string
+    review?: ReviewPlan
   }
   error?: string
 }
@@ -337,6 +340,13 @@ export default function ProcessingPanel() {
     resultStepFilter === 'all'
       ? result?.steps || []
       : (result?.steps || []).filter((step) => step.status === resultStepFilter)
+  const review = result?.proposed_changes?.review
+  // A tag that was gone by the time of the write was never set.
+  const reviewFields = review && !review.missing ? review.add_fields : []
+  const showUpdates =
+    Object.keys(result?.proposed_changes ?? {}).some((key) => key !== 'review') ||
+    reviewFields.length > 0 ||
+    Boolean(review?.remove)
 
   return (
     <div className="space-y-6">
@@ -440,12 +450,14 @@ export default function ProcessingPanel() {
             </span>
           </div>
           <p className="mt-1">
-            {schedulerStatus.last_stop.failures === 0
-              ? t('processing.runStoppedByHand')
-              : t('processing.runStoppedBody', {
-                  failures: schedulerStatus.last_stop.failures,
-                  reason: schedulerStatus.last_stop.reason,
-                })}
+            {schedulerStatus.last_stop.kind === 'review_tag'
+              ? t('processing.runStoppedReviewTag', { reason: schedulerStatus.last_stop.reason })
+              : schedulerStatus.last_stop.failures === 0
+                ? t('processing.runStoppedByHand')
+                : t('processing.runStoppedBody', {
+                    failures: schedulerStatus.last_stop.failures,
+                    reason: schedulerStatus.last_stop.reason,
+                  })}
           </p>
         </div>
       )}
@@ -569,6 +581,7 @@ export default function ProcessingPanel() {
                         </p>
                       )}
                       {step.details?.prompt_cut && <PromptCutNote cut={step.details.prompt_cut} />}
+                      {step.details?.decision && <DecisionNote decision={step.details.decision} />}
                     </div>
                   </div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">{formatDuration(step.duration_ms)}</span>
@@ -579,7 +592,7 @@ export default function ProcessingPanel() {
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('processing.noStepsForFilter')}</p>
             )}
 
-            {result.proposed_changes && Object.keys(result.proposed_changes).length > 0 && (
+            {showUpdates && (
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                   {t('processing.updatesApplied')}
@@ -623,6 +636,19 @@ export default function ProcessingPanel() {
                       {t('processing.updateContent')}{' '}
                       {String(result.proposed_changes.content).substring(0, 100)}...
                     </div>
+                  )}
+                  {review && reviewFields.length > 0 && (
+                    <div>
+                      {t('processing.reviewTagAdded', {
+                        tag: review.tag.name,
+                        fields: reviewFields
+                          .map((field) => t(`decision.field.${field}`))
+                          .join(', '),
+                      })}
+                    </div>
+                  )}
+                  {review?.remove && (
+                    <div>{t('processing.reviewTagRemoved', { tag: review.tag.name })}</div>
                   )}
                 </div>
               </div>

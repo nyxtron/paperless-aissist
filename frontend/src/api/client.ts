@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { DecisionTestResult } from './types'
 
 /**
  * Axios-based API client for Paperless-AIssist backend.
@@ -38,6 +39,7 @@ export const configApi = {
     api.post('/config', { key, value, description }),
   delete: (key: string) => api.delete(`/config/${key}`),
   testConnection: () => api.post('/config/test-ollama'),
+  testDecision: () => api.post<DecisionTestResult>('/config/test-decision'),
   generateAutomationToken: () => api.post('/config/automation-token'),
   revokeAutomationToken: () => api.delete('/config/automation-token'),
 }

@@ -1,21 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { toast } from 'sonner'
 
-import ConfigPanel from '../components/ConfigPanel'
+import ConfigPanel, { SENSITIVE_KEYS } from '../components/ConfigPanel'
 
 const mocks = vi.hoisted(() => ({
   mockGetAll: vi.fn(),
   mockSet: vi.fn(),
+  mockDelete: vi.fn(),
+  mockGetTags: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({
   configApi: {
     getAll: mocks.mockGetAll,
     set: mocks.mockSet,
+    delete: mocks.mockDelete,
     testConnection: vi.fn(),
   },
   documentsApi: {
-    getTags: vi.fn(),
+    getTags: mocks.mockGetTags,
   },
   schedulerApi: {
     getStatus: vi.fn(),
@@ -49,6 +53,85 @@ describe('ConfigPanel', () => {
       },
     })
     mocks.mockSet.mockResolvedValue({ data: { key: 'document_list_refresh_mode', value: 'manual' } })
+    mocks.mockGetTags.mockResolvedValue({ data: { tags: [] } })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // A stored decision key with an own provider; the delete empties the stored list.
+  const storeDecisionKey = () => {
+    let stored = ['llm_api_key_decision']
+    mocks.mockGetAll.mockImplementation(async () => ({
+      data: {
+        data: {
+          llm_provider_decision: 'openai',
+          llm_api_base_decision: 'https://api.openai.com/v1',
+        },
+        secrets_set: stored,
+      },
+    }))
+    mocks.mockDelete.mockImplementation(async () => {
+      stored = []
+      return { data: {} }
+    })
+  }
+
+  const openDecisionKey = async () => {
+    render(<ConfigPanel />)
+    fireEvent.click(await screen.findByText('config.tabLLM'))
+    await screen.findByText('config.decisionRemoveKey')
+    return screen.getByLabelText('config.apiKey')
+  }
+
+  const savedKeys = () => mocks.mockSet.mock.calls.map(([key]) => key)
+
+  it('does not store a removed decision key again on save', async () => {
+    storeDecisionKey()
+    const key = await openDecisionKey()
+
+    fireEvent.change(key, { target: { value: 'sk-typed' } })
+    expect(key).toHaveValue('sk-typed')
+    fireEvent.click(screen.getByText('config.decisionRemoveKey'))
+
+    await waitFor(() =>
+      expect(screen.queryByText('config.decisionRemoveKey')).not.toBeInTheDocument(),
+    )
+    expect(mocks.mockDelete).toHaveBeenCalledWith('llm_api_key_decision')
+    expect(key).toHaveValue('')
+
+    fireEvent.click(screen.getByText('config.saveConfiguration'))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('config.savedSuccess'))
+    expect(mocks.mockSet).toHaveBeenCalledWith('llm_provider_decision', 'openai')
+    expect(savedKeys()).not.toContain('llm_api_key_decision')
+  })
+
+  it('drops a pending save of the decision key when it is removed', async () => {
+    storeDecisionKey()
+    const key = await openDecisionKey()
+
+    vi.useFakeTimers()
+    fireEvent.change(key, { target: { value: 'sk-typed' } })
+    fireEvent.change(screen.getByLabelText('config.model'), { target: { value: 'gpt-4o' } })
+    fireEvent.click(screen.getByText('config.decisionRemoveKey'))
+    await act(() => vi.advanceTimersByTimeAsync(1500))
+
+    expect(mocks.mockDelete).toHaveBeenCalledWith('llm_api_key_decision')
+    expect(mocks.mockSet).toHaveBeenCalledWith('llm_model_decision', 'gpt-4o')
+    expect(savedKeys()).not.toContain('llm_api_key_decision')
+  })
+
+  it('treats the decision model key as a secret', () => {
+    expect(SENSITIVE_KEYS.has('llm_api_key_decision')).toBe(true)
+  })
+
+  it('shows the decision mode section on the LLM tab', async () => {
+    render(<ConfigPanel />)
+
+    fireEvent.click(await screen.findByText('config.tabLLM'))
+
+    expect(await screen.findByText('config.decisionSection')).toBeInTheDocument()
   })
 
   it('saves document list refresh mode immediately when changed', async () => {

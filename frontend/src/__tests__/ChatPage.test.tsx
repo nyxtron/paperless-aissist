@@ -25,7 +25,8 @@ vi.mock('../api/client', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, params?: { tag?: string; fields?: string }) =>
+      params?.fields ? `${key} ${params.tag}: ${params.fields}` : key,
   }),
 }))
 
@@ -199,6 +200,101 @@ describe('ChatPage', () => {
     fireEvent.click(await screen.findByText('chat.preview'))
 
     expect(await screen.findAllByText('processing.promptCut')).toHaveLength(1)
+  })
+
+  describe('decisions in the preview', () => {
+    const openPreview = async (data: Record<string, unknown>) => {
+      Element.prototype.scrollIntoView = vi.fn()
+      mocks.mockGetChatDocument.mockResolvedValue({ data: { id: 1, title: 'Invoice 2024' } })
+      mocks.mockGetPreview.mockResolvedValue({
+        data: { success: true, document_id: 1, steps: [], proposed_changes: {}, ...data },
+      })
+      render(<ChatPage />)
+      fireEvent.click(await screen.findByText('Invoice 2024'))
+      fireEvent.click(await screen.findByText('chat.preview'))
+      await screen.findByText('chat.previewSuccess')
+    }
+
+    const review = (extra: Record<string, unknown> = {}) => ({
+      tag: { id: 3, name: 'ai-review' },
+      add_fields: [],
+      remove: false,
+      missing: false,
+      ...extra,
+    })
+
+    it('notes how a field was decided and unfolds the full request', async () => {
+      await openPreview({
+        steps: [
+          {
+            name: 'correspondent',
+            status: 'completed',
+            duration_ms: 5,
+            details: {
+              decision: {
+                method: 'ollama_letters',
+                provider: 'ollama',
+                model: 'qwen2.5:7b',
+                outcome: 'applied',
+                reason: null,
+                choice: 'Telekom',
+                probability: 0.99,
+                threshold: 0.9,
+                top: [],
+                requests: 1,
+                mass: 1,
+                fallback_reason: null,
+                fallback_detail: null,
+                request: {
+                  text_chars: 20,
+                  text_sha256: 'a',
+                  rendered: '[user] <document text, 20 chars>',
+                  full: '[user] Rechnung der Telekom',
+                },
+              },
+            },
+          },
+        ],
+      })
+
+      expect(screen.getByText('decision.note.decided')).toBeInTheDocument()
+      expect(screen.queryByText('[user] Rechnung der Telekom')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('decision.note.showRequest'))
+
+      expect(screen.getByText('[user] Rechnung der Telekom')).toBeInTheDocument()
+    })
+
+    it('says which fields would get the review tag', async () => {
+      await openPreview({
+        proposed_changes: { review: review({ add_fields: ['correspondent', 'document_type'] }) },
+      })
+
+      expect(
+        screen.getByText(
+          'chat.reviewAdd ai-review: decision.field.correspondent, decision.field.document_type',
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('chat.reviewRemove')).not.toBeInTheDocument()
+      expect(screen.queryByText('chat.reviewMissing')).not.toBeInTheDocument()
+    })
+
+    it('warns that the review tag does not exist', async () => {
+      await openPreview({
+        proposed_changes: {
+          review: review({ tag: { id: null, name: 'ai-review' }, missing: true }),
+        },
+      })
+
+      expect(screen.getByText('chat.reviewMissing')).toBeInTheDocument()
+    })
+
+    it('says the review tag would come off', async () => {
+      await openPreview({ proposed_changes: { review: review({ remove: true }) } })
+
+      expect(screen.getByText('chat.reviewRemove')).toBeInTheDocument()
+      expect(screen.queryByText(/chat\.reviewAdd/)).not.toBeInTheDocument()
+    })
   })
 })
 

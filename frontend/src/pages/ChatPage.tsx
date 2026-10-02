@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { configApi, documentsApi } from '../api/client'
 import { extractApiError } from '../api/errorUtils'
 import type { ChatDocument, ChatMessage, ProcessingPreview } from '../api/types'
+import { DecisionNote } from '../components/DecisionNote'
 import { PromptCutNote } from '../components/PromptCutNote'
 import {
   getCachedDocumentList,
@@ -395,6 +396,9 @@ export default function ChatPage() {
                         <span className="text-gray-500 dark:text-gray-400">{step.status}</span>
                       </div>
                       {step.details?.prompt_cut && <PromptCutNote cut={step.details.prompt_cut} />}
+                      {step.details?.decision && (
+                        <DecisionNote decision={step.details.decision} showRequest />
+                      )}
                     </div>
                   ))}
                   {previewResult.proposed_changes &&
@@ -430,6 +434,31 @@ export default function ChatPage() {
                             {previewResult.proposed_changes.custom_fields
                               .map((f) => `${f.field}: ${f.value}`)
                               .join(', ')}
+                          </p>
+                        )}
+                        {previewResult.proposed_changes.review?.missing && (
+                          <p className="text-sm text-amber-700 dark:text-amber-300">
+                            {t('chat.reviewMissing', {
+                              tag: previewResult.proposed_changes.review.tag.name,
+                            })}
+                          </p>
+                        )}
+                        {previewResult.proposed_changes.review &&
+                          previewResult.proposed_changes.review.add_fields.length > 0 && (
+                            <p className="text-sm text-amber-700 dark:text-amber-300">
+                              {t('chat.reviewAdd', {
+                                tag: previewResult.proposed_changes.review.tag.name,
+                                fields: previewResult.proposed_changes.review.add_fields
+                                  .map((field) => t(`decision.field.${field}`))
+                                  .join(', '),
+                              })}
+                            </p>
+                          )}
+                        {previewResult.proposed_changes.review?.remove && (
+                          <p className="text-sm dark:text-gray-300">
+                            {t('chat.reviewRemove', {
+                              tag: previewResult.proposed_changes.review.tag.name,
+                            })}
                           </p>
                         )}
                       </div>

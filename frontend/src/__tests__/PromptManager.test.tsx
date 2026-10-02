@@ -54,6 +54,10 @@ i18n.use(initReactI18next).init({
           update: 'Update',
           create: 'Create',
           cancel: 'Cancel',
+          decisionHelp: 'Decision help',
+          nimbleTitle: 'Nimble format',
+          nimbleHelp: 'Nimble help',
+          warnMissingPlaceholders: 'Saved, but the template is missing {{missing}}',
         },
         common: {
           loading: 'Loading...',
@@ -66,10 +70,15 @@ i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 })
 
-const { mockGet, mockPost, mockPut } = vi.hoisted(() => ({
+const { mockGet, mockPost, mockPut, mockToastWarning } = vi.hoisted(() => ({
   mockGet: vi.fn(),
   mockPost: vi.fn(),
   mockPut: vi.fn(),
+  mockToastWarning: vi.fn(),
+}))
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), warning: mockToastWarning },
 }))
 
 vi.mock('../api/client', () => ({
@@ -146,6 +155,24 @@ const mockConfig: Record<string, string> = {
   modular_tag_ocr: 'custom-ocr-tag',
 }
 
+const decisionType = {
+  value: 'decision_correspondent',
+  description: 'Decision: correspondent (letters)',
+  variables: [
+    { name: '{content}', description: 'c' },
+    { name: '{question}', description: 'q' },
+    { name: '{options}', description: 'o' },
+  ],
+}
+const templatesWithDecision = { ...mockTemplates, types: [...mockTemplates.types, decisionType] }
+
+function loadWith(templates = templatesWithDecision) {
+  mockGet
+    .mockResolvedValueOnce(createMockResponse(mockPrompts))
+    .mockResolvedValueOnce(createMockResponse(templates))
+    .mockResolvedValueOnce(createMockResponse(mockConfig))
+}
+
 describe('getTriggerTag', () => {
   it('returns config value for known prompt type', () => {
     const result = getTriggerTag('title', { modular_tag_title: 'custom-title-tag' })
@@ -181,6 +208,11 @@ describe('getTriggerTag', () => {
       'detect-document-date',
     )
   })
+
+  it('shows the trigger tag for the decision types', () => {
+    expect(getTriggerTag('decision_correspondent', {})).toBe('ai-correspondent')
+    expect(getTriggerTag('decision_document_type', { modular_tag_document_type: 'typ' })).toBe('typ')
+  })
 })
 
 describe('PromptManager Component', () => {
@@ -188,6 +220,7 @@ describe('PromptManager Component', () => {
     mockGet.mockReset()
     mockPost.mockReset()
     mockPut.mockReset()
+    mockToastWarning.mockReset()
   })
 
   it('renders prompt list after loading', async () => {
@@ -418,5 +451,47 @@ describe('PromptManager Component', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /add prompt/i })).toBeInTheDocument()
     })
+  })
+
+  it('offers only the decision placeholders for a decision prompt', async () => {
+    loadWith()
+    render(<PromptManager />)
+    await userEvent.click(await screen.findByText('Add Prompt'))
+    await userEvent.selectOptions(screen.getByLabelText('Type'), 'decision_correspondent')
+    expect(screen.getAllByText('{options}').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('{content}').length).toBeGreaterThan(0)
+    expect(screen.queryByText('{{text}}')).not.toBeInTheDocument()
+    expect(screen.getByText('Decision help')).toBeInTheDocument()
+  })
+
+  it('toasts the missing placeholders after a save', async () => {
+    loadWith()
+    mockPost.mockResolvedValueOnce(
+      createMockResponse({
+        id: 9,
+        name: 'x',
+        message: 'ok',
+        warning: { code: 'missing_placeholders', missing: ['{options}'] },
+      }),
+    )
+    loadWith() // the list reloads after the save
+    render(<PromptManager />)
+    await userEvent.click(await screen.findByText('Add Prompt'))
+    await userEvent.type(screen.getByLabelText('Name'), 'x')
+    await userEvent.selectOptions(screen.getByLabelText('Type'), 'decision_correspondent')
+    await userEvent.type(screen.getByLabelText('System Prompt'), 'Pick one.')
+    await userEvent.type(screen.getByLabelText('User Template'), '{{content} {{question}')
+    await userEvent.click(screen.getByText('Create'))
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalledWith('Saved, but the template is missing {options}')
+    })
+  })
+
+  it('shows the Nimble format read-only', async () => {
+    loadWith()
+    render(<PromptManager />)
+    expect(await screen.findByText('Nimble format')).toBeInTheDocument()
+    expect(screen.getByText(/Requested field/)).toBeInTheDocument()
+    expect(screen.getByText('Nimble help')).toBeInTheDocument()
   })
 })

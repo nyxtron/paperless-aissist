@@ -56,7 +56,8 @@
     "noLogsForFilter": "No log entries for this filter.",
     "confirmReset": "Are you sure you want to delete all processing logs? This cannot be undone.",
     "resetFailed": "Failed to reset stats",
-    "promptCut": "Prompt cut in: {{steps}}. Raise the context window."
+    "promptCut": "Prompt cut in: {{steps}}. Raise the context window.",
+    "decision": "Decisions: {{summary}}"
   },
   "config": {
     "title": "Configuration",
@@ -108,6 +109,39 @@
     "visionPdfModeImages": "Page images",
     "visionPdfModeHelp": "Use page images for local OpenAI-compatible runtimes. Native PDF is only reliable with the official OpenAI API.",
     "visionSectionDisabledHint": "Vision OCR is disabled, but you can preconfigure provider and model here.",
+    "decisionSection": "Decision mode",
+    "decisionSectionHint": "Picks the correspondent and document type from your Paperless lists and states how sure the model is. Below the threshold the field stays unchanged and the document gets the review tag. Needs a provider that returns token probabilities; otherwise the text prompt is used.",
+    "decisionCorrespondent": "Decide the correspondent",
+    "decisionDocumentType": "Decide the document type",
+    "decisionThreshold": "Threshold ({{field}})",
+    "decisionThresholdHint": "0.50 to 1.00. Below this probability the field is left for review.",
+    "decisionQuestion": "Question ({{field}})",
+    "decisionFormat": "Format",
+    "decisionFormatAuto": "Auto",
+    "decisionFormatLetters": "Letters",
+    "decisionFormatNimble": "Nimble",
+    "decisionFormatSystemOne": "SystemOne",
+    "decisionFormatHint": "Auto picks Nimble when the model name contains nimble, else Letters. Letters works on Ollama, OpenAI-compatible servers and OpenRouter; Nimble and SystemOne need Ollama, SystemOne through its /v1/systemone route.",
+    "decisionFormatUnusable": "This provider cannot run this format, so the text prompt is used instead. Grok cannot run decision mode at all.",
+    "decisionModelSection": "Decision model",
+    "decisionModelHint": "Own connection: provider, URL, key and model are not taken from the main LLM. Timeout and context window use the main values when empty.",
+    "decisionInherited": "Uses the provider, URL and key of the main LLM. A model name here decides with another model on the same server; empty uses the main model.",
+    "decisionInheritedOption": "Same as main model",
+    "decisionUrlRequired": "An own provider needs a URL; without one the text prompt is used.",
+    "decisionModelRequired": "An own provider needs a model; without one the text prompt is used.",
+    "decisionRemoveKey": "Remove stored key",
+    "decisionKeyRemoved": "Decision model key removed",
+    "decisionContextWindow": "Context window (Ollama letters and Nimble; ignored on SystemOne)",
+    "reviewTag": "Review tag",
+    "reviewTagHint": "Added to documents with a field left for review and removed once a later run decides every field that has decision mode on. Must exist in Paperless.",
+    "reviewTagMissing": "Tag {{tag}} does not exist in Paperless. Runs with a decision toggle on stop until it exists.",
+    "reviewTagPresent": "Tag {{tag}} exists in Paperless.",
+    "reviewTagUnknown": "Could not check the review tag, Paperless did not answer",
+    "decisionTest": "Test decision model",
+    "decisionTesting": "Testing…",
+    "decisionTestOk": "{{method}} on {{model}}: {{choice}} ({{p}})",
+    "decisionTestFallback": "Falls back to the text prompt: {{reason}}",
+    "decisionTestFailed": "Test failed: {{message}}",
     "schedulerSection": "Auto-Processing Scheduler",
     "schedulerRunning": "Running",
     "schedulerStopped": "Stopped",
@@ -266,6 +300,10 @@
     "confirmLoadPromptSample": "Replace this prompt with the bundled sample?",
     "samplesLoaded": "Loaded: {{created}} created, {{updated}} updated",
     "loadPromptSample": "Load sample prompt",
+    "decisionHelp": "The letter block is built by AIssist: one line per option, A: name, the last line is \"None of these\". Keep {content} first so Ollama's prompt cache can reuse it.",
+    "nimbleTitle": "Nimble format",
+    "nimbleHelp": "Nimble was trained on this format, so it cannot be edited here. The system prompt and chat template come from the model in Ollama.",
+    "warnMissingPlaceholders": "Saved, but the template is missing {{missing}}",
     "sampleStatus": {
       "custom": "Custom",
       "sample_current": "Sample current",
@@ -303,6 +341,8 @@
     "updateTags": "Tags:",
     "updateCustomFields": "Custom Fields:",
     "updateContent": "Content:",
+    "reviewTagAdded": "Review tag {{tag}} added for: {{fields}}",
+    "reviewTagRemoved": "Review tag {{tag}} removed",
     "noDocuments": "No documents to process",
     "noDocumentsHint": "Tag documents with your process tag in Paperless to fill the queue.",
     "manualRefreshTitle": "Document list not loaded",
@@ -329,6 +369,7 @@
     "stopRequested": "Stopping once the documents in flight are done. The scheduler keeps its interval.",
     "stopFailed": "Could not ask the run to stop",
     "runStoppedByHand": "Stopped on request; the documents in flight were finished.",
+    "runStoppedReviewTag": "Stopped: {{reason}}. Create the review tag in Paperless or turn decision mode off.",
     "pageOfPages": "page {{page}} of {{pages}}",
     "promptCut": "Prompt cut: Ollama read only {{evaluated}} tokens of a {{window}}-token window, so the instructions and lists were dropped. Raise the context window.",
     "promptCutNoWindow": "Prompt cut: Ollama read only {{evaluated}} tokens, so the instructions and lists were dropped. Raise the context window."
@@ -374,6 +415,58 @@
     "previewing": "Previewing...",
     "previewHint": "Simulate AI processing without modifying Paperless",
     "previewSuccess": "Preview generated successfully",
-    "proposedChanges": "Proposed Changes"
+    "proposedChanges": "Proposed Changes",
+    "reviewAdd": "Would add review tag {{tag}} for: {{fields}}",
+    "reviewRemove": "Would remove review tag {{tag}}",
+    "reviewMissing": "Review tag {{tag}} does not exist in Paperless"
+  },
+  "decision": {
+    "outcome": {
+      "applied": "applied",
+      "created": "created",
+      "would_create": "would create",
+      "review": "left for review",
+      "fallback": "text prompt used"
+    },
+    "reason": {
+      "below_threshold": "not sure enough",
+      "low_mass": "the model barely answered with a letter",
+      "final_none": "the final round rejected every candidate",
+      "creation_off": "unknown sender and creating correspondents is off",
+      "none_of_these": "none of the existing types fits",
+      "named_existing": "the text model named an existing correspondent",
+      "no_name_prompt": "no active correspondent prompt to name the sender",
+      "no_name": "the text model gave no usable name",
+      "untrusted_response": "the name did not come as JSON",
+      "claimed_existing_no_match": "the text model called the name existing but nothing matched",
+      "implausible_name": "the name does not look like a sender",
+      "create_failed": "Paperless refused to create the correspondent"
+    },
+    "fallback": {
+      "no_logprobs": "the provider returned no token probabilities",
+      "unsupported_parameter": "the provider rejected a parameter the decision needs",
+      "route_missing": "this Ollama has no /v1/systemone",
+      "format_unsupported": "the chosen format does not work with this provider or model",
+      "provider_unsupported": "this provider gives no token probabilities",
+      "url_missing": "decision URL missing",
+      "model_missing": "decision model missing",
+      "prompt_inactive": "the decision prompt is off or missing",
+      "empty_list": "the list in Paperless is empty",
+      "no_letters": "the model did not answer with a letter",
+      "context_exceeded": "the document does not fit the model's context"
+    },
+    "field": {
+      "correspondent": "Correspondent",
+      "document_type": "Document type"
+    },
+    "note": {
+      "decided": "Decided: {{choice}} ({{p}} ≥ {{threshold}}) · {{model}}",
+      "review": "Left for review: {{reason}} · best guess {{choice}} ({{p}} < {{threshold}})",
+      "reviewNone": "Left for review: {{reason}}",
+      "fallback": "Decision mode not available: {{reason}}; the text prompt was used",
+      "wouldCreate": "Would create correspondent {{name}}",
+      "showRequest": "Show request",
+      "hideRequest": "Hide request"
+    }
   }
 }

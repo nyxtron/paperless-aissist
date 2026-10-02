@@ -26,8 +26,9 @@ vi.mock('../api/client', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, params?: { id?: number; steps?: string }) => {
+    t: (key: string, params?: { id?: number; steps?: string; summary?: string }) => {
       if (params?.steps) return `${key} ${params.steps}`
+      if (params?.summary) return `${key} ${params.summary}`
       return params?.id ? `${key} ${params.id}` : key
     },
   }),
@@ -54,6 +55,23 @@ vi.mock('recharts', () => ({
 }))
 
 describe('Dashboard', () => {
+  const logWithSteps = (steps: unknown[]) => ({
+    data: [
+      {
+        id: 11,
+        document_id: 90,
+        document_title: 'Telekom Rechnung',
+        status: 'success',
+        llm_provider: 'ollama',
+        llm_model: 'qwen2.5:7b',
+        llm_response: JSON.stringify({ steps }),
+        error_message: null,
+        processing_time_ms: 1200,
+        processed_at: '2026-10-01T10:00:00Z',
+      },
+    ],
+  })
+
   beforeEach(() => {
     mocks.mockGetStats.mockResolvedValue({
       data: {
@@ -129,6 +147,43 @@ describe('Dashboard', () => {
 
     await screen.findByText('Recent Invoice')
     expect(screen.queryByText(/dashboard\.promptCut/)).not.toBeInTheDocument()
+  })
+
+  it('sums up how sure each decided field was', async () => {
+    mocks.mockGetRecent.mockResolvedValue(
+      logWithSteps([
+        { name: 'title' },
+        { name: 'correspondent', details: { decision: { outcome: 'review', probability: 0.72 } } },
+        { name: 'document_type', details: { decision: { outcome: 'applied', probability: 0.98 } } },
+      ]),
+    )
+    render(<Dashboard />)
+
+    expect(
+      await screen.findByText(
+        'dashboard.decision correspondent: decision.outcome.review 72% · document_type: 98%',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('shows a dash for a field the text prompt decided', async () => {
+    mocks.mockGetRecent.mockResolvedValue(
+      logWithSteps([
+        { name: 'correspondent', details: { decision: { outcome: 'fallback', probability: null } } },
+      ]),
+    )
+    render(<Dashboard />)
+
+    expect(
+      await screen.findByText('dashboard.decision correspondent: decision.outcome.fallback –'),
+    ).toBeInTheDocument()
+  })
+
+  it('says nothing about decisions when no field was decided', async () => {
+    render(<Dashboard />)
+
+    await screen.findByText('Recent Invoice')
+    expect(screen.queryByText(/dashboard\.decision/)).not.toBeInTheDocument()
   })
 
   it('renders recent processing log document links with visible IDs', async () => {

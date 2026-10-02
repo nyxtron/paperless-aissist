@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { promptsApi, configApi } from '../api/client'
 import { Plus, Pencil, Trash2, X, RefreshCw } from 'lucide-react'
 import { MODULAR_TAG_DEFAULTS } from '../constants'
@@ -22,7 +23,14 @@ const PROMPT_TYPE_TO_CONFIG_KEY: Record<string, string | undefined> = {
   ocr_fix: 'modular_tag_ocr_fix',
   date: 'modular_tag_date',
   classify: 'modular_tag_process',
+  decision_correspondent: 'modular_tag_correspondent',
+  decision_document_type: 'modular_tag_document_type',
 }
+
+const NIMBLE_FORMAT = `{"context": <document text>, "schema": [{"name": "field", "description": <question>,
+  "choices": [{"code": "A", "value": <option>, "description": <option>}, ..., {"code": ..., "value": "None of these", "description": "The right answer is not in this list."}]}]}
+
+Requested field: "field"`
 
 export function getTriggerTag(promptType: string, config: Record<string, string>): string | null {
   const configKey = PROMPT_TYPE_TO_CONFIG_KEY[promptType]
@@ -42,9 +50,14 @@ interface Prompt {
   sample_status?: SampleStatus
 }
 
+interface TemplateVariable {
+  name: string
+  description: string
+}
+
 interface TemplateInfo {
-  variables: { name: string; description: string }[]
-  types: { value: string; description: string }[]
+  variables: TemplateVariable[]
+  types: { value: string; description: string; variables?: TemplateVariable[] }[]
 }
 
 export default function PromptManager() {
@@ -65,6 +78,9 @@ export default function PromptManager() {
     is_active: true,
   })
   const userTemplateRequired = formData.prompt_type !== 'vision_ocr'
+  const selectedType = templates?.types.find((type) => type.value === formData.prompt_type)
+  const variables = selectedType?.variables ?? templates?.variables ?? []
+  const isDecisionType = formData.prompt_type.startsWith('decision_')
   const editingPromptWithStatus = editingPrompt
     ? prompts.find((prompt) => prompt.id === editingPrompt.id) || editingPrompt
     : null
@@ -93,11 +109,11 @@ export default function PromptManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingPrompt) {
-        await promptsApi.update(editingPrompt.id, formData)
-      } else {
-        await promptsApi.create(formData)
-      }
+      const res = editingPrompt
+        ? await promptsApi.update(editingPrompt.id, formData)
+        : await promptsApi.create(formData)
+      const warning = (res.data as { warning?: { missing: string[] } }).warning
+      if (warning) toast.warning(t('prompts.warnMissingPlaceholders', { missing: warning.missing.join(', ') }))
       setShowModal(false)
       setEditingPrompt(null)
       resetForm()
@@ -322,6 +338,12 @@ export default function PromptManager() {
         </table>
       </div>
 
+      <div className="bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('prompts.nimbleTitle')}</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('prompts.nimbleHelp')}</p>
+        <pre className="mt-2 text-xs whitespace-pre-wrap text-gray-700 dark:text-gray-200">{NIMBLE_FORMAT}</pre>
+      </div>
+
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
@@ -339,10 +361,11 @@ export default function PromptManager() {
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  <label htmlFor="prompt-name" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     {t('prompts.labelName')}
                   </label>
                   <input
+                    id="prompt-name"
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -351,10 +374,11 @@ export default function PromptManager() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  <label htmlFor="prompt-type" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     {t('prompts.labelType')}
                   </label>
                   <select
+                    id="prompt-type"
                     value={formData.prompt_type}
                     onChange={(e) => setFormData({ ...formData, prompt_type: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100"
@@ -386,12 +410,12 @@ export default function PromptManager() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                <label htmlFor="prompt-system" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   {t('prompts.labelSystemPrompt')}
                 </label>
                 {templates && (
                   <div className="flex gap-2 mb-2 flex-wrap">
-                    {templates.variables.map((v) => (
+                    {variables.map((v) => (
                       <button
                         key={v.name}
                         type="button"
@@ -404,6 +428,7 @@ export default function PromptManager() {
                   </div>
                 )}
                 <textarea
+                  id="prompt-system"
                   value={formData.system_prompt}
                   onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
                   required
@@ -413,12 +438,15 @@ export default function PromptManager() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                <label htmlFor="prompt-user-template" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   {t('prompts.labelUserTemplate')}
                 </label>
+                {isDecisionType && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('prompts.decisionHelp')}</p>
+                )}
                 {templates && (
                   <div className="flex gap-2 mb-2 flex-wrap">
-                    {templates.variables.map((v) => (
+                    {variables.map((v) => (
                       <button
                         key={v.name}
                         type="button"
@@ -431,6 +459,7 @@ export default function PromptManager() {
                   </div>
                 )}
                 <textarea
+                  id="prompt-user-template"
                   value={formData.user_template}
                   onChange={(e) => setFormData({ ...formData, user_template: e.target.value })}
                   required={userTemplateRequired}
