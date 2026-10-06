@@ -39,6 +39,8 @@ DEFAULT_QUESTIONS = {
 MIN_LETTER_MASS = 0.5
 # A provider that cannot do this is not asked again right away.
 UNSUPPORTED_RECHECK_SECONDS = 600
+# Nor is Ollama, when it did not say what a model can do.
+CAPABILITIES_RETRY_SECONDS = 60
 
 
 def chunks(seq: Sequence, per_chunk: int) -> list[list]:
@@ -81,11 +83,18 @@ class DecisionService:
         adapter_cls: Optional[type[Adapter]],
         fallback_reason: Optional[str],
         prompt_loader: Optional[PromptLoader],
+        *,
+        ask_capabilities: bool = False,
     ):
         self._handler = handler
         self._adapter_cls = adapter_cls
         self._fallback_reason = fallback_reason
         self._prompt_loader = prompt_loader
+        # Under auto an Ollama model is asked once what it can do, when the
+        # first document needs it; until Ollama answers, it is asked again
+        # every minute.
+        self._ask_capabilities = ask_capabilities
+        self._capabilities_retry_at: Optional[float] = None
         self._unsupported_until: Optional[float] = None
         self._unsupported: tuple[Optional[str], Optional[str]] = (None, None)
         self._adapter_calls: list[Adapter] = []
@@ -93,7 +102,7 @@ class DecisionService:
     @classmethod
     async def from_config(cls) -> "DecisionService":
         """Build the service from the settings; empty fields mean the main LLM."""
-        from .adapters import pick_adapter
+        from .adapters import OllamaLettersAdapter, pick_adapter
 
         own_provider = await _config("llm_provider_decision")
         fmt = await _config("decision_format") or "auto"
@@ -104,7 +113,10 @@ class DecisionService:
         elif not handler.model:
             fallback = "model_missing"
         adapter_cls, reason = pick_adapter(handler.provider, handler.model, fmt)
-        return cls(handler, adapter_cls, fallback or reason, _load_decision_prompt)
+        # Only a model name tells Nimble apart; a decision model like clef-flash
+        # is known by what Ollama says it can do.
+        ask = fmt == "auto" and adapter_cls is OllamaLettersAdapter and not fallback
+        return cls(handler, adapter_cls, fallback or reason, _load_decision_prompt, ask_capabilities=ask)
 
     @property
     def provider(self) -> str:
@@ -146,9 +158,29 @@ class DecisionService:
     def forget_unsupported(self) -> None:
         self._unsupported_until = None
 
+    async def _settle_route(self) -> None:
+        """Under auto, send an Ollama decision model to /v1/systemone."""
+        if not self._ask_capabilities:
+            return
+        if self._capabilities_retry_at is not None and time.monotonic() < self._capabilities_retry_at:
+            return
+        from .adapters import pick_adapter
+
+        capabilities = await self._handler.ollama_capabilities()
+        if capabilities is None:
+            self._capabilities_retry_at = time.monotonic() + CAPABILITIES_RETRY_SECONDS
+            return
+        self._ask_capabilities = False
+        adapter_cls, _ = pick_adapter(self.provider, self.model, "auto", capabilities)
+        if adapter_cls is not self._adapter_cls:
+            self._adapter_cls = adapter_cls
+            # A refusal remembered from the letters route says nothing about this one.
+            self.forget_unsupported()
+
     async def probe(self) -> Decision:
         """The settings page's test: a fresh two-option question."""
         self.forget_unsupported()
+        self._capabilities_retry_at = None
         question = (await _config("decision_question_correspondent") or "").strip() or DEFAULT_QUESTIONS["correspondent"]
         return await self.decide(PROBE_TEXT, "correspondent", PROBE_OPTIONS, question=question, threshold=0.9)
 
@@ -165,6 +197,7 @@ class DecisionService:
         """Pick one of options for the document text, or say why not."""
         if self._fallback_reason:
             return self._fallback(self._fallback_reason, None)
+        await self._settle_route()
         remembered = self._remembered_unsupported()
         if remembered:
             return self._fallback(*remembered)
@@ -201,8 +234,10 @@ class DecisionService:
             return r.mass is not None and r.mass < MIN_LETTER_MASS
 
         def finish(index, choice, p, r: RoundResult, review=None) -> Decision:
+            # The adapter that answered: under auto the route can change while
+            # another document's decision is still running.
             return Decision(
-                self.method, self.provider, self.model, index=index, choice=choice,
+                adapter.method, self.provider, self.model, index=index, choice=choice,
                 probability=p, mass=r.mass, top=self._top(r, r_names[id(r)]),
                 requests=adapter.requests, review_reason=review, rendered=r.rendered,
                 full=r.full if preview else None, **digest,
@@ -267,8 +302,10 @@ class DecisionService:
             p = min(p_prev, r.probs[top_local])
             return finish(idx, labels[idx], p, r, "low_mass" if (low_prev or low(r)) else None)
         except DecisionUnsupported as e:
-            self._unsupported = (e.reason, e.detail)
-            self._unsupported_until = time.monotonic() + UNSUPPORTED_RECHECK_SECONDS
+            # A refusal from a route auto has left since says nothing about the current one.
+            if type(adapter) is self._adapter_cls:
+                self._unsupported = (e.reason, e.detail)
+                self._unsupported_until = time.monotonic() + UNSUPPORTED_RECHECK_SECONDS
             return self._fallback(e.reason, e.detail, adapter.requests, adapter.method, digest=digest)
         except DecisionSkipped as e:
             return self._fallback(e.reason, e.detail, adapter.requests, adapter.method, digest=digest)

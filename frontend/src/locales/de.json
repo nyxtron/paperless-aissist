@@ -121,7 +121,7 @@
     "decisionFormatLetters": "Letters",
     "decisionFormatNimble": "Nimble",
     "decisionFormatSystemOne": "SystemOne",
-    "decisionFormatHint": "Automatisch wählt Nimble, wenn der Modellname nimble enthält, sonst Letters. Letters funktioniert mit Ollama, OpenAI-kompatiblen Servern und OpenRouter; Nimble und SystemOne brauchen Ollama, SystemOne über dessen Route /v1/systemone.",
+    "decisionFormatHint": "Automatisch wählt Nimble, wenn der Modellname nimble enthält, SystemOne für andere Entscheidungsmodelle in Ollama wie clef-flash, sonst Letters. Letters funktioniert mit Ollama, OpenAI-kompatiblen Servern und OpenRouter; Nimble und SystemOne brauchen Ollama, SystemOne über dessen Route /v1/systemone.",
     "decisionFormatUnusable": "Dieser Anbieter kann dieses Format nicht ausführen, daher wird der Text-Prompt verwendet. Grok kann den Entscheidungsmodus gar nicht ausführen.",
     "decisionModelSection": "Entscheidungsmodell",
     "decisionModelHint": "Eigene Verbindung: Anbieter, URL, Schlüssel und Modell kommen nicht vom Haupt-LLM. Leere Felder für Timeout und Kontextfenster übernehmen die Werte des Haupt-LLM.",

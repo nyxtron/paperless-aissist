@@ -139,6 +139,9 @@ def classify_http_error(error: LLMHttpError, *, systemone: bool = True) -> Optio
         return "context_exceeded", False
     if status == 400 and "not supported by system one" in body:
         return "format_unsupported", True
+    # A decision model such as clef-flash only answers on /v1/systemone.
+    if status == 400 and ("does not support chat" in body or "does not support generate" in body):
+        return "format_unsupported", True
     if status == 404 and "no endpoints found" in body:
         return "no_logprobs", True
     # Ollama's own "model not found" is a JSON 404; only a missing route is plain text.
@@ -328,16 +331,20 @@ class OllamaSystemOneAdapter(Adapter):
 
 
 def pick_adapter(
-    provider: str, model: str, fmt: str
+    provider: str, model: str, fmt: str, capabilities: Optional[list[str]] = None
 ) -> tuple[Optional[type[Adapter]], Optional[str]]:
-    """The adapter for a provider and format, or why there is none."""
+    """The adapter for a provider and format, or why there is none.
+
+    capabilities is what Ollama's /api/show says the model can do; under auto
+    a decision model goes to its own route.
+    """
     fmt = fmt or "auto"
     if provider == "grok":
         return None, ("provider_unsupported" if fmt in ("auto", "letters") else "format_unsupported")
     if provider == "ollama":
         if fmt == "nimble" or (fmt == "auto" and "nimble" in (model or "").lower()):
             return OllamaNimbleAdapter, None
-        if fmt == "systemone":
+        if fmt == "systemone" or (fmt == "auto" and "decision" in (capabilities or ())):
             return OllamaSystemOneAdapter, None
         return OllamaLettersAdapter, None
     if fmt in ("nimble", "systemone"):
