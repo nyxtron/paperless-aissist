@@ -12,7 +12,7 @@ import time
 import logging
 import httpx
 from typing import Optional
-from fastapi import HTTPException, Depends, Query
+from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .database import get_async_session, get_session
 from .models import Config
@@ -157,29 +157,6 @@ async def require_auth(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Authentication required")
     return await _verify_token_against_paperless(credentials.credentials)
-
-
-async def require_auth_or_query(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
-    token: Optional[str] = Query(None, alias="token"),
-) -> dict:
-    """FastAPI dependency that enforces authentication via header or query param.
-
-    Query-param tokens may appear in server logs and browser history.
-    Use header-based auth (Bearer token) when possible.
-    Query-param auth is intended as a fallback for clients that cannot
-    send custom headers (e.g., native EventSource).
-    """
-    if not _is_auth_enabled():
-        return {}
-    auth_token = None
-    if credentials and credentials.scheme.lower() == "bearer":
-        auth_token = credentials.credentials
-    elif token:
-        auth_token = token
-    if not auth_token:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return await _verify_token_against_paperless(auth_token)
 
 
 async def require_automation_auth(

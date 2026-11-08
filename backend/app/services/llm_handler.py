@@ -739,6 +739,22 @@ class LLMHandler:
         self._server_window = window
         return window
 
+    async def ollama_capabilities(self) -> Optional[list[str]]:
+        """What Ollama says this model can do (/api/show), or None when it did not say."""
+        # Counted like a request, so a settings save does not close the client under it.
+        self._in_flight += 1
+        try:
+            response = await self.client.post(
+                "/api/show", json={"model": self.model}, timeout=_WINDOW_LOOKUP_TIMEOUT
+            )
+            response.raise_for_status()
+            return [str(c) for c in response.json().get("capabilities") or []]
+        except Exception as e:
+            logger.debug("Could not read what %s can do from Ollama: %s", self.model, e)
+            return None
+        finally:
+            await self._after_request()
+
     async def _openai_complete(
         self,
         system_prompt: str,

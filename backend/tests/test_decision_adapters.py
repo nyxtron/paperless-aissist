@@ -290,6 +290,10 @@ class TestClassify:
         assert classify_http_error(e(413, "request body must not exceed 64 KiB")) == ("context_exceeded", False)
         assert classify_http_error(e(401, "Incorrect API key")) is None
         assert classify_http_error(e(404, '{"error":"model \\"x\\" not found"}')) is None
+        # A decision model such as clef-flash answers only on /v1/systemone.
+        refused = '{"error":"\\"clef-flash:9b-q8_0\\" does not support chat"}'
+        assert classify_http_error(e(400, refused), systemone=False) == ("format_unsupported", True)
+        assert classify_http_error(e(400, '{"error":"\\"x\\" does not support generate"}')) == ("format_unsupported", True)
 
 
 class TestPickAdapter:
@@ -310,3 +314,11 @@ class TestPickAdapter:
         assert pick_adapter("openrouter", "x", "letters") == (OpenAILettersAdapter, None)
         assert pick_adapter("openrouter", "x", "systemone") == (None, "format_unsupported")
         assert pick_adapter("openai", "x", "systemone") == (None, "format_unsupported")
+
+    def test_auto_sends_an_ollama_decision_model_to_its_route(self):
+        assert pick_adapter("ollama", "clef-flash:9b-q8_0", "auto", ["decision", "vision"]) == (OllamaSystemOneAdapter, None)
+        assert pick_adapter("ollama", "qwen2.5:7b", "auto", ["completion", "tools"]) == (OllamaLettersAdapter, None)
+        # Nimble keeps its own format, and a format chosen by hand wins.
+        assert pick_adapter("ollama", "nimble", "auto", ["decision"]) == (OllamaNimbleAdapter, None)
+        assert pick_adapter("ollama", "clef-flash", "letters", ["decision"]) == (OllamaLettersAdapter, None)
+        assert pick_adapter("openai", "clef-flash", "auto", ["decision"]) == (OpenAILettersAdapter, None)

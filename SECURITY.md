@@ -50,4 +50,7 @@ and modify your documents. Treat it as trusted infrastructure:
    stored only as a hash; anyone holding it can trigger processing.
 4. **Protect the data volume.** `/app/data` holds the configuration database
    including your Paperless token.
-5. **Update regularly.** Fixes ship in the latest release only.
+5. **Keep cross-origin access closed.** Browsers on other origins cannot read the
+   API unless you list them in `CORS_ALLOW_ORIGINS`. Avoid `*`, especially without
+   the login: it lets any website you visit read this API from your browser.
+6. **Update regularly.** Fixes ship in the latest release only.
