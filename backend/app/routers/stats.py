@@ -1,8 +1,8 @@
 """Processing statistics and SSE log streaming endpoints.
 
 WARNING: Auth is declared per-endpoint in this file (not router-level).
-Every new endpoint MUST include an explicit `Depends(require_auth)` or
-`Depends(require_auth_or_query)` to avoid accidentally exposing data.
+Every new endpoint MUST include an explicit `Depends(require_auth)` to avoid
+accidentally exposing data.
 """
 
 import asyncio
@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import select, func
 from datetime import datetime, timedelta, timezone
 
-from ..auth import require_auth, require_auth_or_query
+from ..auth import require_auth
 from ..database import get_async_session
 from ..models import ProcessingLog
 from ..schemas import DailyStatsItem, RecentLogItem, StatsResponse
@@ -152,7 +152,7 @@ async def get_logs(user: dict = Depends(require_auth)):
 
 
 @router.get("/logs/stream")
-async def stream_logs(user: dict = Depends(require_auth_or_query)):
+async def stream_logs(user: dict = Depends(require_auth)):
     async def event_gen():
         for line in get_history():
             yield f"data: {json.dumps(line)}\n\n"

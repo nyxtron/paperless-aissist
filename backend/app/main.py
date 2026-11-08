@@ -187,20 +187,22 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Self-hosted app: permissive CORS by default — the web UI is same-origin
-# (nginx proxies /api) and the Automation API is server-to-server, so this only
-# matters for cross-origin browser callers. Set CORS_ALLOW_ORIGINS to a
-# comma-separated list to restrict; leave unset (or "*") to allow all.
-_cors_origins_raw = os.environ.get("CORS_ALLOW_ORIGINS", "*").strip()
-_cors_origins = (
-    ["*"]
-    if _cors_origins_raw in ("", "*")
-    else [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
-)
+
+def parse_cors_origins(raw: str | None) -> list[str]:
+    """Turn CORS_ALLOW_ORIGINS into the list of origins allowed to read the API.
+
+    Unset or empty allows no cross-origin browser callers. The web UI is
+    same-origin (nginx proxies /api) and the Automation API is server-to-server,
+    so neither needs CORS, while the login is off by default: allowing every
+    origin would let any website a user visits read this API from their browser.
+    Set a comma-separated list, or "*" to allow all.
+    """
+    return [o.strip() for o in (raw or "").split(",") if o.strip()]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=parse_cors_origins(os.environ.get("CORS_ALLOW_ORIGINS")),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
