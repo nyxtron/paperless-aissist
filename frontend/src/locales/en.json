@@ -173,7 +173,7 @@
     "llmMaxTokens": "Max Output Tokens",
     "llmMaxTokensHint": "Optional response limit. Leave empty to use the provider default.",
     "llmMaxTokensVision": "Vision Max Output Tokens",
-    "llmMaxTokensVisionHint": "Optional OCR output limit per request/page. Leave empty to use the provider default.",
+    "llmMaxTokensVisionHint": "Optional OCR output limit per page or request. Empty means 4,096 per page on Ollama, so a model that keeps repeating itself stops instead of running into the timeout; other providers use their own default.",
     "llmContextWindow": "Context Window",
     "llmContextWindowHint": "Ollama only. Increase for large documents or many Paperless correspondents. Empty means Ollama's own default, often only 4,096 tokens, not the most the model can take; a longer prompt is cut without an error.",
     "llmContextWindowVision": "Vision Context Window",

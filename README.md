@@ -185,7 +185,8 @@ rest_command:
 
 | Provider | Model | Notes |
 |----------|-------|-------|
-| Ollama | `benhaotang/Nanonets-OCR-s:latest` | Recommended local — best OCR accuracy |
+| Ollama | `benhaotang/Nanonets-OCR-s:latest` | Recommended local. Set **Vision Context Window** to 16384, with the model's own 4,096 a dense scan is cut short |
+| Ollama | `hf.co/ggml-org/LightOnOCR-2-1B-GGUF:Q8_0` | About twice as fast and 1.1 GB, read German scans as well as Nanonets in my test. Ignores the OCR prompt and writes tables as HTML |
 | Ollama | `qwen2.5vl:7b` | Good text extraction |
 | OpenAI | `gpt-4o` | Supports native PDF with the official OpenAI API |
 | Grok | `grok-2-vision-1212` | xAI vision alternative |
@@ -211,6 +212,12 @@ and the log. When you see it, or when Ollama returns `400 Bad Request` for large
 documents, increase the **Context Window** setting in the web UI. It sends
 Ollama `num_ctx` for text and Vision OCR requests and applies from the next
 document on, without a restart.
+
+A scanned A4 page alone takes 2,000 to 3,000 tokens of context, so set
+**Vision Context Window** to 16384 for Vision OCR. On Ollama a page may write up
+to 4,096 tokens unless **Vision Max Output Tokens** says otherwise. A model that
+starts repeating itself stops there, and the document shows up as failed in the
+log with the setting that ran out, instead of running into the timeout.
 
 ## Processing Pipeline
 

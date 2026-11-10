@@ -144,7 +144,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             step="1"
             value={config.llm_max_tokens_vision || ''}
             onChange={(e) => handleChange('llm_max_tokens_vision', e.target.value)}
-            placeholder="8192"
+            placeholder="4096"
             className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
           <p className={hintClass}>{t('config.llmMaxTokensVisionHint')}</p>

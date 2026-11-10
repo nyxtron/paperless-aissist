@@ -173,7 +173,7 @@
     "llmMaxTokens": "Max. Ausgabetokens",
     "llmMaxTokensHint": "Optionale Antwortbegrenzung. Leer lassen für den Provider-Standard.",
     "llmMaxTokensVision": "Vision max. Ausgabetokens",
-    "llmMaxTokensVisionHint": "Optionale OCR-Begrenzung pro Anfrage/Seite. Leer lassen für den Provider-Standard.",
+    "llmMaxTokensVisionHint": "Optionale OCR-Begrenzung pro Seite oder Anfrage. Leer bedeutet bei Ollama 4.096 pro Seite, damit ein Modell, das sich ständig wiederholt, abbricht, statt in den Timeout zu laufen. Andere Provider nutzen ihren eigenen Standard.",
     "llmContextWindow": "Kontextfenster",
     "llmContextWindowHint": "Nur Ollama. Erhöhen für große Dokumente oder viele Paperless-Korrespondenten. Leer bedeutet Ollamas eigene Voreinstellung, oft nur 4.096 Token, nicht das Maximum des Modells; ein längerer Prompt wird ohne Fehlermeldung gekürzt.",
     "llmContextWindowVision": "Vision-Kontextfenster",

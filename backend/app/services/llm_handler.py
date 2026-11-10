@@ -12,7 +12,7 @@ import re
 import time
 import httpx
 from typing import Any, Callable, Iterator, Optional
-from ..exceptions import LLMError, LLMHttpError, LLMUnavailableError
+from ..exceptions import LLMError, LLMHttpError, LLMUnavailableError, ReplyCutShortError
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +243,23 @@ def _incomplete_reason(data: dict) -> Optional[str]:
     if isinstance(reason, str) and reason in TRUNCATED_FINISH_REASONS:
         return reason
     return None
+
+
+# What an Ollama vision page may write when no output limit is set. A model that
+# starts repeating itself otherwise writes until the context window is full; on a
+# 16k window that outlasts the timeout, and a timeout reads as a provider that is
+# down, so the document would come back every run. The longest of 30 scanned
+# pages read in full by Nanonets-OCR-s and LightOnOCR-2 needed 3,615 tokens.
+VISION_PAGE_OUTPUT_LIMIT = 4096
+
+
+def _ollama_limit_reached(data: dict, output_limit: int) -> str:
+    """Name the limit a page ran into, so the log points at the setting to raise."""
+    written = data.get("eval_count") or 0
+    if written >= output_limit:
+        return f"output limit of {output_limit} tokens reached, see Vision Max Output Tokens"
+    used = (data.get("prompt_eval_count") or 0) + written
+    return f"context window full at {used} tokens, see Vision Context Window"
 
 
 def _http_error_detail(error: httpx.HTTPError) -> str:
@@ -889,6 +906,7 @@ class LLMHandler:
         client = self.client
         url = "/api/chat"
         combined_text = []
+        output_limit = VISION_PAGE_OUTPUT_LIMIT if max_tokens is None else max_tokens
 
         for i, img in enumerate(images):
             _report_page(on_page, i + 1, len(images))
@@ -910,10 +928,8 @@ class LLMHandler:
                 "model": self.model,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": temperature},
+                "options": {"temperature": temperature, "num_predict": output_limit},
             }
-            if max_tokens is not None:
-                payload["options"]["num_predict"] = max_tokens
             if num_ctx is not None:
                 payload["options"]["num_ctx"] = num_ctx
             if json_mode:
@@ -925,13 +941,15 @@ class LLMHandler:
                 data = response.json()
                 cut_short = _incomplete_reason(data)
                 if cut_short:
-                    raise LLMError(
+                    if cut_short == "length":
+                        cut_short = _ollama_limit_reached(data, output_limit)
+                    raise ReplyCutShortError(
                         f"Ollama vision reply for page {i + 1} was cut short "
                         f"({cut_short}); the page was not fully read"
                     )
                 content = data.get("message", {}).get("content", "").strip()
                 combined_text.append(_drop_no_text_marker(content))
-            except LLMError:
+            except (LLMError, ReplyCutShortError):
                 raise
             except Exception as e:
                 logger.error(
@@ -1009,7 +1027,7 @@ class LLMHandler:
                     data = response.json()
                     cut_short = _incomplete_reason(data)
                     if cut_short:
-                        raise LLMError(
+                        raise ReplyCutShortError(
                             f"OpenAI vision reply for page {page_no} was cut short "
                             f"({cut_short}); the page was not fully read"
                         )
@@ -1057,7 +1075,7 @@ class LLMHandler:
 
             cut_short = _incomplete_reason(data)
             if cut_short:
-                raise LLMError(
+                raise ReplyCutShortError(
                     f"OpenAI vision reply was cut short ({cut_short}); "
                     "the document was not fully read"
                 )
