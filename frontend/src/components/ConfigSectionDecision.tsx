@@ -41,7 +41,7 @@ const formatUsable = (provider: string, format: string) => {
 }
 
 const modelPlaceholder = (provider: string) => {
-  if (provider === 'openai') return 'gpt-4o-mini'
+  if (provider === 'openai') return 'gpt-6-luna'
   if (provider === 'grok') return 'grok-3-mini'
   if (provider === 'openrouter') return 'openai/gpt-4o-mini'
   return 'nimble'
@@ -68,6 +68,7 @@ export function ConfigSectionDecision({
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [testDetail, setTestDetail] = useState<string | null>(null)
+  const [testHint, setTestHint] = useState<string | null>(null)
   const [testRequest, setTestRequest] = useState<string | null>(null)
   const [showRequest, setShowRequest] = useState(false)
   const checkedOnce = useRef(false)
@@ -124,10 +125,12 @@ export function ConfigSectionDecision({
     setTesting(true)
     setTestResult(null)
     setTestDetail(null)
+    setTestHint(null)
     setTestRequest(null)
     try {
       const { data } = await configApi.testDecision()
       setTestRequest(data.request ?? null)
+      setTestHint(data.hint ?? null)
       if (data.success) {
         const p = data.probability == null ? '–' : `${(data.probability * 100).toFixed(1)}%`
         setTestResult(
@@ -356,6 +359,21 @@ export function ConfigSectionDecision({
             </button>
           )}
         </div>
+        {provider === 'openai' && (
+          <div className="md:col-span-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={(config.decision_reasoning_off || 'false') === 'true'}
+                onChange={(e) =>
+                  save('decision_reasoning_off', e.target.checked ? 'true' : 'false')
+                }
+              />
+              {t('config.decisionReasoningOff')}
+            </label>
+            <p className={hintClass}>{t('config.decisionReasoningOffHint')}</p>
+          </div>
+        )}
         <div>
           <label className={labelClass} htmlFor="decision-timeout">
             {t('config.llmTimeout')}
@@ -403,6 +421,7 @@ export function ConfigSectionDecision({
         {testDetail && (
           <p className="mt-1 text-xs break-all text-gray-600 dark:text-gray-300">{testDetail}</p>
         )}
+        {testHint && <p className={warnClass}>{t(`config.decisionTestHint.${testHint}`)}</p>}
         {testRequest && (
           <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
             <button type="button" className="underline" onClick={() => setShowRequest((v) => !v)}>

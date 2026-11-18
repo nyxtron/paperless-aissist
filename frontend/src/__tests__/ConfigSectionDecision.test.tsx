@@ -417,6 +417,68 @@ describe('ConfigSectionDecision', () => {
     expect(screen.queryByText('decision.note.showRequest')).not.toBeInTheDocument()
   })
 
+  it('offers the reasoning switch for OpenAI only and saves it', () => {
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const { rerender } = render(
+      <ConfigSectionDecision config={base} onSave={onSave} secretsSet={[]} />,
+    )
+    expect(screen.queryByLabelText('config.decisionReasoningOff')).not.toBeInTheDocument()
+    rerender(
+      <ConfigSectionDecision
+        config={{ ...base, llm_provider_decision: 'openrouter' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.queryByLabelText('config.decisionReasoningOff')).not.toBeInTheDocument()
+
+    // the main connection counts while the decision model inherits it
+    rerender(
+      <ConfigSectionDecision
+        config={{ ...base, llm_provider: 'openai' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.getByLabelText('config.decisionReasoningOff')).not.toBeChecked()
+    fireEvent.click(screen.getByLabelText('config.decisionReasoningOff'))
+    expect(onSave).toHaveBeenCalledWith('decision_reasoning_off', 'true')
+
+    rerender(
+      <ConfigSectionDecision
+        config={{ ...own, decision_reasoning_off: 'true' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.getByLabelText('config.decisionReasoningOff')).toBeChecked()
+    fireEvent.click(screen.getByLabelText('config.decisionReasoningOff'))
+    expect(onSave).toHaveBeenCalledWith('decision_reasoning_off', 'false')
+  })
+
+  it('says which way the reasoning switch should go, and drops that with the next probe', async () => {
+    mocks.testDecision.mockResolvedValue({
+      data: {
+        success: false,
+        fallback_reason: 'unsupported_parameter',
+        fallback_detail: "'logprobs' is not supported with this model.",
+        hint: 'reasoning_off_needed',
+      },
+    })
+    render(<ConfigSectionDecision config={own} onSave={vi.fn()} secretsSet={[]} />)
+    fireEvent.click(screen.getByText('config.decisionTest'))
+    expect(
+      await screen.findByText('config.decisionTestHint.reasoning_off_needed'),
+    ).toBeInTheDocument()
+
+    mocks.testDecision.mockRejectedValue(new Error('Network Error'))
+    fireEvent.click(screen.getByText('config.decisionTest'))
+    expect(
+      await screen.findByText('config.decisionTestFailed message=Network Error'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/config\.decisionTestHint/)).not.toBeInTheDocument()
+  })
+
   it('reports a probe that failed outright', async () => {
     mocks.testDecision.mockResolvedValue({
       data: { success: false, message: 'connection refused' },

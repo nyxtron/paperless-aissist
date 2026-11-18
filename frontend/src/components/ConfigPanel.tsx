@@ -64,6 +64,7 @@ export default function ConfigPanel() {
     decision_question_correspondent: '',
     decision_question_document_type: '',
     decision_format: 'auto',
+    decision_reasoning_off: 'false',
     review_tag: 'ai-review',
     llm_provider_decision: '',
     llm_model_decision: '',

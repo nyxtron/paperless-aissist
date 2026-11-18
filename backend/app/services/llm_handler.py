@@ -12,6 +12,7 @@ import re
 import time
 import httpx
 from typing import Any, Callable, Iterator, Optional
+from urllib.parse import urlparse
 from ..exceptions import LLMError, LLMHttpError, LLMUnavailableError, ReplyCutShortError
 
 logger = logging.getLogger(__name__)
@@ -319,6 +320,7 @@ class LLMHandler:
         temperature: Default sampling temperature for requests.
         max_tokens: Optional default output token limit.
         num_ctx: Optional Ollama context window size.
+        reasoning_effort: Optional reasoning level, sent by the decision request only.
     """
 
     def __init__(
@@ -331,6 +333,7 @@ class LLMHandler:
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: Optional[int] = None,
         num_ctx: Optional[int] = None,
+        reasoning_effort: Optional[str] = None,
     ):
         self.provider = provider
         self.model = model
@@ -340,6 +343,7 @@ class LLMHandler:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.num_ctx = num_ctx
+        self.reasoning_effort = reasoning_effort
         self._client: Optional[httpx.AsyncClient] = None
         # Ollama's own window for this model when num_ctx is not set, read from
         # /api/ps and refreshed now and then.
@@ -369,6 +373,17 @@ class LLMHandler:
     @property
     def is_closed(self) -> bool:
         return self._closed
+
+    @property
+    def output_limit_field(self) -> str:
+        """The name the output token limit goes out under.
+
+        OpenAI's newer models refuse max_tokens, and its older ones take
+        max_completion_tokens as well. LM Studio, vLLM and the other servers
+        behind the OpenAI setting only know max_tokens.
+        """
+        host = urlparse(self.api_base).hostname or ""
+        return "max_completion_tokens" if host.lower() == "api.openai.com" else "max_tokens"
 
     async def close(self):
         """Close the underlying HTTP client."""
@@ -540,6 +555,11 @@ class LLMHandler:
             await cls._get_config("llm_num_ctx_decision")
             or await cls._get_config("llm_num_ctx")
         )
+        # Only OpenAI's own reasoning models need this; the other providers
+        # never see the switch, so a value left over from one is not sent.
+        reasoning_off = provider == "openai" and (
+            await cls._get_config("decision_reasoning_off") == "true"
+        )
         logger.info(
             f"Decision provider: {provider}, model: {model or '(none)'}, API base: {api_base}"
         )
@@ -550,6 +570,7 @@ class LLMHandler:
             api_key=api_key,
             timeout=float(timeout_str) if timeout_str else 600.0,
             num_ctx=cls._parse_positive_int(num_ctx_str),
+            reasoning_effort="none" if reasoning_off else None,
         )
 
     @staticmethod
@@ -799,7 +820,7 @@ class LLMHandler:
             "temperature": temperature,
         }
         if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
+            payload[self.output_limit_field] = max_tokens
 
         # No response_format: LM Studio rejects json_object outright, and OpenAI
         # rejects it whenever the word "json" is missing from the prompt, which
@@ -1020,7 +1041,7 @@ class LLMHandler:
                         "temperature": temperature,
                     }
                     if max_tokens is not None:
-                        payload["max_tokens"] = max_tokens
+                        payload[self.output_limit_field] = max_tokens
 
                     response = await client.post(url, json=payload)
                     response.raise_for_status()
@@ -1067,7 +1088,7 @@ class LLMHandler:
                 "temperature": temperature,
             }
             if max_tokens is not None:
-                payload["max_tokens"] = max_tokens
+                payload[self.output_limit_field] = max_tokens
 
             response = await client.post(url, json=payload)
             response.raise_for_status()

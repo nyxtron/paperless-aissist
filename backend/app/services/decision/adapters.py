@@ -120,8 +120,8 @@ class Adapter:
 # A 400/422 naming one of these refused something the decision adds to the
 # request, so this route cannot score letters at all.
 _UNSUPPORTED_PARAMETER = ("logprob", "top_logprobs", "max_tokens", "temperature",
-                          "unsupported parameter", "unsupported_parameter", "unsupported_value",
-                          "unknown field")
+                          "reasoning_effort", "unsupported parameter", "unsupported_parameter",
+                          "unsupported_value", "unknown field")
 
 
 def classify_http_error(error: LLMHttpError, *, systemone: bool = True) -> Optional[tuple[str, bool]]:
@@ -246,8 +246,12 @@ class OpenAILettersAdapter(_LettersAdapter):
         messages = self._messages(text, question, labels)
         payload: dict[str, Any] = {
             "model": self.handler.model, "messages": messages, "temperature": 0,
-            "max_tokens": 1, "logprobs": True, "top_logprobs": TOP_LOGPROBS,
+            self.handler.output_limit_field: 1, "logprobs": True, "top_logprobs": TOP_LOGPROBS,
         }
+        if self.handler.reasoning_effort:
+            # A reasoning model spends the one token on thinking and returns
+            # no probabilities unless reasoning is off.
+            payload["reasoning_effort"] = self.handler.reasoning_effort
         if self.handler.provider == "openrouter":
             # Otherwise OpenRouter may route to an endpoint that drops logprobs.
             payload["provider"] = {"require_parameters": True}

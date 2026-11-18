@@ -124,6 +124,8 @@ export interface DecisionTestResult {
   fallback_reason?: FallbackReason | null
   fallback_detail?: string | null
   request?: string | null
+  /** Which way the reasoning switch should go, when the refusal points at it. */
+  hint?: 'reasoning_off_needed' | 'reasoning_off_refused' | null
   /** Set when asking the decision model failed. */
   message?: string
   review_tag?: { name: string; exists: boolean | null }

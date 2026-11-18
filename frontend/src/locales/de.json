@@ -132,6 +132,8 @@
     "decisionRemoveKey": "Gespeicherten Schlüssel entfernen",
     "decisionKeyRemoved": "Schlüssel des Entscheidungsmodells entfernt",
     "decisionContextWindow": "Kontextfenster (Ollama Letters und Nimble; bei SystemOne ignoriert)",
+    "decisionReasoningOff": "Reasoning abschalten",
+    "decisionReasoningOffHint": "Für die Reasoning-Modelle von OpenAI wie gpt-6-luna: Mit Reasoning liefern sie keine Token-Wahrscheinlichkeiten. Ältere Modelle wie gpt-4.1-mini lehnen die Einstellung ab, dort und bei LM Studio oder vLLM aus lassen.",
     "reviewTag": "Prüf-Tag",
     "reviewTagHint": "Wird an Dokumente mit einem zur Prüfung offenen Feld gehängt und entfernt, sobald ein späterer Lauf jedes Feld mit eingeschalteter Entscheidung entscheidet. Muss in Paperless existieren.",
     "reviewTagMissing": "Der Tag {{tag}} existiert in Paperless nicht. Läufe mit eingeschalteter Entscheidung stoppen, bis es ihn gibt.",
@@ -142,6 +144,10 @@
     "decisionTestOk": "{{method}} auf {{model}}: {{choice}} ({{p}})",
     "decisionTestFallback": "Fällt auf den Text-Prompt zurück: {{reason}}",
     "decisionTestFailed": "Test fehlgeschlagen: {{message}}",
+    "decisionTestHint": {
+      "reasoning_off_needed": "So antwortet ein Reasoning-Modell wie gpt-6-luna, solange Reasoning läuft. \"Reasoning abschalten\" oben einschalten und noch einmal testen.",
+      "reasoning_off_refused": "Dieses Modell kennt die Reasoning-Einstellung nicht. \"Reasoning abschalten\" oben ausschalten und noch einmal testen."
+    },
     "schedulerSection": "Automatische Verarbeitung",
     "schedulerRunning": "Aktiv",
     "schedulerStopped": "Gestoppt",

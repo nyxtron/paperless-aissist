@@ -39,7 +39,7 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
   }
 
   const getModelPlaceholder = (provider: string) => {
-    if (provider === 'openai') return 'gpt-4o-mini'
+    if (provider === 'openai') return 'gpt-6-luna'
     if (provider === 'grok') return 'grok-3-mini'
     if (provider === 'openrouter') return 'openai/gpt-4o-mini'
     return 'qwen2.5:7b'
