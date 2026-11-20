@@ -5,6 +5,7 @@ import { configApi, documentsApi } from '../api/client'
 import { extractApiError } from '../api/errorUtils'
 import { ConfigSectionProps } from './ConfigSectionProps'
 import { fieldClass, labelClass, hintClass } from './fieldStyles'
+import { apiBaseAfterSwitch, defaultApiBase } from './providerDefaults'
 
 const FIELDS = ['correspondent', 'document_type'] as const
 const FORMATS = ['auto', 'letters', 'nimble', 'systemone'] as const
@@ -45,13 +46,6 @@ const modelPlaceholder = (provider: string) => {
   if (provider === 'grok') return 'grok-3-mini'
   if (provider === 'openrouter') return 'openai/gpt-4o-mini'
   return 'nimble'
-}
-
-const apiBasePlaceholder = (provider: string) => {
-  if (provider === 'openai') return 'https://api.openai.com/v1'
-  if (provider === 'grok') return 'https://api.x.ai/v1'
-  if (provider === 'openrouter') return 'https://openrouter.ai/api/v1'
-  return 'http://localhost:11434'
 }
 
 type TagCheck = { name: string; exists: boolean | null }
@@ -109,6 +103,16 @@ export function ConfigSectionDecision({
   }, [reviewTag])
 
   const save = (key: string, value: string) => void onSave(key, value)
+
+  const changeProvider = (next: string) => {
+    // Without a provider of its own the stored URL is not used, so it stays.
+    const url =
+      ownProvider && next
+        ? apiBaseAfterSwitch(config.llm_api_base_decision || '', ownProvider, next)
+        : null
+    save('llm_provider_decision', next)
+    if (url) save('llm_api_base_decision', url)
+  }
 
   const removeKey = async () => {
     onSecretRemoved?.('llm_api_key_decision')
@@ -284,7 +288,7 @@ export function ConfigSectionDecision({
           <select
             id="decision-provider"
             value={ownProvider}
-            onChange={(e) => save('llm_provider_decision', e.target.value)}
+            onChange={(e) => changeProvider(e.target.value)}
             className={fieldClass}
           >
             <option value="">{t('config.decisionInheritedOption')}</option>
@@ -322,8 +326,8 @@ export function ConfigSectionDecision({
             placeholder={
               inherited
                 ? config.llm_api_base ||
-                  (provider === 'openrouter' ? apiBasePlaceholder('openrouter') : '')
-                : apiBasePlaceholder(ownProvider)
+                  (provider === 'openrouter' ? defaultApiBase('openrouter') : '')
+                : defaultApiBase(ownProvider)
             }
             onChange={(e) => save('llm_api_base_decision', e.target.value)}
             className={`${fieldClass} disabled:opacity-60`}
