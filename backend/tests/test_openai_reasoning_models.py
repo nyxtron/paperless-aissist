@@ -3,17 +3,20 @@
 They refuse max_tokens, and with reasoning on they refuse logprobs and a
 temperature of 0, so decision mode has a switch that turns reasoning off. With
 it off gpt-6-luna shows five candidates at most, lists only the ones that
-carry weight and answers nothing below four output tokens. The bodies below
-are the ones from issue #59 and from api.openai.com on 2026-11-20.
+carry weight and answers nothing below four output tokens. Text and page
+requests it turns down over their temperature go out again without one. The
+bodies below are the ones from issue #59 and from api.openai.com on 2026-11-20.
 """
 
+import functools
 import json
+import logging
 import math
 
 import httpx
 import pytest
 
-from app.exceptions import LLMHttpError
+from app.exceptions import LLMError, LLMHttpError
 from app.services.decision import DecisionService, DecisionServiceManager
 from app.services.decision.adapters import DecisionUnsupported, OpenAILettersAdapter, letter_probs
 from app.services.decision.formats import NONE_DESCRIPTION, NONE_LABEL
@@ -196,6 +199,88 @@ class TestTheReasoningSwitch:
         assert info.value.status_code == 404
 
 
+def _sent_temperatures(server):
+    return [b.get("temperature", "left out") for b in server.bodies]
+
+
+class TestARefusedTemperature:
+    @pytest.mark.asyncio
+    async def test_a_text_request_goes_again_without_it(self):
+        server = OpenAI()
+        assert await _handler(server, max_tokens=512).complete("s", "u", json_mode=False) == {"text": "ok"}
+        first, second = server.bodies
+        assert first["temperature"] == 0.3 and second == {k: v for k, v in first.items() if k != "temperature"}
+
+    @pytest.mark.asyncio
+    async def test_after_the_refusal_it_is_left_out_straight_away(self):
+        server = OpenAI()
+        handler = _handler(server)
+        await handler.complete("s", "u", json_mode=False)
+        await handler.complete("s", "u", json_mode=False)
+        assert _sent_temperatures(server) == [0.3, "left out", "left out"]
+
+    @pytest.mark.asyncio
+    async def test_a_handler_built_after_a_settings_save_still_knows(self):
+        server = OpenAI()
+        await _handler(server).complete("s", "u", json_mode=False)
+        await _handler(server).complete("s", "u", json_mode=False)
+        assert _sent_temperatures(server) == [0.3, "left out", "left out"]
+
+    @pytest.mark.asyncio
+    async def test_page_images_go_again_without_it(self):
+        server = OpenAI()
+        result = await _handler(server).vision_complete("s", images=[b"p1", b"p2"], json_mode=False)
+        assert result == {"text": "ok\n\nok"}
+        assert _sent_temperatures(server) == [0.3, "left out", "left out"]
+
+    @pytest.mark.asyncio
+    async def test_a_whole_pdf_goes_again_without_it(self):
+        server = OpenAI()
+        assert await _handler(server).vision_complete("s", pdf_bytes=b"%PDF", json_mode=False) == {"text": "ok"}
+        assert _sent_temperatures(server) == [0.3, "left out"]
+
+    @pytest.mark.asyncio
+    async def test_a_model_that_takes_it_gets_it_as_set(self):
+        server = OpenAI()
+        await _handler(server, model="gpt-4.1-mini", temperature=0.2).complete("s", "u", json_mode=False)
+        assert _sent_temperatures(server) == [0.2]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("model, api_base", [("gpt-4.1-mini", OPENAI), ("gpt-6-luna", "https://proxy.example/v1")])
+    async def test_the_refusal_belongs_to_one_model_at_one_address(self, model, api_base):
+        server = OpenAI()
+        await _handler(server).complete("s", "u", json_mode=False)
+        await _handler(server, model=model, api_base=api_base).complete("s", "u", json_mode=False)
+        assert server.bodies[2]["temperature"] == 0.3
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_of_something_else_is_not_sent_again(self):
+        # LM Studio and the like get max_tokens, which gpt-6 refuses.
+        server = OpenAI()
+        handler = _handler(server, api_base="http://lmstudio:1234/v1", max_tokens=512)
+        with pytest.raises(LLMError, match="max_tokens"):
+            await handler.complete("s", "u", json_mode=False)
+        assert len(server.bodies) == 1
+
+    @pytest.mark.asyncio
+    async def test_the_log_says_so_once(self, caplog):
+        handler = _handler(OpenAI())
+        with caplog.at_level(logging.WARNING, logger="app.services.llm_handler"):
+            await handler.complete("s", "u", json_mode=False)
+            await handler.complete("s", "u", json_mode=False)
+        said = [r.getMessage() for r in caplog.records if "refused a temperature" in r.getMessage()]
+        assert len(said) == 1 and "gpt-6-luna" in said[0] and "Temperature 1" in said[0]
+
+    @pytest.mark.asyncio
+    async def test_the_decision_keeps_its_own(self):
+        # With reasoning off luna takes a temperature of 0, and the letters rely on it.
+        server = OpenAI()
+        handler = _handler(server, reasoning_effort="none")
+        await handler.complete("s", "u", json_mode=False)
+        await OpenAILettersAdapter(handler, PROMPT).score_rounds("t", "Q?", ASK, DESC)
+        assert _sent_temperatures(server) == [0.3, "left out", 0]
+
+
 def _top(**weights):
     return [{"token": token, "logprob": math.log(p)} for token, p in weights.items()]
 
@@ -226,7 +311,8 @@ class TestCandidatesLeftOut:
 @pytest.fixture
 def settings(client):
     keys = ["llm_provider", "llm_model", "llm_api_base", "llm_provider_decision", "llm_model_decision",
-            "llm_api_base_decision", "decision_reasoning_off"]
+            "llm_api_base_decision", "decision_reasoning_off", "llm_temperature", "llm_provider_vision",
+            "llm_model_vision", "llm_api_base_vision", "llm_temperature_vision"]
 
     def save(**values):
         for key, value in values.items():
@@ -331,3 +417,27 @@ class TestTheTestPointsAtTheSwitch:
         settings(llm_provider="openai", llm_api_base=OPENAI, llm_model="gpt-4.1-nano")
         body = _probe(client, OpenAI())
         assert body["success"] is False and "deprecated" in body["message"] and "hint" not in body
+
+
+def _from_settings(client, server, for_vision=False):
+    handler = client.portal.call(LLMHandler.from_config, for_vision)
+    handler._client = httpx.AsyncClient(base_url=OPENAI, transport=httpx.MockTransport(server))
+    return handler
+
+
+class TestLunaAsTheMainModel:
+    def test_the_saved_temperature_is_tried_first(self, client, settings):
+        settings(llm_provider="openai", llm_api_base=OPENAI, llm_model="gpt-6-luna", llm_temperature="0.2")
+        server = OpenAI()
+        handler = _from_settings(client, server)
+        assert client.portal.call(handler.complete, "s", "u", False) == {"text": "ok"}
+        assert _sent_temperatures(server) == [0.2, "left out"]
+
+    def test_pages_for_its_own_vision_model_too(self, client, settings):
+        settings(llm_provider="ollama", llm_provider_vision="openai", llm_api_base_vision=OPENAI,
+                 llm_model_vision="gpt-6-luna", llm_temperature_vision="0.1")
+        server = OpenAI()
+        handler = _from_settings(client, server, for_vision=True)
+        read = functools.partial(handler.vision_complete, "s", images=[b"p1"], json_mode=False)
+        assert client.portal.call(read) == {"text": "ok"}
+        assert _sent_temperatures(server) == [0.1, "left out"]

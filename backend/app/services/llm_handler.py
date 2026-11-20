@@ -278,6 +278,23 @@ def _http_error_detail(error: httpx.HTTPError) -> str:
     return f"{detail} - {body[:500]}" if body else detail
 
 
+# Address and model of every server that turned down the temperature it was
+# sent. OpenAI's reasoning models take nothing but their default of 1, so their
+# requests go out without one until the next restart.
+_TEMPERATURE_REFUSED: set[tuple[str, str]] = set()
+
+
+def _refuses_temperature(response: httpx.Response) -> bool:
+    """Whether the server turned the request down over its temperature."""
+    if response.status_code != 400:
+        return False
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        return False
+    return isinstance(error, dict) and error.get("param") == "temperature"
+
+
 OPENAI_COMPATIBLE_PROVIDERS = frozenset({"openai", "grok", "openrouter"})
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_REFERER = "https://github.com/nyxtron/paperless-aissist"
@@ -384,6 +401,29 @@ class LLMHandler:
         """
         host = urlparse(self.api_base).hostname or ""
         return "max_completion_tokens" if host.lower() == "api.openai.com" else "max_tokens"
+
+    async def _post_chat(self, payload: dict[str, Any]) -> httpx.Response:
+        """POST to /chat/completions, leaving out a temperature the model refused.
+
+        Only the first request to such a model is turned down; the refusal is
+        remembered for the ones after it.
+        """
+        key = (self.api_base, self.model)
+        if key in _TEMPERATURE_REFUSED:
+            payload = {k: v for k, v in payload.items() if k != "temperature"}
+        response = await self.client.post("/chat/completions", json=payload)
+        if "temperature" in payload and _refuses_temperature(response):
+            _TEMPERATURE_REFUSED.add(key)
+            logger.warning(
+                "%s refused a temperature of %s, so its requests go out without one "
+                "until the next restart. OpenAI's reasoning models want Temperature 1.",
+                self.model,
+                payload["temperature"],
+            )
+            payload = {k: v for k, v in payload.items() if k != "temperature"}
+            response = await self.client.post("/chat/completions", json=payload)
+        response.raise_for_status()
+        return response
 
     async def close(self):
         """Close the underlying HTTP client."""
@@ -802,7 +842,6 @@ class LLMHandler:
         max_tokens: Optional[int],
     ) -> dict[str, Any]:
         """Internal OpenAI-compatible /chat/completions implementation."""
-        client = self.client
         url = "/chat/completions"
         logger.info(f"OpenAI calling: {url}, model: {self.model}")
         logger.debug(
@@ -827,8 +866,7 @@ class LLMHandler:
         # users are free to edit away. The reply is parsed leniently instead.
 
         try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
+            response = await self._post_chat(payload)
             data = response.json()
 
             content = data["choices"][0]["message"]["content"].strip()
@@ -1009,7 +1047,6 @@ class LLMHandler:
             images = []
         import base64
 
-        client = self.client
         url = "/chat/completions"
         logger.info(f"OpenAI Vision calling: {url}, model: {self.model}")
 
@@ -1043,8 +1080,7 @@ class LLMHandler:
                     if max_tokens is not None:
                         payload[self.output_limit_field] = max_tokens
 
-                    response = await client.post(url, json=payload)
-                    response.raise_for_status()
+                    response = await self._post_chat(payload)
                     data = response.json()
                     cut_short = _incomplete_reason(data)
                     if cut_short:
@@ -1090,8 +1126,7 @@ class LLMHandler:
             if max_tokens is not None:
                 payload[self.output_limit_field] = max_tokens
 
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
+            response = await self._post_chat(payload)
             data = response.json()
 
             cut_short = _incomplete_reason(data)

@@ -121,7 +121,7 @@ The provider is selected per-model in Settings. Ollama runs locally; OpenAI, Gro
 
 The main LLM and Vision OCR model each have their own generation settings:
 
-- **Temperature** controls randomness. Lower values are more deterministic; `0.0`–`0.3` is recommended for document metadata and OCR. OpenAI's reasoning models such as `gpt-6-luna` refuse anything but `1`.
+- **Temperature** controls randomness. Lower values are more deterministic; `0.0`–`0.3` is recommended for document metadata and OCR. OpenAI's reasoning models such as `gpt-6-luna` refuse anything but `1`. Their requests then go out without a temperature; set it to `1` to save the refused first one.
 - **Max Output Tokens** optionally limits response length. Leave it empty to use the provider default. For Ollama, this is sent as `num_predict`; for OpenAI-compatible providers it is sent as `max_tokens`, for OpenAI itself as `max_completion_tokens`.
 - **Context Window** is Ollama-only and maps to `num_ctx`. Increase it for large documents, many correspondents/tags, or long prompts. Left empty, Ollama uses its own default, often only 4,096 tokens and not the model's maximum, and cuts a longer prompt without an error. This is different from Max Output Tokens: `num_ctx` controls how much input context the model can see, while `num_predict` controls how long the answer may be.
 
@@ -177,7 +177,7 @@ rest_command:
 |----------|-------|-------|
 | Ollama | `qwen3:8b` | Recommended local — fast, strong multilingual support |
 | Ollama | `qwen2.5:7b` | Lighter option for slower hardware |
-| OpenAI | `gpt-6-luna` | OpenAI's replacement for `gpt-4o-mini`, which it shuts down on January 14, 2027. Set Temperature to `1` |
+| OpenAI | `gpt-6-luna` | OpenAI's replacement for `gpt-4o-mini`, which it shuts down on January 14, 2027. Temperature `1` is the only one it takes |
 | Grok | `grok-3-mini` | xAI alternative |
 | OpenRouter | `openai/gpt-4o-mini` | OpenRouter model namespace |
 
