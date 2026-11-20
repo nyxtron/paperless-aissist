@@ -1,20 +1,21 @@
 """OpenAI's gpt-5 and gpt-6 models take other parameters than the older ones.
 
-They refuse max_tokens, and with reasoning on they spend a one-token answer on
-thinking and return no token probabilities, so decision mode has a switch that
-turns reasoning off. The first two refusals below are the ones reported in
-issue #59; the others are worded after OpenAI's reference, they were not
-captured from the API.
+They refuse max_tokens, and with reasoning on they refuse logprobs and a
+temperature of 0, so decision mode has a switch that turns reasoning off. With
+it off gpt-6-luna shows five candidates at most, lists only the ones that
+carry weight and answers nothing below four output tokens. The bodies below
+are the ones from issue #59 and from api.openai.com on 2026-11-20.
 """
 
 import json
+import math
 
 import httpx
 import pytest
 
 from app.exceptions import LLMHttpError
 from app.services.decision import DecisionService, DecisionServiceManager
-from app.services.decision.adapters import DecisionUnsupported, OpenAILettersAdapter
+from app.services.decision.adapters import DecisionUnsupported, OpenAILettersAdapter, letter_probs
 from app.services.decision.formats import NONE_DESCRIPTION, NONE_LABEL
 from app.services.llm_handler import LLMHandler
 
@@ -29,15 +30,31 @@ MAX_TOKENS_REFUSED = {"error": {
 MODEL_RETIRED = {"error": {
     "message": "The model `gpt-4.1-nano` has been deprecated, learn more here: https://platform.openai.com/docs/deprecations",
     "type": "invalid_request_error", "param": None, "code": "model_not_found"}}
+TEMPERATURE_REFUSED = {"error": {
+    "message": "Unsupported value: 'temperature' does not support 0 with this model. Only the default (1) value is supported.",
+    "type": "invalid_request_error", "param": "temperature", "code": "unsupported_value"}}
 LOGPROBS_REFUSED = {"error": {
-    "message": "'logprobs' is not supported with this model.",
+    "message": "Unsupported parameter: 'logprobs' is not supported with this model.",
     "type": "invalid_request_error", "param": "logprobs", "code": "unsupported_parameter"}}
+TOO_MANY_CANDIDATES = {"error": {
+    "message": "Invalid value for 'top_logprobs': must be less than or equal to 5.",
+    "type": "invalid_request_error", "param": "top_logprobs", "code": None}}
+NO_ROOM = {"error": {
+    "message": "Could not finish the message because max_tokens or model output limit was reached. Please try again with higher max_tokens.",
+    "type": "invalid_request_error", "param": None, "code": None}}
 REASONING_UNKNOWN = {"error": {
     "message": "Unrecognized request argument supplied: reasoning_effort",
     "type": "invalid_request_error", "param": None, "code": None}}
 LETTER = {"choices": [{"finish_reason": "length", "message": {"content": "A"}, "logprobs": {"content": [
     {"token": "A", "logprob": -0.01, "top_logprobs": [{"token": "A", "logprob": -0.01}, {"token": "B", "logprob": -5.0}]}]}}],
     "usage": {"prompt_tokens": 60}}
+# gpt-6-luna on a clear question: one candidate, the rest of the weight unseen.
+LUNA_LETTER = {"choices": [{"finish_reason": "stop", "message": {"content": "A"}, "logprobs": {"content": [
+    {"token": "A", "logprob": -0.0015239715576171875,
+     "top_logprobs": [{"token": "A", "logprob": -0.0015239715576171875}]}]}}],
+    "usage": {"prompt_tokens": 37, "completion_tokens": 4}}
+LUNA_CUT_SHORT = {"choices": [{"finish_reason": "length", "message": {"content": ""},
+                               "logprobs": {"content": [], "refusal": None}}]}
 TEXT = {"choices": [{"finish_reason": "stop", "message": {"content": "ok"}}]}
 
 
@@ -56,8 +73,17 @@ class OpenAI:
         if model.startswith("gpt-6"):
             if "max_tokens" in body:
                 return httpx.Response(400, json=MAX_TOKENS_REFUSED)
-            if body.get("logprobs") and body.get("reasoning_effort") != "none":
-                return httpx.Response(400, json=LOGPROBS_REFUSED)
+            if body.get("reasoning_effort") != "none":
+                if body.get("temperature", 1) != 1:
+                    return httpx.Response(400, json=TEMPERATURE_REFUSED)
+                if body.get("logprobs"):
+                    return httpx.Response(400, json=LOGPROBS_REFUSED)
+            elif body.get("logprobs"):
+                if body.get("top_logprobs", 0) > 5:
+                    return httpx.Response(400, json=TOO_MANY_CANDIDATES)
+                if body["max_completion_tokens"] < 3:
+                    return httpx.Response(400, json=NO_ROOM)
+                return httpx.Response(200, json=LUNA_CUT_SHORT if body["max_completion_tokens"] < 4 else LUNA_LETTER)
         elif "reasoning_effort" in body:
             return httpx.Response(400, json=REASONING_UNKNOWN)
         return httpx.Response(200, json=LETTER if body.get("logprobs") else TEXT)
@@ -69,23 +95,28 @@ def _handler(server, model="gpt-6-luna", api_base=OPENAI, **settings):
     return handler
 
 
+def _luna(server, **settings):
+    """gpt-6-luna for text and pages; with reasoning on it only takes its default temperature."""
+    return _handler(server, temperature=1.0, **settings)
+
+
 class TestTheOutputLimitName:
     @pytest.mark.asyncio
     async def test_a_text_request_to_openai_uses_the_new_name(self):
         server = OpenAI()
-        assert await _handler(server, max_tokens=512).complete("s", "u", json_mode=False) == {"text": "ok"}
+        assert await _luna(server, max_tokens=512).complete("s", "u", json_mode=False) == {"text": "ok"}
         assert server.bodies[0]["max_completion_tokens"] == 512 and "max_tokens" not in server.bodies[0]
 
     @pytest.mark.asyncio
     async def test_page_images_to_openai_use_the_new_name(self):
         server = OpenAI()
-        await _handler(server, max_tokens=900).vision_complete("s", images=[b"page"], json_mode=False)
+        await _luna(server, max_tokens=900).vision_complete("s", images=[b"page"], json_mode=False)
         assert server.bodies[0]["max_completion_tokens"] == 900 and "max_tokens" not in server.bodies[0]
 
     @pytest.mark.asyncio
     async def test_a_whole_pdf_to_openai_uses_the_new_name(self):
         server = OpenAI()
-        await _handler(server, max_tokens=900).vision_complete("s", pdf_bytes=b"%PDF", json_mode=False)
+        await _luna(server, max_tokens=900).vision_complete("s", pdf_bytes=b"%PDF", json_mode=False)
         assert server.bodies[0]["max_completion_tokens"] == 900 and "max_tokens" not in server.bodies[0]
 
     @pytest.mark.asyncio
@@ -104,7 +135,9 @@ class TestTheOutputLimitName:
         (r,) = await adapter.score_rounds("t", "Q?", ASK, DESC)
         body = server.bodies[0]
         assert body["max_completion_tokens"] == 1 and "max_tokens" not in body
-        assert "reasoning_effort" not in body and r.probs[0] > 0.99
+        assert body["top_logprobs"] == 20 and "reasoning_effort" not in body
+        # Among the letters it showed, as before: 0.990 against 0.007.
+        assert r.probs[0] == pytest.approx(0.9932, abs=1e-4)
 
 
 class TestTheReasoningSwitch:
@@ -116,11 +149,36 @@ class TestTheReasoningSwitch:
         assert server.bodies[0]["reasoning_effort"] == "none" and r.probs[0] > 0.99
 
     @pytest.mark.asyncio
+    async def test_switched_on_it_asks_for_what_the_model_allows(self):
+        # The stand-in refuses more than five candidates and less than four tokens.
+        server = OpenAI()
+        adapter = OpenAILettersAdapter(_handler(server, reasoning_effort="none"), PROMPT)
+        await adapter.score_rounds("t", "Q?", ASK, DESC)
+        body = server.bodies[0]
+        assert (body["top_logprobs"], body["max_completion_tokens"], body["temperature"]) == (5, 16, 0)
+
+    @pytest.mark.asyncio
+    async def test_what_the_model_did_not_show_counts_against_the_letter(self):
+        adapter = OpenAILettersAdapter(_handler(OpenAI(), reasoning_effort="none"), PROMPT)
+        (r,) = await adapter.score_rounds("t", "Q?", ASK, DESC)
+        assert r.probs == {0: pytest.approx(0.99848, abs=1e-5)} and r.mass == pytest.approx(0.99848, abs=1e-5)
+
+    @pytest.mark.asyncio
     async def test_without_it_a_reasoning_model_cannot_decide(self):
         adapter = OpenAILettersAdapter(_handler(OpenAI()), PROMPT)
         with pytest.raises(DecisionUnsupported) as info:
             await adapter.score_rounds("t", "Q?", ASK, DESC)
-        assert info.value.reason == "unsupported_parameter" and "logprobs" in info.value.detail
+        assert info.value.reason == "unsupported_parameter" and "temperature" in info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_an_answer_cut_before_the_letter_is_no_decision(self):
+        def cut_short(request):
+            return httpx.Response(200, json=LUNA_CUT_SHORT)
+
+        adapter = OpenAILettersAdapter(_handler(cut_short, reasoning_effort="none"), PROMPT)
+        with pytest.raises(DecisionUnsupported) as info:
+            await adapter.score_rounds("t", "Q?", ASK, DESC)
+        assert info.value.reason == "no_logprobs"
 
     @pytest.mark.asyncio
     async def test_a_model_that_does_not_know_it_falls_back_to_the_text_prompt(self):
@@ -136,6 +194,33 @@ class TestTheReasoningSwitch:
         with pytest.raises(LLMHttpError) as info:
             await adapter.score_rounds("t", "Q?", ASK, DESC)
         assert info.value.status_code == 404
+
+
+def _top(**weights):
+    return [{"token": token, "logprob": math.log(p)} for token, p in weights.items()]
+
+
+class TestCandidatesLeftOut:
+    def test_the_unseen_weight_goes_into_the_denominator(self):
+        probs, mass = letter_probs(_top(A=0.6, B=0.05), 20, partial=True)
+        assert probs == {0: pytest.approx(0.6), 1: pytest.approx(0.05)} and mass == pytest.approx(0.65)
+
+    def test_without_it_only_the_shown_letters_count(self):
+        probs, mass = letter_probs(_top(A=0.6, B=0.05), 20)
+        assert probs[0] == pytest.approx(0.6 / 0.65) and mass == pytest.approx(0.65)
+
+    def test_a_shown_word_is_neither_letter_nor_unseen(self):
+        probs, _ = letter_probs(_top(A=0.6, The=0.3), 20, partial=True)
+        assert probs == {0: pytest.approx(0.6 / 0.7)}
+
+    def test_nothing_unseen_changes_nothing(self):
+        top = _top(A=0.9, B=0.1)
+        assert letter_probs(top, 20, partial=True) == letter_probs(top, 20)
+
+    def test_weights_that_add_up_to_more_than_one_are_not_scaled_down(self):
+        # Rounded logprobs can add up to a little over one.
+        probs, _ = letter_probs([{"token": "A", "logprob": 0.0}, {"token": "B", "logprob": -6.0}], 20, partial=True)
+        assert probs[0] == pytest.approx(1 / (1 + math.exp(-6.0)))
 
 
 @pytest.fixture
@@ -171,9 +256,11 @@ class TestTheSwitchInTheSettings:
         settings(llm_provider="openai", llm_api_base=OPENAI, llm_model="gpt-6-luna", decision_reasoning_off="true")
         server = OpenAI()
         body = _probe(client, server)
-        assert server.bodies[0]["reasoning_effort"] == "none" and server.bodies[0]["max_completion_tokens"] == 1
+        sent = server.bodies[0]
+        assert (sent["reasoning_effort"], sent["max_completion_tokens"], sent["top_logprobs"]) == ("none", 16, 5)
         assert (body["success"], body["method"], body["choice"], body["hint"]) == (
             True, "openai_letters", "Stadtwerke Saarbrücken", None)
+        assert body["probability"] == pytest.approx(0.99848, abs=1e-5)
 
     def test_saving_it_drops_the_service(self, client, settings):
         settings(llm_provider="openai", llm_api_base=OPENAI, llm_model="gpt-6-luna")
@@ -196,7 +283,9 @@ class TestTheSwitchInTheSettings:
         settings(llm_provider="openai", llm_api_base=OPENAI, llm_model="gpt-4.1-mini")
         server = OpenAI()
         body = _probe(client, server)
-        assert "reasoning_effort" not in server.bodies[0] and body["success"] is True
+        sent = server.bodies[0]
+        assert "reasoning_effort" not in sent and (sent["max_completion_tokens"], sent["top_logprobs"]) == (1, 20)
+        assert body["success"] is True and body["probability"] == pytest.approx(0.9932, abs=1e-4)
 
 
 class TestTheTestPointsAtTheSwitch:

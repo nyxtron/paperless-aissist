@@ -23,6 +23,10 @@ from .formats import (
 
 
 TOP_LOGPROBS = 20
+# What OpenAI's reasoning models allow with reasoning off: five candidates at
+# most, and no answer at all below four output tokens.
+REASONING_TOP_LOGPROBS = 5
+REASONING_OUTPUT_TOKENS = 16
 
 
 class DecisionUnsupported(Exception):
@@ -52,13 +56,18 @@ class RoundResult:
     input_tokens: Optional[int] = None
 
 
-def letter_probs(top: list[dict[str, Any]], n: int) -> tuple[dict[int, float], float]:
+def letter_probs(
+    top: list[dict[str, Any]], n: int, *, partial: bool = False
+) -> tuple[dict[int, float], float]:
     """Probabilities over the option letters among the top candidates.
 
     Whitespace around a token is stripped, only an exact uppercase option
     letter counts, and the first occurrence wins ("B" and " B" are not added
     up). An entry without a number is no candidate. The mass is how much of
     the model's answer sat on letters at all.
+
+    partial says the provider leaves candidates out. What it did not show may
+    sit on the other letters, so it is counted against the ones it did show.
     """
     found: dict[int, float] = {}
     for entry in top:
@@ -75,6 +84,13 @@ def letter_probs(top: list[dict[str, Any]], n: int) -> tuple[dict[int, float], f
     z = sum(math.exp(v - best) for v in found.values())
     probs = {i: math.exp(v - best) / z for i, v in found.items()}
     mass = sum(math.exp(v) for v in found.values())
+    if partial:
+        shown = sum(
+            math.exp(e["logprob"]) for e in top if isinstance(e.get("logprob"), (int, float))
+        )
+        hidden = max(0.0, 1.0 - shown)
+        if hidden:
+            probs = {i: math.exp(v) / (mass + hidden) for i, v in found.items()}
     return probs, mass
 
 
@@ -244,13 +260,16 @@ class OpenAILettersAdapter(_LettersAdapter):
 
     async def _score_one(self, text, question, name, labels, descriptions) -> RoundResult:
         messages = self._messages(text, question, labels)
+        reasoning_off = bool(self.handler.reasoning_effort)
         payload: dict[str, Any] = {
             "model": self.handler.model, "messages": messages, "temperature": 0,
-            self.handler.output_limit_field: 1, "logprobs": True, "top_logprobs": TOP_LOGPROBS,
+            self.handler.output_limit_field: REASONING_OUTPUT_TOKENS if reasoning_off else 1,
+            "logprobs": True,
+            "top_logprobs": REASONING_TOP_LOGPROBS if reasoning_off else TOP_LOGPROBS,
         }
-        if self.handler.reasoning_effort:
-            # A reasoning model spends the one token on thinking and returns
-            # no probabilities unless reasoning is off.
+        if reasoning_off:
+            # With reasoning on a reasoning model refuses logprobs and a
+            # temperature of 0.
             payload["reasoning_effort"] = self.handler.reasoning_effort
         if self.handler.provider == "openrouter":
             # Otherwise OpenRouter may route to an endpoint that drops logprobs.
@@ -260,7 +279,8 @@ class OpenAILettersAdapter(_LettersAdapter):
             data = await self.handler.post_json("/chat/completions", payload)
         except LLMHttpError as e:
             _raise_classified(e, systemone=False)
-        probs, mass = letter_probs(_openai_top(data), len(labels))
+        # These models list only the candidates that carry weight.
+        probs, mass = letter_probs(_openai_top(data), len(labels), partial=reasoning_off)
         rendered, full = self._render(text, question, labels)
         usage = data.get("usage") or {}
         return RoundResult(probs, mass, rendered, full, usage.get("prompt_tokens"))
