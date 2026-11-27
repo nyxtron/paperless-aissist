@@ -13,6 +13,15 @@ from app.services.steps.base import StepContext
 create_db_and_tables()
 
 
+@pytest.fixture(autouse=True)
+def forget_refused_temperatures():
+    from app.services import llm_handler
+
+    llm_handler._TEMPERATURE_REFUSED.clear()
+    yield
+    llm_handler._TEMPERATURE_REFUSED.clear()
+
+
 @pytest.fixture(name="client")
 def client_fixture():
     with TestClient(app) as c:

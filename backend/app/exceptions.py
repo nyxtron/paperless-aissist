@@ -44,6 +44,15 @@ class DocumentProcessingError(PaperlessAissistError):
     pass
 
 
+class ReplyCutShortError(DocumentProcessingError):
+    """A reply the provider ended before the page was fully read.
+
+    Not an LLMError on purpose: the provider answered, this page just needed
+    more room than the context window or output limit gave it. Counted as a
+    provider failure, a few dense scans in a row would stop a healthy run.
+    """
+
+
 class PaperlessAPIError(PaperlessAissistError):
     """Raised when Paperless API calls fail."""
 

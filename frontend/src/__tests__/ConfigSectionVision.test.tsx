@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 
 import { ConfigSectionVision } from '../components/ConfigSectionVision'
 
@@ -45,5 +45,36 @@ describe('ConfigSectionVision', () => {
     expect(screen.getByDisplayValue('1024')).toBeInTheDocument()
     expect(screen.getByText('config.llmContextWindowVision')).toBeInTheDocument()
     expect(screen.getByDisplayValue('32768')).toBeInTheDocument()
+  })
+
+  it('moves a default URL along when the provider changes', () => {
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ConfigSectionVision
+        config={{
+          enable_vision: 'true',
+          llm_provider_vision: 'openai',
+          llm_api_base_vision: 'https://api.openai.com/v1/',
+        }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    fireEvent.change(screen.getByDisplayValue('OpenAI'), { target: { value: 'ollama' } })
+    expect(onSave).toHaveBeenCalledWith('llm_provider_vision', 'ollama')
+    expect(onSave).toHaveBeenCalledWith('llm_api_base_vision', 'http://localhost:11434')
+  })
+
+  it('leaves an empty URL empty, it stands for the main model\'s', () => {
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ConfigSectionVision
+        config={{ enable_vision: 'true', llm_provider_vision: 'ollama', llm_api_base_vision: '' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    fireEvent.change(screen.getByDisplayValue('Ollama'), { target: { value: 'openai' } })
+    expect(onSave.mock.calls).toEqual([['llm_provider_vision', 'openai']])
   })
 })

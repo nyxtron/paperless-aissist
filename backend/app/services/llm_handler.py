@@ -12,7 +12,8 @@ import re
 import time
 import httpx
 from typing import Any, Callable, Iterator, Optional
-from ..exceptions import LLMError, LLMHttpError, LLMUnavailableError
+from urllib.parse import urlparse
+from ..exceptions import LLMError, LLMHttpError, LLMUnavailableError, ReplyCutShortError
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +246,23 @@ def _incomplete_reason(data: dict) -> Optional[str]:
     return None
 
 
+# What an Ollama vision page may write when no output limit is set. A model that
+# starts repeating itself otherwise writes until the context window is full; on a
+# 16k window that outlasts the timeout, and a timeout reads as a provider that is
+# down, so the document would come back every run. The longest of 30 scanned
+# pages read in full by Nanonets-OCR-s and LightOnOCR-2 needed 3,615 tokens.
+VISION_PAGE_OUTPUT_LIMIT = 4096
+
+
+def _ollama_limit_reached(data: dict, output_limit: int) -> str:
+    """Name the limit a page ran into, so the log points at the setting to raise."""
+    written = data.get("eval_count") or 0
+    if written >= output_limit:
+        return f"output limit of {output_limit} tokens reached, see Vision Max Output Tokens"
+    used = (data.get("prompt_eval_count") or 0) + written
+    return f"context window full at {used} tokens, see Vision Context Window"
+
+
 def _http_error_detail(error: httpx.HTTPError) -> str:
     """Describe an httpx error including the server's own explanation.
 
@@ -258,6 +276,23 @@ def _http_error_detail(error: httpx.HTTPError) -> str:
         return detail
     body = (response.text or "").strip()
     return f"{detail} - {body[:500]}" if body else detail
+
+
+# Address and model of every server that turned down the temperature it was
+# sent. OpenAI's reasoning models take nothing but their default of 1, so their
+# requests go out without one until the next restart.
+_TEMPERATURE_REFUSED: set[tuple[str, str]] = set()
+
+
+def _refuses_temperature(response: httpx.Response) -> bool:
+    """Whether the server turned the request down over its temperature."""
+    if response.status_code != 400:
+        return False
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        return False
+    return isinstance(error, dict) and error.get("param") == "temperature"
 
 
 OPENAI_COMPATIBLE_PROVIDERS = frozenset({"openai", "grok", "openrouter"})
@@ -302,6 +337,7 @@ class LLMHandler:
         temperature: Default sampling temperature for requests.
         max_tokens: Optional default output token limit.
         num_ctx: Optional Ollama context window size.
+        reasoning_effort: Optional reasoning level, sent by the decision request only.
     """
 
     def __init__(
@@ -314,6 +350,7 @@ class LLMHandler:
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: Optional[int] = None,
         num_ctx: Optional[int] = None,
+        reasoning_effort: Optional[str] = None,
     ):
         self.provider = provider
         self.model = model
@@ -323,6 +360,7 @@ class LLMHandler:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.num_ctx = num_ctx
+        self.reasoning_effort = reasoning_effort
         self._client: Optional[httpx.AsyncClient] = None
         # Ollama's own window for this model when num_ctx is not set, read from
         # /api/ps and refreshed now and then.
@@ -352,6 +390,40 @@ class LLMHandler:
     @property
     def is_closed(self) -> bool:
         return self._closed
+
+    @property
+    def output_limit_field(self) -> str:
+        """The name the output token limit goes out under.
+
+        OpenAI's newer models refuse max_tokens, and its older ones take
+        max_completion_tokens as well. LM Studio, vLLM and the other servers
+        behind the OpenAI setting only know max_tokens.
+        """
+        host = urlparse(self.api_base).hostname or ""
+        return "max_completion_tokens" if host.lower() == "api.openai.com" else "max_tokens"
+
+    async def _post_chat(self, payload: dict[str, Any]) -> httpx.Response:
+        """POST to /chat/completions, leaving out a temperature the model refused.
+
+        Only the first request to such a model is turned down; the refusal is
+        remembered for the ones after it.
+        """
+        key = (self.api_base, self.model)
+        if key in _TEMPERATURE_REFUSED:
+            payload = {k: v for k, v in payload.items() if k != "temperature"}
+        response = await self.client.post("/chat/completions", json=payload)
+        if "temperature" in payload and _refuses_temperature(response):
+            _TEMPERATURE_REFUSED.add(key)
+            logger.warning(
+                "%s refused a temperature of %s, so its requests go out without one "
+                "until the next restart. OpenAI's reasoning models want Temperature 1.",
+                self.model,
+                payload["temperature"],
+            )
+            payload = {k: v for k, v in payload.items() if k != "temperature"}
+            response = await self.client.post("/chat/completions", json=payload)
+        response.raise_for_status()
+        return response
 
     async def close(self):
         """Close the underlying HTTP client."""
@@ -523,6 +595,11 @@ class LLMHandler:
             await cls._get_config("llm_num_ctx_decision")
             or await cls._get_config("llm_num_ctx")
         )
+        # Only OpenAI's own reasoning models need this; the other providers
+        # never see the switch, so a value left over from one is not sent.
+        reasoning_off = provider == "openai" and (
+            await cls._get_config("decision_reasoning_off") == "true"
+        )
         logger.info(
             f"Decision provider: {provider}, model: {model or '(none)'}, API base: {api_base}"
         )
@@ -533,6 +610,7 @@ class LLMHandler:
             api_key=api_key,
             timeout=float(timeout_str) if timeout_str else 600.0,
             num_ctx=cls._parse_positive_int(num_ctx_str),
+            reasoning_effort="none" if reasoning_off else None,
         )
 
     @staticmethod
@@ -764,7 +842,6 @@ class LLMHandler:
         max_tokens: Optional[int],
     ) -> dict[str, Any]:
         """Internal OpenAI-compatible /chat/completions implementation."""
-        client = self.client
         url = "/chat/completions"
         logger.info(f"OpenAI calling: {url}, model: {self.model}")
         logger.debug(
@@ -782,15 +859,14 @@ class LLMHandler:
             "temperature": temperature,
         }
         if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
+            payload[self.output_limit_field] = max_tokens
 
         # No response_format: LM Studio rejects json_object outright, and OpenAI
         # rejects it whenever the word "json" is missing from the prompt, which
         # users are free to edit away. The reply is parsed leniently instead.
 
         try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
+            response = await self._post_chat(payload)
             data = response.json()
 
             content = data["choices"][0]["message"]["content"].strip()
@@ -889,6 +965,7 @@ class LLMHandler:
         client = self.client
         url = "/api/chat"
         combined_text = []
+        output_limit = VISION_PAGE_OUTPUT_LIMIT if max_tokens is None else max_tokens
 
         for i, img in enumerate(images):
             _report_page(on_page, i + 1, len(images))
@@ -910,10 +987,8 @@ class LLMHandler:
                 "model": self.model,
                 "messages": messages,
                 "stream": False,
-                "options": {"temperature": temperature},
+                "options": {"temperature": temperature, "num_predict": output_limit},
             }
-            if max_tokens is not None:
-                payload["options"]["num_predict"] = max_tokens
             if num_ctx is not None:
                 payload["options"]["num_ctx"] = num_ctx
             if json_mode:
@@ -925,13 +1000,15 @@ class LLMHandler:
                 data = response.json()
                 cut_short = _incomplete_reason(data)
                 if cut_short:
-                    raise LLMError(
+                    if cut_short == "length":
+                        cut_short = _ollama_limit_reached(data, output_limit)
+                    raise ReplyCutShortError(
                         f"Ollama vision reply for page {i + 1} was cut short "
                         f"({cut_short}); the page was not fully read"
                     )
                 content = data.get("message", {}).get("content", "").strip()
                 combined_text.append(_drop_no_text_marker(content))
-            except LLMError:
+            except (LLMError, ReplyCutShortError):
                 raise
             except Exception as e:
                 logger.error(
@@ -970,7 +1047,6 @@ class LLMHandler:
             images = []
         import base64
 
-        client = self.client
         url = "/chat/completions"
         logger.info(f"OpenAI Vision calling: {url}, model: {self.model}")
 
@@ -1002,14 +1078,13 @@ class LLMHandler:
                         "temperature": temperature,
                     }
                     if max_tokens is not None:
-                        payload["max_tokens"] = max_tokens
+                        payload[self.output_limit_field] = max_tokens
 
-                    response = await client.post(url, json=payload)
-                    response.raise_for_status()
+                    response = await self._post_chat(payload)
                     data = response.json()
                     cut_short = _incomplete_reason(data)
                     if cut_short:
-                        raise LLMError(
+                        raise ReplyCutShortError(
                             f"OpenAI vision reply for page {page_no} was cut short "
                             f"({cut_short}); the page was not fully read"
                         )
@@ -1049,15 +1124,14 @@ class LLMHandler:
                 "temperature": temperature,
             }
             if max_tokens is not None:
-                payload["max_tokens"] = max_tokens
+                payload[self.output_limit_field] = max_tokens
 
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
+            response = await self._post_chat(payload)
             data = response.json()
 
             cut_short = _incomplete_reason(data)
             if cut_short:
-                raise LLMError(
+                raise ReplyCutShortError(
                     f"OpenAI vision reply was cut short ({cut_short}); "
                     "the document was not fully read"
                 )

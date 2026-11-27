@@ -121,8 +121,8 @@ The provider is selected per-model in Settings. Ollama runs locally; OpenAI, Gro
 
 The main LLM and Vision OCR model each have their own generation settings:
 
-- **Temperature** controls randomness. Lower values are more deterministic; `0.0`–`0.3` is recommended for document metadata and OCR.
-- **Max Output Tokens** optionally limits response length. Leave it empty to use the provider default. For Ollama, this is sent as `num_predict`; for OpenAI-compatible providers it is sent as `max_tokens`.
+- **Temperature** controls randomness. Lower values are more deterministic; `0.0`–`0.3` is recommended for document metadata and OCR. OpenAI's reasoning models such as `gpt-6-luna` refuse anything but `1`. Their requests then go out without a temperature; set it to `1` to save the refused first one.
+- **Max Output Tokens** optionally limits response length. Leave it empty to use the provider default. For Ollama, this is sent as `num_predict`; for OpenAI-compatible providers it is sent as `max_tokens`, for OpenAI itself as `max_completion_tokens`.
 - **Context Window** is Ollama-only and maps to `num_ctx`. Increase it for large documents, many correspondents/tags, or long prompts. Left empty, Ollama uses its own default, often only 4,096 tokens and not the model's maximum, and cuts a longer prompt without an error. This is different from Max Output Tokens: `num_ctx` controls how much input context the model can see, while `num_predict` controls how long the answer may be.
 
 ## Automation API
@@ -177,7 +177,7 @@ rest_command:
 |----------|-------|-------|
 | Ollama | `qwen3:8b` | Recommended local — fast, strong multilingual support |
 | Ollama | `qwen2.5:7b` | Lighter option for slower hardware |
-| OpenAI | `gpt-4o-mini` | Fast and cost-effective |
+| OpenAI | `gpt-6-luna` | OpenAI's replacement for `gpt-4o-mini`, which it shuts down on January 14, 2027. Temperature `1` is the only one it takes |
 | Grok | `grok-3-mini` | xAI alternative |
 | OpenRouter | `openai/gpt-4o-mini` | OpenRouter model namespace |
 
@@ -185,7 +185,8 @@ rest_command:
 
 | Provider | Model | Notes |
 |----------|-------|-------|
-| Ollama | `benhaotang/Nanonets-OCR-s:latest` | Recommended local — best OCR accuracy |
+| Ollama | `benhaotang/Nanonets-OCR-s:latest` | Recommended local. Set **Vision Context Window** to 16384, with the model's own 4,096 a dense scan is cut short |
+| Ollama | `hf.co/ggml-org/LightOnOCR-2-1B-GGUF:Q8_0` | About twice as fast and 1.1 GB, read German scans as well as Nanonets in my test. Ignores the OCR prompt and writes tables as HTML |
 | Ollama | `qwen2.5vl:7b` | Good text extraction |
 | OpenAI | `gpt-4o` | Supports native PDF with the official OpenAI API |
 | Grok | `grok-2-vision-1212` | xAI vision alternative |
@@ -211,6 +212,12 @@ and the log. When you see it, or when Ollama returns `400 Bad Request` for large
 documents, increase the **Context Window** setting in the web UI. It sends
 Ollama `num_ctx` for text and Vision OCR requests and applies from the next
 document on, without a restart.
+
+A scanned A4 page alone takes 2,000 to 3,000 tokens of context, so set
+**Vision Context Window** to 16384 for Vision OCR. On Ollama a page may write up
+to 4,096 tokens unless **Vision Max Output Tokens** says otherwise. A model that
+starts repeating itself stops there, and the document shows up as failed in the
+log with the setting that ran out, instead of running into the timeout.
 
 ## Processing Pipeline
 
@@ -271,7 +278,7 @@ Correspondent and document type can be decided from the Paperless lists with a p
 
 Settings → LLM/Vision → Decision mode. Everything there takes effect from the next document. Each field also has its own question, default `Who sent this document (the correspondent)?` and `What type of document is this?`; the letter prompt receives it as `{question}`, and the Nimble and SystemOne formats send it as the field's description (the `<question>` below). The decision model can be the main model (leave the provider at **Same as main model**; only the model name may differ, e.g. `nimble` on the same Ollama) or its own connection. **Test decision model** sends a sample question and shows the answer with its probability, or why the text prompt would be used. The section also shows whether the review tag exists: while it is missing, a run stops at the first document that needs a decision, writes nothing to that document and says why on the Process page.
 
-What works: Ollama (any instruct model via letters, `nimble` via its own format, `/v1/systemone` when selected or, under Auto, for other Ollama decision models such as `clef-flash`), OpenAI (not the reasoning models), LM Studio and vLLM through the OpenAI setting, and the OpenRouter providers that return log-probabilities. Grok does not. Where it cannot work, the field falls back to the normal text prompt and the log says why. SystemOne is asked one question per request: with several questions in one request, the other options colour each answer (measured on Ollama 0.35).
+What works: Ollama (any instruct model via letters, `nimble` via its own format, `/v1/systemone` when selected or, under Auto, for other Ollama decision models such as `clef-flash`), OpenAI (its reasoning models such as `gpt-6-luna` need **Turn reasoning off** in the decision model settings), LM Studio and vLLM through the OpenAI setting, and the OpenRouter providers that return log-probabilities. Grok does not. Where it cannot work, the field falls back to the normal text prompt and the log says why. SystemOne is asked one question per request: with several questions in one request, the other options colour each answer (measured on Ollama 0.35).
 
 Two list entries that mean the same thing, like a document type `Rechnung` next to `Invoice` or one sender under two spellings, cannot be told apart by probability: the model takes the one listed first, often with high confidence. Merge such duplicates in Paperless before you turn decision mode on.
 

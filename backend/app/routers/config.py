@@ -53,7 +53,7 @@ LLM_HANDLER_KEYS = {
 DECISION_SERVICE_KEYS = {
     f"llm_{name}_decision"
     for name in ("provider", "model", "api_base", "api_key", "timeout", "temperature", "max_tokens", "num_ctx")
-} | {"decision_format"}
+} | {"decision_format", "decision_reasoning_off"}
 
 THRESHOLD_KEYS = {"decision_threshold_correspondent", "decision_threshold_document_type"}
 
@@ -259,6 +259,7 @@ async def test_decision_model():
             method=decision.method, model=decision.model, choice=decision.choice,
             probability=decision.probability, fallback_reason=decision.fallback_reason,
             fallback_detail=decision.fallback_detail, request=decision.rendered,
+            hint=service.switch_hint(decision),
         )
     except LLMError as e:
         result.update(success=False, message=str(e))

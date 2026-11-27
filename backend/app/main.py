@@ -30,6 +30,7 @@ from .routers import (
 from .auth import require_auth
 from .services.log_stream import BroadcastHandler, apply_log_level
 from .limiter import limiter
+from .origin_guard import OriginGuard
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from .mcp.server import build_mcp_app
@@ -200,13 +201,20 @@ def parse_cors_origins(raw: str | None) -> list[str]:
     return [o.strip() for o in (raw or "").split(",") if o.strip()]
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=parse_cors_origins(os.environ.get("CORS_ALLOW_ORIGINS")),
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def add_browser_access(target: FastAPI, raw_origins: str | None) -> None:
+    """Who may use the API from a browser: CORS for reading, the guard for changing."""
+    origins = parse_cors_origins(raw_origins)
+    target.add_middleware(OriginGuard, allowed=origins)
+    target.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+add_browser_access(app, os.environ.get("CORS_ALLOW_ORIGINS"))
 
 _auth_dep = [Depends(require_auth)]
 

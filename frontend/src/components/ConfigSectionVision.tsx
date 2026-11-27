@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ConfigSectionProps } from './ConfigSectionProps'
 import { fieldClass, labelClass, hintClass } from './fieldStyles'
+import { apiBaseAfterSwitch, defaultApiBase } from './providerDefaults'
 
 export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectionProps) {
   const { t } = useTranslation()
@@ -10,18 +11,21 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
     await onSave(key, value)
   }
 
+  const handleProviderChange = (provider: string) => {
+    const url = apiBaseAfterSwitch(
+      config.llm_api_base_vision || '',
+      config.llm_provider_vision || 'ollama',
+      provider,
+    )
+    void handleChange('llm_provider_vision', provider)
+    if (url) void handleChange('llm_api_base_vision', url)
+  }
+
   const getVisionModelPlaceholder = (provider: string) => {
     if (provider === 'openai') return 'gpt-4o'
     if (provider === 'grok') return 'grok-2-vision-1212'
     if (provider === 'openrouter') return 'openai/gpt-4o'
     return 'qwen2.5vl:7b'
-  }
-
-  const getApiBasePlaceholder = (provider: string) => {
-    if (provider === 'openai') return 'https://api.openai.com/v1'
-    if (provider === 'grok') return 'https://api.x.ai/v1'
-    if (provider === 'openrouter') return 'https://openrouter.ai/api/v1'
-    return 'http://localhost:11434'
   }
 
   const getApiKeyPlaceholder = (provider: string) => {
@@ -48,7 +52,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
           <label className={labelClass}>{t('config.provider')}</label>
           <select
             value={config.llm_provider_vision || 'ollama'}
-            onChange={(e) => handleChange('llm_provider_vision', e.target.value)}
+            onChange={(e) => handleProviderChange(e.target.value)}
             className={fieldClass}
           >
             <option value="ollama">Ollama</option>
@@ -73,7 +77,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             type="text"
             value={config.llm_api_base_vision || ''}
             onChange={(e) => handleChange('llm_api_base_vision', e.target.value)}
-            placeholder={getApiBasePlaceholder(config.llm_provider_vision)}
+            placeholder={defaultApiBase(config.llm_provider_vision)}
             className={fieldClass}
           />
         </div>
@@ -144,7 +148,7 @@ export function ConfigSectionVision({ config, onSave, secretsSet }: ConfigSectio
             step="1"
             value={config.llm_max_tokens_vision || ''}
             onChange={(e) => handleChange('llm_max_tokens_vision', e.target.value)}
-            placeholder="8192"
+            placeholder="4096"
             className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500"
           />
           <p className={hintClass}>{t('config.llmMaxTokensVisionHint')}</p>

@@ -132,6 +132,8 @@
     "decisionRemoveKey": "Remove stored key",
     "decisionKeyRemoved": "Decision model key removed",
     "decisionContextWindow": "Context window (Ollama letters and Nimble; ignored on SystemOne)",
+    "decisionReasoningOff": "Turn reasoning off",
+    "decisionReasoningOffHint": "For OpenAI's reasoning models such as gpt-6-luna: with reasoning on they return no token probabilities. Older models such as gpt-4.1-mini refuse the setting, so leave it off for them and for LM Studio or vLLM.",
     "reviewTag": "Review tag",
     "reviewTagHint": "Added to documents with a field left for review and removed once a later run decides every field that has decision mode on. Must exist in Paperless.",
     "reviewTagMissing": "Tag {{tag}} does not exist in Paperless. Runs with a decision toggle on stop until it exists.",
@@ -142,6 +144,10 @@
     "decisionTestOk": "{{method}} on {{model}}: {{choice}} ({{p}})",
     "decisionTestFallback": "Falls back to the text prompt: {{reason}}",
     "decisionTestFailed": "Test failed: {{message}}",
+    "decisionTestHint": {
+      "reasoning_off_needed": "A reasoning model such as gpt-6-luna answers like this while reasoning is on. Switch on \"Turn reasoning off\" above and test again.",
+      "reasoning_off_refused": "This model does not take the reasoning setting. Switch off \"Turn reasoning off\" above and test again."
+    },
     "schedulerSection": "Auto-Processing Scheduler",
     "schedulerRunning": "Running",
     "schedulerStopped": "Stopped",
@@ -173,7 +179,7 @@
     "llmMaxTokens": "Max Output Tokens",
     "llmMaxTokensHint": "Optional response limit. Leave empty to use the provider default.",
     "llmMaxTokensVision": "Vision Max Output Tokens",
-    "llmMaxTokensVisionHint": "Optional OCR output limit per request/page. Leave empty to use the provider default.",
+    "llmMaxTokensVisionHint": "Optional OCR output limit per page or request. Empty means 4,096 per page on Ollama, so a model that keeps repeating itself stops instead of running into the timeout; other providers use their own default.",
     "llmContextWindow": "Context Window",
     "llmContextWindowHint": "Ollama only. Increase for large documents or many Paperless correspondents. Empty means Ollama's own default, often only 4,096 tokens, not the most the model can take; a longer prompt is cut without an error.",
     "llmContextWindowVision": "Vision Context Window",

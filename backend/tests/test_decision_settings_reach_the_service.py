@@ -35,7 +35,7 @@ def clean(client):
     keys = ["llm_provider_decision", "llm_model_decision", "llm_api_base_decision", "llm_api_key_decision",
             "llm_timeout_decision", "llm_num_ctx_decision", "decision_format", "decision_threshold_correspondent",
             "llm_provider", "llm_model", "llm_api_base", "tag_blacklist", "review_tag",
-            "decision_question_correspondent"]
+            "decision_question_correspondent", "decision_reasoning_off"]
     yield
     for key in keys:
         client.delete(f"/api/config/{key}")
@@ -45,6 +45,7 @@ def clean(client):
     ("llm_model_decision", "nimble"), ("llm_provider_decision", "openai"), ("llm_api_base_decision", "http://a"),
     ("llm_api_key_decision", "k"), ("llm_timeout_decision", "30"), ("llm_num_ctx_decision", "8192"),
     ("decision_format", "nimble"), ("llm_model", "qwen3:8b"), ("llm_api_base", "http://b"), ("llm_provider", "ollama"),
+    ("decision_reasoning_off", "true"),
 ])
 def test_saving_a_setting_drops_the_service(client, cached_service, clean, key, value):
     assert client.post("/api/config", json={"key": key, "value": value}).status_code == 200
@@ -73,7 +74,8 @@ def test_other_settings_leave_it_alone(client, cached_service, clean):
     assert DecisionServiceManager._service is cached_service
 
 
-@pytest.mark.parametrize("stored", [{"llm_provider_decision": "ollama", "llm_model_decision": "nimble"}, {}])
+@pytest.mark.parametrize("stored", [{"llm_provider_decision": "ollama", "llm_model_decision": "nimble"}, {},
+                                    {"llm_provider": "openai", "llm_api_base": "http://x"}])
 def test_every_key_the_service_reads_is_in_the_reset_set(client, clean, stored):
     for key, value in stored.items():
         client.post("/api/config", json={"key": key, "value": value})

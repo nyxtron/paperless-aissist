@@ -177,6 +177,17 @@ class DecisionService:
             # A refusal remembered from the letters route says nothing about this one.
             self.forget_unsupported()
 
+    def switch_hint(self, decision: Decision) -> Optional[str]:
+        """Which way the reasoning switch should go, when a refusal points at it."""
+        if decision.fallback_reason not in ("unsupported_parameter", "no_logprobs"):
+            return None
+        if self._handler.reasoning_effort:
+            refused = "reasoning_effort" in (decision.fallback_detail or "").lower()
+            return "reasoning_off_refused" if refused else None
+        # Only OpenAI itself has models that answer this way with reasoning on.
+        on_openai = self._handler.output_limit_field == "max_completion_tokens"
+        return "reasoning_off_needed" if on_openai else None
+
     async def probe(self) -> Decision:
         """The settings page's test: a fresh two-option question."""
         self.forget_unsupported()

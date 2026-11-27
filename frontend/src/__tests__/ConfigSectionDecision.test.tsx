@@ -160,6 +160,31 @@ describe('ConfigSectionDecision', () => {
     expect(screen.getByLabelText('config.apiKey')).toHaveAttribute('placeholder', '')
   })
 
+  it('moves a default URL along when the own provider changes', () => {
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ConfigSectionDecision
+        config={{ ...own, llm_api_base_decision: 'https://api.openai.com/v1' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText('config.provider'), { target: { value: 'ollama' } })
+    expect(onSave).toHaveBeenCalledWith('llm_provider_decision', 'ollama')
+    expect(onSave).toHaveBeenCalledWith('llm_api_base_decision', 'http://localhost:11434')
+  })
+
+  it.each([
+    ['a URL of your own', { ...own, llm_api_base_decision: 'http://lmstudio:1234/v1' }, 'ollama'],
+    ['the stored URL on the way back to the main model', { ...own, llm_api_base_decision: 'https://api.openai.com/v1' }, ''],
+    ['the stored URL on the way from the main model', { ...base, llm_api_base_decision: 'http://localhost:11434' }, 'openai'],
+  ])('leaves %s alone', (_name, config, next) => {
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    render(<ConfigSectionDecision config={config} onSave={onSave} secretsSet={[]} />)
+    fireEvent.change(screen.getByLabelText('config.provider'), { target: { value: next } })
+    expect(onSave.mock.calls).toEqual([['llm_provider_decision', next]])
+  })
+
   it('needs no URL for OpenRouter', () => {
     render(
       <ConfigSectionDecision
@@ -415,6 +440,68 @@ describe('ConfigSectionDecision', () => {
     ).toBeInTheDocument()
     // the request of the earlier probe does not belong to this failure
     expect(screen.queryByText('decision.note.showRequest')).not.toBeInTheDocument()
+  })
+
+  it('offers the reasoning switch for OpenAI only and saves it', () => {
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const { rerender } = render(
+      <ConfigSectionDecision config={base} onSave={onSave} secretsSet={[]} />,
+    )
+    expect(screen.queryByLabelText('config.decisionReasoningOff')).not.toBeInTheDocument()
+    rerender(
+      <ConfigSectionDecision
+        config={{ ...base, llm_provider_decision: 'openrouter' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.queryByLabelText('config.decisionReasoningOff')).not.toBeInTheDocument()
+
+    // the main connection counts while the decision model inherits it
+    rerender(
+      <ConfigSectionDecision
+        config={{ ...base, llm_provider: 'openai' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.getByLabelText('config.decisionReasoningOff')).not.toBeChecked()
+    fireEvent.click(screen.getByLabelText('config.decisionReasoningOff'))
+    expect(onSave).toHaveBeenCalledWith('decision_reasoning_off', 'true')
+
+    rerender(
+      <ConfigSectionDecision
+        config={{ ...own, decision_reasoning_off: 'true' }}
+        onSave={onSave}
+        secretsSet={[]}
+      />,
+    )
+    expect(screen.getByLabelText('config.decisionReasoningOff')).toBeChecked()
+    fireEvent.click(screen.getByLabelText('config.decisionReasoningOff'))
+    expect(onSave).toHaveBeenCalledWith('decision_reasoning_off', 'false')
+  })
+
+  it('says which way the reasoning switch should go, and drops that with the next probe', async () => {
+    mocks.testDecision.mockResolvedValue({
+      data: {
+        success: false,
+        fallback_reason: 'unsupported_parameter',
+        fallback_detail: "'logprobs' is not supported with this model.",
+        hint: 'reasoning_off_needed',
+      },
+    })
+    render(<ConfigSectionDecision config={own} onSave={vi.fn()} secretsSet={[]} />)
+    fireEvent.click(screen.getByText('config.decisionTest'))
+    expect(
+      await screen.findByText('config.decisionTestHint.reasoning_off_needed'),
+    ).toBeInTheDocument()
+
+    mocks.testDecision.mockRejectedValue(new Error('Network Error'))
+    fireEvent.click(screen.getByText('config.decisionTest'))
+    expect(
+      await screen.findByText('config.decisionTestFailed message=Network Error'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/config\.decisionTestHint/)).not.toBeInTheDocument()
   })
 
   it('reports a probe that failed outright', async () => {

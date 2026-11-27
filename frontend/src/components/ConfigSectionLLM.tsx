@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { configApi } from '../api/client'
 import { ConfigSectionProps } from './ConfigSectionProps'
 import { fieldClass, labelClass, hintClass } from './fieldStyles'
+import { apiBaseAfterSwitch, defaultApiBase } from './providerDefaults'
 
 export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionProps) {
   const { t } = useTranslation()
@@ -12,6 +13,12 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
 
   const handleChange = async (key: string, value: string) => {
     await onSave(key, value)
+  }
+
+  const handleProviderChange = (provider: string) => {
+    const url = apiBaseAfterSwitch(config.llm_api_base || '', config.llm_provider || 'ollama', provider)
+    void handleChange('llm_provider', provider)
+    if (url) void handleChange('llm_api_base', url)
   }
 
   const handleTestLlm = async () => {
@@ -39,17 +46,10 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
   }
 
   const getModelPlaceholder = (provider: string) => {
-    if (provider === 'openai') return 'gpt-4o-mini'
+    if (provider === 'openai') return 'gpt-6-luna'
     if (provider === 'grok') return 'grok-3-mini'
     if (provider === 'openrouter') return 'openai/gpt-4o-mini'
     return 'qwen2.5:7b'
-  }
-
-  const getApiBasePlaceholder = (provider: string) => {
-    if (provider === 'openai') return 'https://api.openai.com/v1'
-    if (provider === 'grok') return 'https://api.x.ai/v1'
-    if (provider === 'openrouter') return 'https://openrouter.ai/api/v1'
-    return 'http://localhost:11434'
   }
 
   const getApiKeyPlaceholder = (provider: string) => {
@@ -79,7 +79,7 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
           <label className={labelClass}>{t('config.provider')}</label>
           <select
             value={config.llm_provider || 'ollama'}
-            onChange={(e) => handleChange('llm_provider', e.target.value)}
+            onChange={(e) => handleProviderChange(e.target.value)}
             className={fieldClass}
           >
             <option value="ollama">Ollama</option>
@@ -104,7 +104,7 @@ export function ConfigSectionLLM({ config, onSave, secretsSet }: ConfigSectionPr
             type="text"
             value={config.llm_api_base || ''}
             onChange={(e) => handleChange('llm_api_base', e.target.value)}
-            placeholder={getApiBasePlaceholder(config.llm_provider)}
+            placeholder={defaultApiBase(config.llm_provider)}
             className={fieldClass}
           />
         </div>
